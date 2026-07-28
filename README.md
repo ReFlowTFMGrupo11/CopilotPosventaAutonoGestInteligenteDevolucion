@@ -47,3 +47,49 @@ async def test():
 asyncio.run(test())
 "
 ```
+
+## Servidores MCP
+
+Los servidores MCP utilizan transporte **SSE (HTTP)** para permitir que múltiples agentes se conecten simultáneamente.
+
+### Iniciar los servidores
+
+Abre **dos terminales** y ejecuta cada servidor por separado:
+
+```bash
+cd /path/to/CopilotPosventaAutonoGestInteligenteDevolucion
+```
+**Terminal 1** — Supabase (Datos y Políticas) en `http://localhost:8001/sse`:
+
+```bash
+python -m backend.mcp.mcp_supabase
+```
+
+**Terminal 2** — Logística en `http://localhost:8002/sse`:
+```bash
+python -m backend.mcp.mcp_logistics
+```
+
+### Probar la conexión (desde un tercer terminal)
+
+```bash
+python tests/test_mcp_logistics.py
+python tests/test_mcp_supabase.py
+```
+
+### `mcp_supabase.py` — Datos y Políticas (puerto 8001)
+
+| Herramienta | Entradas | Descripción |
+|---|---|---|
+| `get_order_details` | `order_id` | Consulta detalles del pedido, fechas y productos (Agentes 1 y 2) |
+| `get_customer_return_history` | `customer_id` | Historial de devoluciones para detectar abusos (Agente 2) |
+| `search_return_policy` | `query`, `category` | Búsqueda semántica RAG con pgvector sobre políticas (Agente 2) |
+| `create_return_record` | `order_id`, `customer_id`, `reason`, ... | Inserta solicitud de devolución (Agente 3) |
+| `update_return_status` | `return_id`, `status` | Actualiza estado de devolución (Admin / HITL) |
+
+### `mcp_logistics.py` — Logística (puerto 8002)
+
+| Herramienta | Entradas | Descripción |
+|---|---|---|
+| `generate_shipping_label` | `order_id`, `items` | Genera PDF de etiqueta de transporte con reportlab (Agente 3) |
+| `send_customer_notification` | `email`, `message` | Simula envío de correo transaccional con enlace al PDF (Agente 3) |

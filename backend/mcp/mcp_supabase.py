@@ -12,7 +12,7 @@ Tools:
 import os
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 from supabase import create_async_client, AsyncClient
 
 from backend.db.supabase_client import get_settings
