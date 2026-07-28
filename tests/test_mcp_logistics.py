@@ -1,19 +1,22 @@
 """
-Test script for MCP logistics server via SSE.
+Test script for MCP logistics server via Streamable HTTP.
 Start the server first: python -m backend.mcp.mcp_logistics
 Then run this: python tests/test_mcp_logistics.py
 """
 
+# asyncio: necesario porque todo el cliente MCP es asíncrono.
 import asyncio
 
+# ClientSession + streamablehttp_client: ver comentario en
+# test_mcp_supabase.py.
 from mcp import ClientSession
-from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamable_http_client
 
-MCP_LOGISTICS_URL = "http://localhost:8002/sse"
+MCP_LOGISTICS_URL = "http://localhost:8002/mcp"
 
 
 async def test():
-    async with sse_client(MCP_LOGISTICS_URL) as (read, write):
+    async with streamable_http_client(MCP_LOGISTICS_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 

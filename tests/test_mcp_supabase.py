@@ -1,20 +1,34 @@
 """
-Test script for MCP Supabase server via SSE.
+Test script for MCP Supabase server via Streamable HTTP.
 Start the server first: python -m backend.mcp.mcp_supabase
 Then run this: python tests/test_mcp_supabase.py
 """
 
+# asyncio: necesario porque todo el cliente MCP es asíncrono.
 import asyncio
 
+# ClientSession: gestiona el handshake y las llamadas del protocolo MCP
+# sobre un par de streams (lectura/escritura) ya abiertos por el transporte.
 from mcp import ClientSession
-from mcp.client.sse import sse_client
+# streamable_http_client: abre la conexión Streamable HTTP (el transporte
+# vigente; sustituye a SSE, deprecado en la spec 2025-03-26 y con EOL el
+# 1 de abril de 2026) y expone los streams read/write que consume
+# ClientSession. (Existe también "streamablehttp_client", pero está
+# marcada deprecada en favor de esta.)
+from mcp.client.streamable_http import streamable_http_client
 
-MCP_SUPABASE_URL = "http://localhost:8001/sse"
+# Ruta por defecto del servidor FastMCP: "/mcp".
+MCP_SUPABASE_URL = "http://localhost:8001/mcp"
 
 
 async def test():
-    async with sse_client(MCP_SUPABASE_URL) as (read, write):
+    # streamable_http_client entrega 3 valores: streams de lectura/escritura
+    # y una función get_session_id (no usada aquí, de ahí el "_").
+    async with streamable_http_client(MCP_SUPABASE_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
+            # Handshake inicial del protocolo MCP (intercambio de
+            # capacidades cliente/servidor); obligatorio antes de listar o
+            # llamar tools.
             await session.initialize()
 
             # List tools

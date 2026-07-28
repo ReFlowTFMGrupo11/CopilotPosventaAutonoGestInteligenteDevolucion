@@ -7,13 +7,21 @@
 
 ```bash
 python3 -m venv .venv
+
+# Linux / macOS
 source .venv/bin/activate
+
+# Windows (Git Bash)
+source .venv/Scripts/activate
+
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
 ```
 
 ### 2. Instalar dependencias
 
 ```bash
-pip install -r requirements.txt 
+pip install -r requirements.txt
 ```
 
 ### 3. Variables de entorno
@@ -50,7 +58,7 @@ asyncio.run(test())
 
 ## Servidores MCP
 
-Los servidores MCP utilizan transporte **SSE (HTTP)** para permitir que múltiples agentes se conecten simultáneamente.
+Los servidores MCP utilizan transporte **Streamable HTTP** (el sustituto oficial de HTTP+SSE, que quedó deprecado en la revisión de spec 2025-03-26 y alcanzó su end-of-life el 1 de abril de 2026) para permitir que múltiples agentes se conecten simultáneamente.
 
 ### Iniciar los servidores
 
@@ -59,13 +67,13 @@ Abre **dos terminales** y ejecuta cada servidor por separado:
 ```bash
 cd /path/to/CopilotPosventaAutonoGestInteligenteDevolucion
 ```
-**Terminal 1** — Supabase (Datos y Políticas) en `http://localhost:8001/sse`:
+**Terminal 1** — Supabase (Datos y Políticas) en `http://localhost:8001/mcp`:
 
 ```bash
 python -m backend.mcp.mcp_supabase
 ```
 
-**Terminal 2** — Logística en `http://localhost:8002/sse`:
+**Terminal 2** — Logística en `http://localhost:8002/mcp`:
 ```bash
 python -m backend.mcp.mcp_logistics
 ```

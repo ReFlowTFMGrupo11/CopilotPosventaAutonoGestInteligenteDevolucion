@@ -2,11 +2,21 @@
 supabase>=2.5.0
 pydantic-settings>=2.3.0
 
-# MCP
-mcp[cli]>=1.0.0
+# MCP (Streamable HTTP transport vía mcp.server.fastmcp.FastMCP).
+# Pinned a la última serie 1.x (no 2.x): langchain-mcp-adapters 0.3.1 (la
+# última publicada) todavía importa `RequestContext` desde `mcp.shared.context`,
+# clase que el SDK "mcp" v2.0.0 reestructuró y ya no expone ahí. Mientras
+# langchain-mcp-adapters no publique soporte para mcp 2.x, hay que quedarse
+# en 1.x para que el agente LangChain pueda cargar las tools MCP.
+mcp[cli]>=1.24.0,<2.0.0
 
 # AI / Embeddings
 openai>=1.30.0
+
+# Agente LangChain que consume las tools MCP
+langchain>=1.0.0
+langchain-openai>=0.3.0
+langchain-mcp-adapters>=0.3.0
 
 # PDF generation
 reportlab>=4.0.0
