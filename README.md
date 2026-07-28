@@ -77,7 +77,6 @@ python tests/test_mcp_logistics.py
 python tests/test_mcp_supabase.py
 ```
 
-### `mcp_supabase.py` — Datos y Políticas (puerto 8001)
 
 | Herramienta | Entradas | Descripción |
 |---|---|---|
