@@ -13,7 +13,7 @@ source .venv/bin/activate
 ### 2. Instalar dependencias
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt 
 ```
 
 ### 3. Variables de entorno
