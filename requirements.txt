@@ -3,7 +3,7 @@ supabase>=2.5.0
 pydantic-settings>=2.3.0
 
 # MCP
-mcp[cli]>=1.0.0
+mcp[cli]>=1.0.0,<2.0.0
 
 # AI / Embeddings
 openai>=1.30.0

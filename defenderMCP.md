@@ -1,53 +1,109 @@
-# Defender la arquitectura MCP con Docker y FastMCP
+# Defender la arquitectura MCP de ReFlow
 
-## 1. Arquitectura: un contenedor Docker por cada servidor MCP
+Este documento recoge los argumentos para defender, en la memoria/presentación del TFM,
+las dos decisiones de arquitectura tomadas para la capa MCP de ReFlow: separar las
+herramientas en servidores independientes por dominio, y construirlos con FastMCP en
+lugar de implementar el protocolo desde cero.
 
-### El planteamiento
-Cada dominio funcional del sistema vive en su propio contenedor Docker independiente. Por ejemplo, un MCP para la base de datos SQL, otro para consultar una API externa, y otro para gestionar el sistema de ficheros local.
-
-### Argumentos para defenderlo
-- **Aislamiento de fallos:** Si un servidor MCP que conecta con una API externa se cae, el resto de los contenedores MCP siguen operando normalmente. El agente de IA mantiene acceso a los demás servicios y herramientas.
-- **Seguridad y principio de menor privilegio:** Cada contenedor tiene su propio espacio de nombres, variables de entorno y credenciales limitadas. El MCP de ficheros solo accede al volumen necesario; si es vulnerable, el impacto se confina a ese contenedor.
-- **Independencia de dependencias:** Un MCP puede necesitar librerías Python pesadas y otro solo llamadas HTTP ligeras. Docker evita conflictos de dependencias y mantiene cada entorno limpio.
-- **Despliegues y actualizaciones atómicas:** Puedes actualizar, parchear o reiniciar un único MCP sin tocar ni recompilar el resto de la arquitectura.
-
-## 2. El núcleo del desarrollo: ¿por qué usar FastMCP?
+## 1. Arquitectura: un servidor MCP independiente por dominio funcional
 
 ### El planteamiento
-Implementar MCP desde cero obliga a manejar JSON-RPC, sesiones, esquemas y validación de tipos. Con FastMCP, aprovechas una capa de alto rendimiento inspirada en FastAPI que abstrae esa complejidad.
+ReFlow separa las herramientas en dos servidores MCP según su dominio (`backend/mcp/`):
+
+- **`mcp_supabase.py`** (puerto 8001): datos y conocimiento — acceso a PostgreSQL
+  (pedidos, clientes, devoluciones) y búsqueda semántica RAG sobre pgvector.
+- **`mcp_logistics.py`** (puerto 8002): acciones externas — generación de etiquetas de
+  transporte (PDF) y notificaciones al cliente.
+
+En el MVP actual ambos se ejecutan como procesos Python independientes en local (ver
+[`README.md`](README.md)), pero el diseño está pensado para que cada uno pueda desplegarse
+en su propio contenedor Docker en producción sin cambiar una línea de sus tools.
 
 ### Argumentos para defenderlo
-- **Desarrollo pythonico y menos boilerplate:** Con `@mcp.tool`, expones una función de Python como herramienta sin escribir lógica de protocolo manualmente.
-- **Generación automática de esquemas:** FastMCP usa las anotaciones de tipos y docstrings para generar JSON Schema. Define `user_id: int` y FastMCP valida la entrada antes de ejecutar tu función.
-- **Estándar de la industria:** FastMCP es una opción madura y recomendada en Python para servidores MCP por su robustez y simplicidad.
+- **Aislamiento de fallos:** Si `mcp_logistics` (que en producción llamaría a una agencia
+  de transporte real) falla o se satura, `mcp_supabase` sigue respondiendo consultas de
+  pedidos y políticas con normalidad. El agente de resolución puede seguir operando sobre
+  los datos aunque la parte logística esté degradada.
+- **Seguridad y principio de menor privilegio:** `mcp_supabase` es el único proceso con la
+  `SUPABASE_SERVICE_KEY`; `mcp_logistics` no necesita ninguna credencial de base de datos,
+  solo acceso al directorio `generated_labels/`. Si se compromete uno, el otro no expone
+  credenciales que no necesita.
+- **Independencia de dependencias:** `mcp_logistics` depende de `reportlab` (generación de
+  PDF); `mcp_supabase` depende del SDK de `supabase` y de `openai` (embeddings para RAG).
+  Mantenerlos separados evita que un servidor cargue dependencias pesadas que no usa.
+- **Despliegues y actualizaciones atómicas:** En producción, un cambio en la lógica de
+  generación de etiquetas se despliega reiniciando solo el contenedor de logística, sin
+  tocar el servicio de datos que sí necesita alta disponibilidad.
+
+## 2. El núcleo del desarrollo: ¿por qué FastMCP?
+
+### El planteamiento
+Implementar MCP desde cero obliga a manejar JSON-RPC, sesiones y validación de esquemas a
+mano. ReFlow usa `FastMCP` (`mcp.server.fastmcp.FastMCP`, incluido en el SDK oficial `mcp`
+del protocolo), una capa de alto nivel inspirada en FastAPI que abstrae esa complejidad.
+
+> **Nota de versión:** el SDK `mcp` lanzó una versión 2.x que reestructuró su API interna
+> (`FastMCP` pasó a llamarse `MCPServer` en otro módulo). ReFlow fija `mcp[cli]<2.0.0` en
+> `requirements.txt` para mantener la API estable usada en `mcp_supabase.py` y
+> `mcp_logistics.py`.
+
+### Argumentos para defenderlo
+- **Desarrollo pythonico y menos boilerplate:** con el decorador `@mcp.tool()` se expone
+  una función `async` de Python como herramienta MCP sin escribir lógica de protocolo a
+  mano, tal y como hacen `generate_shipping_label` y `get_customer_return_history` en este
+  repo.
+- **Generación automática de esquemas:** FastMCP usa las anotaciones de tipos y los
+  docstrings de la función para generar el JSON Schema que el LLM necesita para invocar la
+  tool. Basta con tipar `order_id: str` para que FastMCP valide la entrada.
+- **Transporte Streamable HTTP integrado:** `mcp.run(transport="streamable-http")` expone
+  el servidor por HTTP sin montar manualmente un servidor ASGI, que es justo lo que usan
+  ambos servidores de ReFlow en `http://localhost:800{1,2}/mcp`.
 
 ## 3. Preguntas frecuentes y objeciones comunes
 
-### Objeción: "¿No es excesivo levantar un contenedor Docker por cada MCP? Añade complejidad de red."
-No es sobrecarga, es modularidad. Docker Compose gestiona la red interna y los contenedores se comunican localmente de forma segura. Además, esta separación facilita la escalabilidad horizontal cuando un MCP sufre alta carga.
+### Objeción: "¿No es excesivo un contenedor Docker por cada MCP? Añade complejidad de red."
+No es sobrecarga, es modularidad: Docker Compose gestionaría la red interna y los
+contenedores se comunicarían localmente. Durante el desarrollo del MVP se ha optado
+deliberadamente por ejecutar ambos servidores como procesos locales (más rápido de iterar,
+sin overhead de red), dejando la contenerización como el paso natural al pasar a
+producción, sin que cambie el código de las tools.
 
 ### Objeción: "¿Por qué no meter todo en un solo script de Python grande?"
-Eso genera deuda técnica y mantenimiento difícil. Un monolito acopla todos los accesos a datos y servicios. Con micro-MCPs en Docker, cada componente se mantiene, prueba y despliega por separado.
+Eso genera deuda técnica: un monolito acopla el acceso a Supabase con la generación de
+PDFs y el envío de notificaciones. Separando `mcp_supabase.py` y `mcp_logistics.py`, cada
+uno se prueba (`tests/test_mcp_supabase.py`, `tests/test_mcp_logistics.py`) y se mantiene
+por separado.
 
 ### Objeción: "¿FastMCP añade latencia o restricciones?"
-Al contrario, acelera el time-to-market. FastMCP abstrae la complejidad del protocolo MCP de bajo nivel y reduce bugs de integración entre el LLM y el backend.
+Al contrario: FastMCP abstrae la complejidad del protocolo MCP de bajo nivel (sesiones,
+JSON-RPC, streaming) y reduce bugs de integración entre el LLM y el backend, acelerando el
+desarrollo del MVP.
 
-## 4. Ejemplo rápido de componente con FastMCP
+## 4. Ejemplo real del repo (`mcp_logistics.py`, simplificado)
 
 ```python
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("Database-Connector-MCP")
+mcp = FastMCP("logistics", host="0.0.0.0", port=8002)
 
 @mcp.tool()
-def consultar_stock_producto(producto_id: int) -> str:
-    """Consulta el stock actual de un producto en la base de datos local."""
-    return f"El producto {producto_id} tiene 45 unidades disponibles."
+async def generate_shipping_label(order_id: str, items: list[dict]) -> dict:
+    """Genera un PDF simulado de etiqueta de transporte para una devolución."""
+    tracking_number = f"RF-{order_id[:8].upper()}"
+    # ... generación del PDF con reportlab ...
+    return {"tracking_number": tracking_number}
 
 if __name__ == "__main__":
-    mcp.run()
+    mcp.run(transport="streamable-http")
 ```
 
 ## 5. Resumen para la presentación
 
-> "Optamos por una arquitectura desacoplada basada en contenedores Docker independientes por cada servidor MCP para garantizar aislamiento de fallos, seguridad por compartimentación y despliegues independientes. Para hacerlo eficiente a nivel de desarrollo y evitar código repetitivo de bajo nivel, implementamos FastMCP, lo que nos permite transformar código Python tipado en herramientas listas para agentes de IA de forma limpia, estandarizada y robusta."
+> "Optamos por separar las herramientas en dos servidores MCP independientes — datos y
+> políticas (Supabase/pgvector) por un lado, logística por otro — para garantizar
+> aislamiento de fallos y menor privilegio de credenciales entre dominios. En el MVP los
+> ejecutamos como procesos locales sobre Streamable HTTP para iterar rápido, pero el
+> diseño permite contenerizar cada uno de forma independiente en producción sin tocar su
+> lógica interna. Para el desarrollo usamos FastMCP, la capa oficial del SDK `mcp` que
+> convierte funciones Python tipadas en herramientas MCP listas para agentes de IA, sin
+> escribir el protocolo JSON-RPC a mano."
