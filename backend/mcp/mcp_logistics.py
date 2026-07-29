@@ -1,171 +1,268 @@
 """
-MCP Server: Logística
+MCP Server: Supabase (Datos y Políticas)
 
 Tools:
-- generate_shipping_label: Genera un PDF simulado de etiqueta de transporte.
-- send_customer_notification: Simula envío de correo electrónico transaccional.
+- get_order_details: Consulta detalles del pedido.
+- get_customer_return_history: Historial de devoluciones del cliente.
+- search_return_policy: Búsqueda semántica RAG sobre políticas.
+- create_return_record: Crea registro de devolución.
+- update_return_status: Actualiza estado de devolución.
 """
 
 import os
-import uuid
-from datetime import datetime
-from pathlib import Path
+from typing import Optional
 
-from fastmcp import FastMCP
+# Se usa la serie 1.x del SDK "mcp" (no la 2.x, donde esta clase pasó a
+# llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
+# mcp 2.x (ver requirements.txt).
+from mcp.server.fastmcp import FastMCP
+from supabase import create_async_client, AsyncClient
 
-mcp = FastMCP("logistics")
+from backend.db.supabase_client import get_settings
 
-# Directory for generated labels
-LABELS_DIR = Path(__file__).parent.parent.parent / "generated_labels"
-LABELS_DIR.mkdir(exist_ok=True)
+mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
+
+# ---------------------------------------------------------------------------
+# Helper: cliente Supabase
+# ---------------------------------------------------------------------------
+
+# Singleton perezoso: se crea en el primer uso para no abrir conexión antes
+# de que haga falta.
+_client: Optional[AsyncClient] = None
+
+
+async def _get_client() -> AsyncClient:
+    global _client
+    if _client is None:
+        settings = get_settings()
+        _client = await create_async_client(
+            supabase_url=settings.supabase_url,
+            supabase_key=settings.supabase_service_key,
+        )
+    return _client
 
 
 # ---------------------------------------------------------------------------
-# Tool 1: generate_shipping_label
+# Tool 1: get_order_details
 # ---------------------------------------------------------------------------
 
 
 @mcp.tool()
-async def generate_shipping_label(
+async def get_order_details(order_id: str) -> dict:
+    """
+    Consulta en PostgreSQL los detalles del pedido, fechas y productos comprados.
+    Usado por Agentes 1 y 2.
+
+    Args:
+        order_id: UUID del pedido a consultar.
+    """
+    client = await _get_client()
+
+    order_resp = await client.table("orders").select(
+        "*, customer:customers(id, email, full_name)"
+    ).eq("id", order_id).single().execute()
+
+    items_resp = await client.table("order_items").select(
+        "*, product:products(name, sku, category, price, weight_kg)"
+    ).eq("order_id", order_id).execute()
+
+    return {
+        "order": order_resp.data,
+        "items": items_resp.data,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool 2: get_customer_return_history
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_customer_return_history(customer_id: str) -> dict:
+    """
+    Recupera el historial de devoluciones del cliente para detectar posibles abusos.
+    Usado por Agente 2.
+
+    Args:
+        customer_id: UUID del cliente.
+    """
+    client = await _get_client()
+
+    returns_resp = await client.table("return_requests").select(
+        "id, order_id, status, reason, reason_category, resolution, refund_amount, created_at, resolved_at"
+    ).eq("customer_id", customer_id).order("created_at", desc=True).execute()
+
+    total_returns = len(returns_resp.data)
+    approved = sum(1 for r in returns_resp.data if r["status"] == "approved")
+    rejected = sum(1 for r in returns_resp.data if r["status"] == "rejected")
+
+    return {
+        "customer_id": customer_id,
+        "total_returns": total_returns,
+        "approved": approved,
+        "rejected": rejected,
+        "returns": returns_resp.data,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool 3: search_return_policy
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def search_return_policy(query: str, category: str = "") -> dict:
+    """
+    Realiza una búsqueda semántica RAG usando pgvector sobre la normativa de la tienda.
+    Usado por Agente 2.
+
+    Args:
+        query: Texto de consulta para buscar en las políticas.
+        category: Categoría opcional para filtrar políticas (e.g., "electronics").
+    """
+    # Import local para no cargar el SDK de OpenAI si esta tool no se invoca.
+    import openai
+
+    client = await _get_client()
+
+    openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    # Debe ser el mismo modelo de embedding usado al indexar las políticas.
+    embedding_resp = openai_client.embeddings.create(
+        model="text-embedding-3-small",
+        input=query,
+    )
+    query_embedding = embedding_resp.data[0].embedding
+
+    rpc_params = {
+        "query_embedding": query_embedding,
+        "match_threshold": 0.7,
+        "match_count": 5,
+    }
+    results = await client.rpc("match_policy_embeddings", rpc_params).execute()
+
+    policy_info = None
+    if category:
+        policy_resp = await client.table("return_policies").select("*").eq(
+            "category", category
+        ).eq("active", True).single().execute()
+        policy_info = policy_resp.data
+
+    return {
+        "query": query,
+        "category": category,
+        "semantic_results": results.data,
+        "policy_info": policy_info,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Tool 4: create_return_record
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def create_return_record(
     order_id: str,
+    customer_id: str,
+    reason: str,
+    reason_category: str,
+    refund_amount: float,
     items: list[dict],
-    customer_name: str = "",
-    customer_address: str = "",
+    notes: str = "",
 ) -> dict:
     """
-    Genera un archivo PDF simulado de la etiqueta de transporte utilizando reportlab.
+    Inserta una solicitud de devolución en la tabla devoluciones de Supabase.
     Usado por Agente 3.
 
     Args:
-        order_id: UUID del pedido asociado.
-        items: Lista de items a devolver [{"name": "...", "quantity": 1}].
-        customer_name: Nombre del cliente para la etiqueta.
-        customer_address: Dirección del cliente.
+        order_id: UUID del pedido.
+        customer_id: UUID del cliente.
+        reason: Motivo de la devolución.
+        reason_category: Categoría del motivo (e.g., "defective", "wrong_item").
+        refund_amount: Monto del reembolso.
+        items: Lista de items a devolver [{"order_item_id": "...", "quantity": 1, "condition": "unopened"}].
+        notes: Notas adicionales opcionales.
     """
-    from reportlab.lib.pagesizes import A6
-    from reportlab.lib.units import mm
-    from reportlab.pdfgen import canvas
+    client = await _get_client()
 
-    # Generate unique tracking number
-    tracking_number = f"RF-{uuid.uuid4().hex[:10].upper()}"
-    filename = f"label_{tracking_number}.pdf"
-    filepath = LABELS_DIR / filename
+    # Toda devolución nueva arranca en estado "pending".
+    return_data = {
+        "order_id": order_id,
+        "customer_id": customer_id,
+        "status": "pending",
+        "reason": reason,
+        "reason_category": reason_category,
+        "refund_amount": refund_amount,
+        "notes": notes,
+    }
 
-    # Create PDF label
-    c = canvas.Canvas(str(filepath), pagesize=A6)
-    width, height = A6
+    return_resp = await client.table("return_requests").insert(return_data).execute()
+    return_request = return_resp.data[0]
+    return_id = return_request["id"]
 
-    # Header
-    c.setFont("Helvetica-Bold", 14)
-    c.drawString(10 * mm, height - 15 * mm, "ETIQUETA DE DEVOLUCIÓN")
+    return_items_data = [
+        {
+            "return_request_id": return_id,
+            "order_item_id": item["order_item_id"],
+            "quantity": item["quantity"],
+            "condition": item.get("condition", "unknown"),
+        }
+        for item in items
+    ]
 
-    # Tracking number
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(10 * mm, height - 25 * mm, f"Tracking: {tracking_number}")
-
-    # Order info
-    c.setFont("Helvetica", 9)
-    c.drawString(10 * mm, height - 35 * mm, f"Pedido: {order_id[:8]}...")
-
-    # Customer info
-    y = height - 45 * mm
-    if customer_name:
-        c.drawString(10 * mm, y, f"De: {customer_name}")
-        y -= 5 * mm
-    if customer_address:
-        c.drawString(10 * mm, y, f"Dir: {customer_address[:50]}")
-        y -= 5 * mm
-
-    # Destination (warehouse)
-    y -= 5 * mm
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(10 * mm, y, "Para: Centro de Devoluciones ReFlow")
-    y -= 5 * mm
-    c.setFont("Helvetica", 9)
-    c.drawString(10 * mm, y, "C/ Logística 42, Madrid 28001")
-
-    # Items
-    y -= 10 * mm
-    c.setFont("Helvetica-Bold", 9)
-    c.drawString(10 * mm, y, "Artículos:")
-    y -= 5 * mm
-    c.setFont("Helvetica", 8)
-    for item in items[:5]:  # Max 5 items on label
-        c.drawString(12 * mm, y, f"• {item.get('name', 'Item')} x{item.get('quantity', 1)}")
-        y -= 4 * mm
-
-    # Date
-    y -= 5 * mm
-    c.setFont("Helvetica", 7)
-    c.drawString(10 * mm, y, f"Generado: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-
-    c.save()
+    await client.table("return_items").insert(return_items_data).execute()
 
     return {
-        "tracking_number": tracking_number,
-        "label_path": str(filepath),
-        "filename": filename,
-        "order_id": order_id,
-        "items_count": len(items),
+        "return_request": return_request,
+        "items_created": len(return_items_data),
     }
 
 
 # ---------------------------------------------------------------------------
-# Tool 2: send_customer_notification
+# Tool 5: update_return_status
 # ---------------------------------------------------------------------------
 
 
 @mcp.tool()
-async def send_customer_notification(
-    email: str,
-    message: str,
-    subject: str = "ReFlow - Actualización de tu devolución",
-    attachment_path: str = "",
+async def update_return_status(
+    return_id: str,
+    status: str,
+    resolution: str = "",
+    notes: str = "",
 ) -> dict:
     """
-    Simula el envío de un correo electrónico transaccional con el enlace al PDF generado.
-    Usado por Agente 3.
+    Actualiza el estado de la devolución desde el panel de control manual.
+    Usado por Admin / HITL (Human-In-The-Loop).
 
     Args:
-        email: Dirección de correo electrónico del cliente.
-        message: Cuerpo del mensaje.
-        subject: Asunto del correo.
-        attachment_path: Ruta al archivo adjunto (etiqueta PDF).
+        return_id: UUID de la solicitud de devolución.
+        status: Nuevo estado ("approved", "rejected", "processing", "completed").
+        resolution: Resolución aplicada (e.g., "full_refund", "partial_refund", "replacement").
+        notes: Notas adicionales del administrador.
     """
-    # Simulate email sending (in production, use SendGrid, SES, etc.)
-    notification_id = str(uuid.uuid4())
-    timestamp = datetime.now().isoformat()
+    client = await _get_client()
 
-    # Log the simulated email
-    log_entry = {
-        "notification_id": notification_id,
-        "to": email,
-        "subject": subject,
-        "message": message,
-        "attachment": attachment_path if attachment_path else None,
-        "status": "sent_simulated",
-        "timestamp": timestamp,
-    }
+    # Construye el dict de campos a actualizar; status siempre se manda,
+    # resolution/notes solo si el llamante los proporcionó (evita
+    # sobrescribir con cadenas vacías valores ya guardados).
+    update_data: dict = {"status": status}
+    if resolution:
+        update_data["resolution"] = resolution
+    if notes:
+        update_data["notes"] = notes
+    # Si el nuevo estado es uno "final", se marca resolved_at con la fecha
+    # actual del servidor de base de datos (función SQL now()).
+    if status in ("approved", "rejected", "completed"):
+        update_data["resolved_at"] = "now()"
 
-    # Write to a log file for traceability
-    log_file = LABELS_DIR / "notifications_log.jsonl"
-    import json
+    # Aplica el UPDATE sobre la fila con ese id y devuelve la fila actualizada.
+    resp = await client.table("return_requests").update(update_data).eq(
+        "id", return_id
+    ).execute()
 
-    with open(log_file, "a") as f:
-        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
-
-    print(f"📧 [SIMULATED] Email sent to {email}")
-    print(f"   Subject: {subject}")
-    print(f"   Attachment: {attachment_path or 'None'}")
-
-    return {
-        "notification_id": notification_id,
-        "status": "sent_simulated",
-        "to": email,
-        "subject": subject,
-        "timestamp": timestamp,
-        "note": "Email sending is simulated. In production, integrate with a transactional email service.",
-    }
+    # resp.data puede venir vacío si el id no existía; en ese caso se
+    # devuelve None en vez de indexar una lista vacía.
+    return {"updated_return": resp.data[0] if resp.data else None}
 
 
 # ---------------------------------------------------------------------------
@@ -173,4 +270,9 @@ async def send_customer_notification(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8002)
+    # Arranca el servidor MCP con transporte Streamable HTTP (el sustituto
+    # oficial de HTTP+SSE, que quedó deprecado en la revisión de spec
+    # 2025-03-26 y llegó a su end-of-life el 1 de abril de 2026). Host y
+    # puerto se fijan en el constructor de FastMCP (línea 36); aquí solo se
+    # elige el transporte. Queda accesible en http://0.0.0.0:8001/mcp.
+    mcp.run(transport="streamable-http")
