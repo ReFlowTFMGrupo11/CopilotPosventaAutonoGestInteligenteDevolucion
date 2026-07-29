@@ -1,19 +1,24 @@
 """
-Test script for MCP Supabase server via SSE.
+Test script for MCP Supabase server via Streamable HTTP.
 Start the server first: python -m backend.mcp.mcp_supabase
 Then run this: python tests/test_mcp_supabase.py
 """
 
 import asyncio
+import sys
 
 from mcp import ClientSession
-from mcp.client.sse import sse_client
+from mcp.client.streamable_http import streamablehttp_client
 
-MCP_SUPABASE_URL = "http://localhost:8001/sse"
+# En Windows la consola usa cp1252 por defecto, que no soporta los emojis
+# de los print() de este script (ver mismo fix en mcp_logistics.py).
+sys.stdout.reconfigure(encoding="utf-8")
+
+MCP_SUPABASE_URL = "http://localhost:8001/mcp"
 
 
 async def test():
-    async with sse_client(MCP_SUPABASE_URL) as (read, write):
+    async with streamablehttp_client(MCP_SUPABASE_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 

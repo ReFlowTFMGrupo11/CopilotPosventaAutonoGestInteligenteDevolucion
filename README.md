@@ -50,7 +50,7 @@ asyncio.run(test())
 
 ## Servidores MCP
 
-Los servidores MCP utilizan transporte **SSE (HTTP)** para permitir que múltiples agentes se conecten simultáneamente.
+Los servidores MCP utilizan transporte **Streamable HTTP** para permitir que múltiples agentes se conecten simultáneamente.
 
 ### Iniciar los servidores
 
@@ -59,13 +59,13 @@ Abre **dos terminales** y ejecuta cada servidor por separado:
 ```bash
 cd /path/to/CopilotPosventaAutonoGestInteligenteDevolucion
 ```
-**Terminal 1** — Supabase (Datos y Políticas) en `http://localhost:8001/sse`:
+**Terminal 1** — Supabase (Datos y Políticas) en `http://localhost:8001/mcp`:
 
 ```bash
 python -m backend.mcp.mcp_supabase
 ```
 
-**Terminal 2** — Logística en `http://localhost:8002/sse`:
+**Terminal 2** — Logística en `http://localhost:8002/mcp`:
 ```bash
 python -m backend.mcp.mcp_logistics
 ```
