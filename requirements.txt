@@ -2,9 +2,11 @@
 supabase>=2.5.0
 pydantic-settings>=2.3.0
 
-# MCP (Streamable HTTP transport). Fijado a la serie 1.x: la 2.x
-# reestructuró mcp.server.fastmcp.FastMCP -> mcp.server.mcpserver.MCPServer.
-mcp[cli]>=1.24.0,<2.0.0
+# MCP
+mcp[cli]>=1.0.0
 
-# PDF generation (mcp_logistics.py)
+# AI / Embeddings
+openai>=1.30.0
+
+# PDF generation
 reportlab>=4.0.0
