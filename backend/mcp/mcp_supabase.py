@@ -12,17 +12,22 @@ Tools:
 import os
 from typing import Optional
 
-from fastmcp import FastMCP
+# Se usa la serie 1.x del SDK "mcp" (no la 2.x, donde esta clase pasó a
+# llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
+# mcp 2.x (ver requirements.txt).
+from mcp.server.fastmcp import FastMCP
 from supabase import create_async_client, AsyncClient
 
 from backend.db.supabase_client import get_settings
 
-mcp = FastMCP("supabase-data-policies")
+mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
 
 # ---------------------------------------------------------------------------
-# Helper: get Supabase client
+# Helper: cliente Supabase
 # ---------------------------------------------------------------------------
 
+# Singleton perezoso: se crea en el primer uso para no abrir conexión antes
+# de que haga falta.
 _client: Optional[AsyncClient] = None
 
 
@@ -53,12 +58,10 @@ async def get_order_details(order_id: str) -> dict:
     """
     client = await _get_client()
 
-    # Get order info
     order_resp = await client.table("orders").select(
         "*, customer:customers(id, email, full_name)"
     ).eq("id", order_id).single().execute()
 
-    # Get order items with product details
     items_resp = await client.table("order_items").select(
         "*, product:products(name, sku, category, price, weight_kg)"
     ).eq("order_id", order_id).execute()
@@ -117,19 +120,19 @@ async def search_return_policy(query: str, category: str = "") -> dict:
         query: Texto de consulta para buscar en las políticas.
         category: Categoría opcional para filtrar políticas (e.g., "electronics").
     """
+    # Import local para no cargar el SDK de OpenAI si esta tool no se invoca.
     import openai
 
     client = await _get_client()
 
-    # Generate embedding for the query
     openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    # Debe ser el mismo modelo de embedding usado al indexar las políticas.
     embedding_resp = openai_client.embeddings.create(
         model="text-embedding-3-small",
         input=query,
     )
     query_embedding = embedding_resp.data[0].embedding
 
-    # Call the match_policy_embeddings function via RPC
     rpc_params = {
         "query_embedding": query_embedding,
         "match_threshold": 0.7,
@@ -137,7 +140,6 @@ async def search_return_policy(query: str, category: str = "") -> dict:
     }
     results = await client.rpc("match_policy_embeddings", rpc_params).execute()
 
-    # If category filter is provided, also get the specific policy
     policy_info = None
     if category:
         policy_resp = await client.table("return_policies").select("*").eq(
@@ -183,7 +185,7 @@ async def create_return_record(
     """
     client = await _get_client()
 
-    # Create return request
+    # Toda devolución nueva arranca en estado "pending".
     return_data = {
         "order_id": order_id,
         "customer_id": customer_id,
@@ -198,7 +200,6 @@ async def create_return_record(
     return_request = return_resp.data[0]
     return_id = return_request["id"]
 
-    # Create return items
     return_items_data = [
         {
             "return_request_id": return_id,
@@ -241,6 +242,8 @@ async def update_return_status(
     """
     client = await _get_client()
 
+    # resolution/notes solo se envían si el llamante los proporcionó, para no
+    # sobrescribir con cadenas vacías valores ya guardados.
     update_data: dict = {"status": status}
     if resolution:
         update_data["resolution"] = resolution
@@ -257,8 +260,10 @@ async def update_return_status(
 
 
 # ---------------------------------------------------------------------------
-# Run server
+# Arranque del servidor
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8001)
+    # streamable-http es el sustituto oficial de HTTP+SSE, deprecado en la
+    # revisión de spec 2025-03-26. Accesible en http://0.0.0.0:8001/mcp.
+    mcp.run(transport="streamable-http")
