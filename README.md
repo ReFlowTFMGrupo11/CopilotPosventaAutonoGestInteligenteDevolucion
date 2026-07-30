@@ -33,6 +33,8 @@ backend/
   db/            # Cliente y settings de Supabase (backend/db/supabase_client.py)
   mcp/           # Servidores MCP: mcp_supabase.py (puerto 8001), mcp_logistics.py (puerto 8002)
 supabase/        # Migraciones SQL, seed de datos de prueba y diagrama ER
+dataset/         # Dataset sintético grande (clientes, pedidos, devoluciones) y
+                 # documentación de políticas de devolución para el RAG — ver dataset/README.md
 tests/           # Clientes de prueba para los servidores MCP
 doc/guia.md      # Arquitectura técnica completa, backlog por épicas y cronograma
 defenderMCP.md   # Argumentario de defensa de las decisiones de arquitectura MCP
