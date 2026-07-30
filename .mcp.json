@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "awslabs.syntheticdata-mcp-server": {
+      "command": "uv",
+      "args": [
+        "tool", "run", "--from",
+        "awslabs.syntheticdata-mcp-server@latest",
+        "awslabs.syntheticdata-mcp-server.exe"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git check-ignore *)",
+      "Bash(python3 -c ' *)",
+      "Bash(where claude *)",
+      "Bash(claude --version)",
+      "Bash(claude mcp *)",
+      "WebFetch(domain:awslabs.github.io)",
+      "WebFetch(domain:github.com)"
+    ]
+  }
+}
