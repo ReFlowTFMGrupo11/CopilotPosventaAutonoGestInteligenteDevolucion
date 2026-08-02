@@ -29,10 +29,13 @@ logger = logging.getLogger(__name__)
 # ── Funciones de enrutamiento (aristas condicionales) ──────────────────────
 
 
-def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "triage"]:
-    """Decide si avanzar a consultar datos o seguir conversando.
+def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "__end__"]:
+    """Decide si avanzar a consultar datos o terminar el turno.
 
     Avanza cuando tenemos ``order_id`` y al menos un artículo a devolver.
+    Si falta información, el turno termina (END) y el caller re-invoca
+    el grafo con el siguiente mensaje del usuario. El checkpointer
+    preserva el estado entre turnos.
     """
     order_id = state.get("order_id")
     items = state.get("items_to_return", [])
@@ -40,14 +43,18 @@ def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "triag
     if order_id and items:
         return "fetch_order_data"
 
-    # Falta información → volver a conversar con el usuario
-    return "triage"
+    # Falta información → terminar turno; el usuario responderá
+    return "__end__"
 
 
-def route_after_fetch(state: ReturnState) -> Literal["evaluator", "triage"]:
-    """Decide si avanzar al evaluador o volver al triaje (si hubo error)."""
+def route_after_fetch(state: ReturnState) -> Literal["evaluator", "__end__"]:
+    """Decide si avanzar al evaluador o terminar turno (si hubo error).
+
+    Si el pedido no se encontró, el agente de triaje ya dejó un mensaje
+    pidiendo corrección. Terminamos el turno para que el usuario responda.
+    """
     if state.get("error"):
-        return "triage"
+        return "__end__"
     return "evaluator"
 
 
@@ -88,10 +95,10 @@ def build_return_graph(checkpointer=None):
     # Entrada → Triaje
     graph.add_edge(START, "triage")
 
-    # Triaje → (fetch_order_data | triage)
+    # Triaje → (fetch_order_data | END)
     graph.add_conditional_edges("triage", route_after_triage)
 
-    # Fetch datos → (evaluator | triage)
+    # Fetch datos → (evaluator | END)
     graph.add_conditional_edges("fetch_order_data", route_after_fetch)
 
     # Evaluador → (resolver | reject)
