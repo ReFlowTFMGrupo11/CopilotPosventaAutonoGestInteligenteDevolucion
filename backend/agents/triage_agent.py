@@ -10,13 +10,12 @@ Primer punto de contacto con el cliente. Se encarga de:
 
 from __future__ import annotations
 
-import json
 import logging
-import re
-from typing import Any
+from typing import Any, Optional
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
 
 from backend.agents.state import ReturnState
 from backend.agents.mcp_client import get_order_details, get_customer_return_history
@@ -43,16 +42,43 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 - Sé empático, cálido y profesional. Usa español.
 - Si el cliente no proporciona el order_id, pídelo amablemente.
 - Si falta información, pregunta de forma natural (una cosa a la vez).
-- Cuando tengas TODA la información necesaria, responde con un JSON al final de tu mensaje
-  dentro de un bloque ```json ... ``` con las claves: order_id, reason, reason_category, items_to_return.
-- NO inventes datos. Si no tienes algo, pregunta.
+- Cuando tengas TODA la información necesaria, rellena todos los campos.
+- NO inventes datos. Si no tienes algo, déjalo como null.
 - Si el cliente tiene un problema que NO es una devolución, indícale amablemente
   que solo puedes ayudar con devoluciones.
+- SIEMPRE rellena response_to_customer con tu respuesta empática al cliente.
 """
 
 
+# ── Modelo de salida estructurada ──────────────────────────────────────────
+
+
+class TriageOutput(BaseModel):
+    """Salida estructurada del agente de triaje."""
+
+    response_to_customer: str = Field(
+        description="Respuesta empática a mostrar al cliente en este turno."
+    )
+    order_id: Optional[str] = Field(
+        default=None,
+        description="UUID del pedido. None si el cliente aún no lo ha proporcionado.",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Motivo de la devolución en palabras del cliente.",
+    )
+    reason_category: Optional[str] = Field(
+        default=None,
+        description="Categoría: defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other.",
+    )
+    items_to_return: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lista de artículos a devolver con order_item_id, quantity, condition.",
+    )
+
+
 def _build_llm() -> ChatOpenAI:
-    """Construye el LLM para el agente de triaje."""
+    """Construye el LLM para el agente de triaje con salida estructurada."""
     return ChatOpenAI(
         model="gpt-5-nano",
         temperature=0.3,
@@ -60,45 +86,34 @@ def _build_llm() -> ChatOpenAI:
     )
 
 
-def _extract_json_from_response(content: str) -> dict[str, Any] | None:
-    """Intenta extraer un bloque JSON del contenido de la respuesta del LLM."""
-    pattern = r"```json\s*(.*?)\s*```"
-    match = re.search(pattern, content, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            logger.warning("No se pudo parsear el JSON extraído del triaje.")
-    return None
-
-
 async def triage_agent(state: ReturnState) -> dict[str, Any]:
     """Nodo del agente de Triaje y Empatía.
 
-    Lee los ``messages`` del estado, invoca al LLM y decide si ya tiene
-    suficiente información para avanzar al Evaluador de Políticas.
+    Lee los ``messages`` del estado, invoca al LLM con structured output
+    (Pydantic) para garantizar un schema válido en cada respuesta.
     """
     llm = _build_llm()
+    llm_structured = llm.with_structured_output(TriageOutput)
 
     # Construir la lista de mensajes para el LLM
     system = SystemMessage(content=TRIAGE_SYSTEM_PROMPT)
     llm_messages = [system, *state.get("messages", [])]
 
-    response = await llm.ainvoke(llm_messages)
-
-    # Intentar extraer datos estructurados de la respuesta
-    extracted = _extract_json_from_response(response.content)
+    result: TriageOutput = await llm_structured.ainvoke(llm_messages)
 
     updates: dict[str, Any] = {
-        "messages": [response],
+        "messages": [AIMessage(content=result.response_to_customer)],
         "current_agent": "triage",
     }
 
-    if extracted:
-        updates["order_id"] = extracted.get("order_id")
-        updates["reason"] = extracted.get("reason")
-        updates["reason_category"] = extracted.get("reason_category")
-        updates["items_to_return"] = extracted.get("items_to_return", [])
+    if result.order_id:
+        updates["order_id"] = result.order_id
+    if result.reason:
+        updates["reason"] = result.reason
+    if result.reason_category:
+        updates["reason_category"] = result.reason_category
+    if result.items_to_return:
+        updates["items_to_return"] = result.items_to_return
 
     return updates
 

@@ -9,9 +9,10 @@ con soporte HITL para reembolsos > 100 €.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Literal
 
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.graph import END, START, StateGraph
 
 from backend.agents.policy_agent import policy_evaluator_agent
@@ -73,13 +74,21 @@ def build_return_graph(checkpointer=None):
 
     Args:
         checkpointer: Checkpointer de LangGraph para persistencia.
-            Si es ``None``, se usa ``InMemorySaver`` (solo para desarrollo).
+            Si es ``None``, se crea un ``PostgresSaver`` conectado a la
+            base de datos de Supabase (variable ``DATABASE_URL``).
 
     Returns:
         El grafo compilado, listo para ``invoke()`` o ``stream_events()``.
     """
     if checkpointer is None:
-        checkpointer = InMemorySaver()
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url:
+            raise RuntimeError(
+                "DATABASE_URL no configurada. Añádela al .env con la "
+                "connection string de Supabase (postgresql://...)."
+            )
+        checkpointer = PostgresSaver.from_conn_string(db_url)
+        checkpointer.setup()  # Crea las tablas si no existen
 
     graph = StateGraph(ReturnState)
 
