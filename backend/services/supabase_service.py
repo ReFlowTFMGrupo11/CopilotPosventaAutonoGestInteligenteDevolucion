@@ -32,7 +32,7 @@ async def _get_client() -> AsyncClient:
     if _client is None:
         settings = get_settings()
         _client = await create_async_client(
-            supabase_url=settings.supabase_url,
+            supabase_url=settings.supabase_api_url,
             supabase_key=settings.supabase_service_key,
         )
     return _client

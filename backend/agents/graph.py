@@ -77,13 +77,13 @@ async def build_return_graph(checkpointer=None):
     Args:
         checkpointer: Checkpointer de LangGraph para persistencia.
             Si es ``None``, se crea un ``AsyncPostgresSaver`` conectado a la
-            base de datos de Supabase (variable ``DATABASE_URL``).
+            base de datos de Supabase (variable ``SUPABASE_DB_URL``).
 
     Returns:
         El grafo compilado, listo para ``ainvoke()`` o ``astream()``.
     """
     if checkpointer is None:
-        db_url = os.getenv("DATABASE_URL")
+        db_url = os.getenv("SUPABASE_DB_URL")
         if db_url:
             try:
                 # Crear pool async con open=False para evitar deprecation warning
@@ -98,7 +98,7 @@ async def build_return_graph(checkpointer=None):
                 )
                 checkpointer = InMemorySaver()
         else:
-            logger.warning("DATABASE_URL no configurada. Usando InMemorySaver (no persistente).")
+            logger.warning("SUPABASE_DB_URL no configurada. Usando InMemorySaver (no persistente).")
             checkpointer = InMemorySaver()
 
     graph = StateGraph(ReturnState)

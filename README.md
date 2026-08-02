@@ -64,7 +64,7 @@ cp .env.example .env
 Edita `.env` con tus valores:
 
 ```
-SUPABASE_URL=https://<tu-proyecto>.supabase.co
+SUPABASE_API_URL=https://<tu-proyecto>.supabase.co
 SUPABASE_SERVICE_KEY=<tu-service-role-key>
 OPENAI_API_KEY=<tu-openai-api-key>
 ```
