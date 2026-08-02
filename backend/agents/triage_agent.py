@@ -53,6 +53,13 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 # ── Modelo de salida estructurada ──────────────────────────────────────────
 
 
+class ReturnItem(BaseModel):
+    """Artículo a devolver."""
+    order_item_id: str = Field(description="UUID del order_item.")
+    quantity: int = Field(default=1, description="Cantidad a devolver.")
+    condition: str = Field(description="Estado: unopened, defective, damaged, used, wrong_item.")
+
+
 class TriageOutput(BaseModel):
     """Salida estructurada del agente de triaje."""
 
@@ -71,9 +78,9 @@ class TriageOutput(BaseModel):
         default=None,
         description="Categoría: defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other.",
     )
-    items_to_return: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Lista de artículos a devolver con order_item_id, quantity, condition.",
+    items_to_return: Optional[list[ReturnItem]] = Field(
+        default=None,
+        description="Lista de artículos a devolver. None si aún no se conocen.",
     )
 
 
@@ -82,7 +89,7 @@ def _build_llm() -> ChatOpenAI:
     return ChatOpenAI(
         model="gpt-5-nano",
         temperature=0.3,
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
 
@@ -99,7 +106,15 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     system = SystemMessage(content=TRIAGE_SYSTEM_PROMPT)
     llm_messages = [system, *state.get("messages", [])]
 
-    result: TriageOutput = await llm_structured.ainvoke(llm_messages)
+    result: TriageOutput | None = await llm_structured.ainvoke(llm_messages)
+
+    if result is None:
+        # Fallback: el LLM no generó structured output válido
+        logger.warning("Triaje: structured output devolvió None, usando fallback.")
+        return {
+            "messages": [AIMessage(content="Lo siento, no he podido procesar tu mensaje. ¿Podrías repetirlo?")],
+            "current_agent": "triage",
+        }
 
     updates: dict[str, Any] = {
         "messages": [AIMessage(content=result.response_to_customer)],
@@ -113,7 +128,7 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     if result.reason_category:
         updates["reason_category"] = result.reason_category
     if result.items_to_return:
-        updates["items_to_return"] = result.items_to_return
+        updates["items_to_return"] = [item.model_dump() for item in result.items_to_return]
 
     return updates
 

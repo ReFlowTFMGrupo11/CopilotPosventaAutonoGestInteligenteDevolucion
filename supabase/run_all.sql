@@ -180,6 +180,35 @@ CREATE TRIGGER trg_customers_updated_at
 CREATE TRIGGER trg_return_requests_updated_at
     BEFORE UPDATE ON return_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- LangGraph checkpointer tables (state persistence between conversation turns)
+CREATE TABLE IF NOT EXISTS checkpoints (
+    thread_id TEXT NOT NULL,
+    checkpoint_ns TEXT NOT NULL DEFAULT '',
+    checkpoint_id TEXT NOT NULL,
+    parent_checkpoint_id TEXT,
+    type TEXT,
+    checkpoint JSONB NOT NULL,
+    metadata_ JSONB NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id)
+);
+
+CREATE TABLE IF NOT EXISTS checkpoint_writes (
+    thread_id TEXT NOT NULL,
+    checkpoint_ns TEXT NOT NULL DEFAULT '',
+    checkpoint_id TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    idx INTEGER NOT NULL,
+    channel TEXT NOT NULL,
+    type TEXT,
+    blob BYTEA NOT NULL,
+    PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
+);
+
+CREATE TABLE IF NOT EXISTS checkpoint_migrations (
+    v INTEGER PRIMARY KEY
+);
+
 -- Seed data for development and demo purposes
 
 -- Sample customers
