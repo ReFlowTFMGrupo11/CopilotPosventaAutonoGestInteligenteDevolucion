@@ -124,6 +124,14 @@ El admin responde con `Command(resume={"approved": True})` y el grafo continúa 
 
 El checkpointer guarda todo el estado (incluido `messages`) asociado a un `thread_id`. Cuando el usuario vuelve (mismo `thread_id`), el grafo se reanuda con todo el historial.
 
+### Persistencia del estado conversacional (Checkpointer)
+
+El grafo LangGraph utiliza un *checkpointer* para persistir el estado completo de cada conversación entre turnos. Cada sesión de usuario se identifica mediante un `thread_id` único, y al finalizar cada turno (cuando el grafo alcanza el nodo `END`), el checkpointer serializa el `ReturnState` —incluyendo el historial de mensajes, datos parciales extraídos y decisiones intermedias— y lo almacena.
+
+En desarrollo se emplea `InMemorySaver`, que mantiene el estado en memoria RAM (se pierde al reiniciar el proceso). En producción se utilizaría `PostgresSaver`, que persiste el estado en tablas gestionadas automáticamente por LangGraph (`checkpoints`, `checkpoint_writes`, `checkpoint_migrations`) dentro de la misma instancia PostgreSQL de Supabase, en un schema separado (`langgraph`) para no interferir con el modelo de datos del dominio.
+
+Este mecanismo permite un patrón conversacional multi-turno sin mantener conexiones abiertas: cada mensaje del usuario dispara una nueva invocación del grafo (`graph.invoke()`), el checkpointer restaura el estado previo asociado al `thread_id`, y la ejecución continúa desde donde se detuvo. Esto es fundamental para el agente de triaje, que puede requerir varios intercambios con el cliente antes de reunir toda la información necesaria (`order_id`, motivo, artículos) para avanzar al evaluador de políticas.
+
 ---
 
 ## 7. ¿Por qué mocks en los tests y no llamadas reales?
