@@ -42,7 +42,6 @@ async def get_mcp_client() -> MultiServerMCPClient:
             "supabase": {"url": MCP_SUPABASE_URL},
             "logistics": {"url": MCP_LOGISTICS_URL},
         })
-        await _client.__aenter__()
     return _client
 
 
@@ -50,7 +49,6 @@ async def close_mcp_client() -> None:
     """Cierra la conexión con los MCP servers."""
     global _client
     if _client is not None:
-        await _client.__aexit__(None, None, None)
         _client = None
 
 
@@ -70,7 +68,7 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
         El resultado de la tool.
     """
     client = await get_mcp_client()
-    tools = client.get_tools()
+    tools = await client.get_tools()
 
     tool = next((t for t in tools if t.name == tool_name), None)
     if tool is None:
