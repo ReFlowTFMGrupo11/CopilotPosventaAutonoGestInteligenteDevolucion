@@ -12,8 +12,10 @@ import logging
 import os
 from typing import Literal
 
-from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
+from psycopg_pool import AsyncConnectionPool
 
 from backend.agents.policy_agent import policy_evaluator_agent
 from backend.agents.resolution_agent import (
@@ -69,26 +71,35 @@ def route_after_evaluator(state: ReturnState) -> Literal["resolver", "reject"]:
 # ── Construcción del grafo ─────────────────────────────────────────────────
 
 
-def build_return_graph(checkpointer=None):
+async def build_return_graph(checkpointer=None):
     """Construye y compila el grafo de devoluciones.
 
     Args:
         checkpointer: Checkpointer de LangGraph para persistencia.
-            Si es ``None``, se crea un ``PostgresSaver`` conectado a la
+            Si es ``None``, se crea un ``AsyncPostgresSaver`` conectado a la
             base de datos de Supabase (variable ``DATABASE_URL``).
 
     Returns:
-        El grafo compilado, listo para ``invoke()`` o ``stream_events()``.
+        El grafo compilado, listo para ``ainvoke()`` o ``astream()``.
     """
     if checkpointer is None:
         db_url = os.getenv("DATABASE_URL")
-        if not db_url:
-            raise RuntimeError(
-                "DATABASE_URL no configurada. Añádela al .env con la "
-                "connection string de Supabase (postgresql://...)."
-            )
-        checkpointer = PostgresSaver.from_conn_string(db_url)
-        checkpointer.setup()  # Crea las tablas si no existen
+        if db_url:
+            try:
+                # Crear pool async con open=False para evitar deprecation warning
+                pool = AsyncConnectionPool(db_url, min_size=1, max_size=3, open=False)
+                # Abrir explícitamente (establece las conexiones al DB)
+                await pool.open()
+                checkpointer = AsyncPostgresSaver(pool)
+                logger.info("Checkpointer: AsyncPostgresSaver (persistente).")
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo conectar a PostgreSQL (%s). Usando InMemorySaver.", exc
+                )
+                checkpointer = InMemorySaver()
+        else:
+            logger.warning("DATABASE_URL no configurada. Usando InMemorySaver (no persistente).")
+            checkpointer = InMemorySaver()
 
     graph = StateGraph(ReturnState)
 
@@ -132,9 +143,9 @@ def build_return_graph(checkpointer=None):
 _default_graph = None
 
 
-def get_return_graph():
+async def get_return_graph():
     """Devuelve el grafo singleton para desarrollo."""
     global _default_graph
     if _default_graph is None:
-        _default_graph = build_return_graph()
+        _default_graph = await build_return_graph()
     return _default_graph
