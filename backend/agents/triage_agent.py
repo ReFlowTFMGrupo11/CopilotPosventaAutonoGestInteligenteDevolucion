@@ -88,7 +88,7 @@ def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de triaje con salida estructurada."""
     return ChatOpenAI(
         model="gpt-5-nano",
-        temperature=0.3,
+        temperature=0,
         max_tokens=4096,
     )
 
