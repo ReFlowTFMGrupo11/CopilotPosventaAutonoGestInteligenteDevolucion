@@ -39,8 +39,14 @@ async def get_mcp_client() -> MultiServerMCPClient:
     global _client
     if _client is None:
         _client = MultiServerMCPClient({
-            "supabase": {"url": MCP_SUPABASE_URL},
-            "logistics": {"url": MCP_LOGISTICS_URL},
+            "supabase": {
+                "transport": "sse",
+                "url": MCP_SUPABASE_URL,
+            },
+            "logistics": {
+                "transport": "sse",
+                "url": MCP_LOGISTICS_URL,
+            },
         })
     return _client
 
