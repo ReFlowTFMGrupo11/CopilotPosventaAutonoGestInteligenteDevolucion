@@ -17,14 +17,14 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg_pool import AsyncConnectionPool
 
-from backend.agents.policy_agent import policy_evaluator_agent
-from backend.agents.resolution_agent import (
+from backend.agents.nodes.policy import policy_evaluator_agent
+from backend.agents.nodes.resolution import (
     hitl_admin_node,
     rejection_agent,
     resolution_agent,
 )
 from backend.agents.state import ReturnState
-from backend.agents.triage_agent import fetch_order_data, triage_agent
+from backend.agents.nodes.triage import fetch_order_data, triage_agent
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ async def build_return_graph(checkpointer=None):
                 logger.warning(
                     "No se pudo conectar a PostgreSQL (%s). Usando InMemorySaver.", exc
                 )
-                checkpointer = InMemorySaver()
+                #checkpointer = InMemorySaver()
         else:
             logger.warning("SUPABASE_DB_URL no configurada. Usando InMemorySaver (no persistente).")
             checkpointer = InMemorySaver()

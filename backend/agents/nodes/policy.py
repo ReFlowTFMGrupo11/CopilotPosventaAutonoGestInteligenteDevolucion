@@ -22,7 +22,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
-from backend.agents.mcp_client import search_return_policy
+from backend.agents.infra.mcp_client import search_return_policy
 from backend.services.supabase_service import calculate_days_since_delivery
 
 logger = logging.getLogger(__name__)

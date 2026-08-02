@@ -18,7 +18,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from backend.agents.state import ReturnState
-from backend.agents.mcp_client import get_order_details, get_customer_return_history
+from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
 
 logger = logging.getLogger(__name__)
 
