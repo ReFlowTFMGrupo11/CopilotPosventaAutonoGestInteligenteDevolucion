@@ -5,7 +5,7 @@ Ejecutar:
     python -m backend.agents.demo_chat
 
 Requiere:
-    - .env con DATABASE_URL y OPENAI_API_KEY
+    - .env con SUPABASE_DB_URL y OPENAI_API_KEY
     - Servidores MCP levantados (mcp_supabase en puerto 8001)
 """
 
