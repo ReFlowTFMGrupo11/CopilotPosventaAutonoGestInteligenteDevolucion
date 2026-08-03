@@ -101,7 +101,7 @@ request = ResolutionRequest(
     reason='Llego roto',
     reason_category='defective',
     refund_amount=79.99,
-    items=[{'order_item_id': 'c5d6e7f8-a9b0-1234-cdef-345678901234', 'quantity': 1, 'condition': 'defective', 'name': 'Batidora de Vaso 1200W'}],
+    products=[{'order_item_id': 'c5d6e7f8-a9b0-1234-cdef-345678901234', 'quantity': 1, 'condition': 'defective', 'name': 'Batidora de Vaso 1200W'}],
 )
 output = asyncio.run(run_agent_resolucion(request))
 print(output.model_dump())
@@ -110,7 +110,7 @@ print(output.model_dump())
 
 **PowerShell:**
 ```powershell
-python -c "import asyncio; from agente3ConMCP.agente_resolucion import ResolutionRequest, run_agent_resolucion; r = ResolutionRequest(order_id='e1f2a3b4-c5d6-7890-efab-901234567890', customer_id='c3d4e5f6-a7b8-9012-cdef-123456789012', customer_email='laura.fernandez@email.com', reason='Llego roto', reason_category='defective', refund_amount=79.99, items=[{'order_item_id': 'c5d6e7f8-a9b0-1234-cdef-345678901234', 'quantity': 1, 'name': 'Batidora de Vaso 1200W'}]); print(asyncio.run(run_agent_resolucion(r)).model_dump())"
+python -c "import asyncio; from agente3ConMCP.agente_resolucion import ResolutionRequest, run_agent_resolucion; r = ResolutionRequest(order_id='e1f2a3b4-c5d6-7890-efab-901234567890', customer_id='c3d4e5f6-a7b8-9012-cdef-123456789012', customer_email='laura.fernandez@email.com', reason='Llego roto', reason_category='defective', refund_amount=79.99, products=[{'order_item_id': 'c5d6e7f8-a9b0-1234-cdef-345678901234', 'quantity': 1, 'name': 'Batidora de Vaso 1200W'}]); print(asyncio.run(run_agent_resolucion(r)).model_dump())"
 ```
 
 ### 2.4. Probar el corte HITL (sin efectos secundarios, no necesita servidores)
@@ -131,7 +131,7 @@ request = ResolutionRequest(
     reason='Llego roto',
     reason_category='defective',
     refund_amount=899.99,
-    items=[{'order_item_id': 'f2a3b4c5-d6e7-8901-fabc-012345678901', 'quantity': 1}],
+    products=[{'order_item_id': 'f2a3b4c5-d6e7-8901-fabc-012345678901', 'quantity': 1}],
 )
 output = asyncio.run(run_agent_resolucion(request))
 print(output.model_dump())
@@ -163,5 +163,5 @@ derivado a un administrador.
 - **No conecta a los MCP**: comprueba que los dos servidores de la sección 2.1
   siguen levantados (`netstat -ano | grep -E ":8001|:8002"`).
 - **Quiero repetir la prueba del demo sin acumular registros**: cambia el
-  `order_id`/`items` a otro pedido de la seed, o revisa/limpia manualmente la tabla
+  `order_id`/`products` a otro pedido de la seed, o revisa/limpia manualmente la tabla
   `return_requests` en Supabase.

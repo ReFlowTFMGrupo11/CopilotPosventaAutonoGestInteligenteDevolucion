@@ -11,11 +11,14 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pydantic import ValidationError
 
+from langchain_openai import ChatOpenAI
+
 from agente3ConMCP.agente_resolucion import (
     HITL_THRESHOLD_EUR,
     RESOLUTION_TOOL_NAMES,
     ResolutionOutput,
     ResolutionRequest,
+    _resolve_model,
     build_resolution_agent,
     get_resolution_tools,
     run_agent_resolucion,
@@ -49,7 +52,7 @@ def _make_request(**overrides) -> ResolutionRequest:
         reason="No era lo que esperaba",
         reason_category="changed_mind",
         refund_amount=34.99,
-        items=[{"order_item_id": "d6e7f8a9-b0c1-2345-defa-456789012345", "quantity": 1}],
+        products=[{"order_item_id": "d6e7f8a9-b0c1-2345-defa-456789012345", "quantity": 1}],
     )
     defaults.update(overrides)
     return ResolutionRequest(**defaults)
@@ -110,15 +113,22 @@ async def test_build_resolution_agent_wires_create_agent_with_injected_tools():
 
     with patch("agente3ConMCP.agente_resolucion.create_agent") as mock_create_agent, patch(
         "agente3ConMCP.agente_resolucion.get_resolution_tools"
-    ) as mock_get_tools:
+    ) as mock_get_tools, patch(
+        "agente3ConMCP.agente_resolucion._resolve_model"
+    ) as mock_resolve_model:
         mock_create_agent.return_value = "compiled-agent"
+        mock_resolve_model.return_value = "resolved-model"
 
         result = await build_resolution_agent(model="openai:gpt-4o-mini", tools=injected_tools)
 
     mock_get_tools.assert_not_called()
+    mock_resolve_model.assert_called_once_with("openai:gpt-4o-mini")
     mock_create_agent.assert_called_once()
     _, kwargs = mock_create_agent.call_args
-    assert kwargs["model"] == "openai:gpt-4o-mini"
+    # build_resolution_agent pasa a create_agent el modelo YA resuelto por
+    # _resolve_model, no el string original (ver test_resolve_model_* mas
+    # abajo para el porque de esa conversion).
+    assert kwargs["model"] == "resolved-model"
     assert kwargs["tools"] == injected_tools
     assert kwargs["response_format"] is ResolutionOutput
     assert "create_return_record" in kwargs["system_prompt"]
@@ -129,7 +139,7 @@ async def test_build_resolution_agent_wires_create_agent_with_injected_tools():
 async def test_build_resolution_agent_fetches_tools_from_mcp_when_not_injected():
     with patch("agente3ConMCP.agente_resolucion.create_agent") as mock_create_agent, patch(
         "agente3ConMCP.agente_resolucion.get_resolution_tools", new_callable=AsyncMock
-    ) as mock_get_tools:
+    ) as mock_get_tools, patch("agente3ConMCP.agente_resolucion._resolve_model"):
         mock_get_tools.return_value = [_FakeTool("create_return_record")]
         mock_create_agent.return_value = "compiled-agent"
 
@@ -141,6 +151,41 @@ async def test_build_resolution_agent_fetches_tools_from_mcp_when_not_injected()
     mock_get_tools.assert_awaited_once_with(
         "http://localhost:8001/mcp", "http://localhost:8002/mcp"
     )
+
+
+# ---------------------------------------------------------------------------
+# _resolve_model: convierte "openai:<modelo>" en ChatOpenAI(use_responses_api=True)
+#
+# Motivo (ver docstring de _resolve_model en agente_resolucion.py): sin
+# use_responses_api=True, OpenAI rechaza el schema de create_return_record
+# con un 400 ("Extra required key 'items' supplied") en cuanto el agente
+# tiene tools + response_format a la vez.
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_model_converts_openai_prefixed_string(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-dummy-key")
+
+    resolved = _resolve_model("openai:gpt-4o-mini")
+
+    assert isinstance(resolved, ChatOpenAI)
+    assert resolved.model_name == "gpt-4o-mini"
+    assert resolved.use_responses_api is True
+
+
+def test_resolve_model_leaves_non_openai_strings_untouched():
+    resolved = _resolve_model("anthropic:claude-3-5-sonnet")
+
+    assert resolved == "anthropic:claude-3-5-sonnet"
+
+
+def test_resolve_model_leaves_prebuilt_chat_models_untouched(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-dummy-key")
+    already_built = ChatOpenAI(model="gpt-4o-mini")
+
+    resolved = _resolve_model(already_built)
+
+    assert resolved is already_built
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +280,7 @@ async def test_run_agent_resolucion_builds_agent_when_none_injected():
 # ---------------------------------------------------------------------------
 
 
-def test_resolution_request_defaults_items_to_empty_list():
+def test_resolution_request_defaults_products_to_empty_list():
     request = ResolutionRequest(
         order_id="order-1",
         customer_id="customer-1",
@@ -244,7 +289,7 @@ def test_resolution_request_defaults_items_to_empty_list():
         reason_category="defective",
         refund_amount=10.0,
     )
-    assert request.items == []
+    assert request.products == []
     assert request.customer_name == ""
     assert request.notes == ""
 

@@ -12,6 +12,13 @@ Tools:
 import os
 from typing import Optional
 
+# load_dotenv: search_return_policy lee OPENAI_API_KEY con os.getenv(), que
+# solo ve variables de entorno reales del proceso, no el fichero .env (a
+# diferencia de SupabaseSettings, que lo lee directamente vía
+# pydantic-settings). Sin esto, el servidor arranca y get_order_details
+# funciona, pero search_return_policy falla con "Missing credentials" en
+# cuanto necesita llamar a la API de embeddings de OpenAI.
+from dotenv import load_dotenv
 # Se usa la serie 1.x del SDK "mcp" (no la 2.x, donde esta clase pasó a
 # llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
 # mcp 2.x (ver requirements.txt).
@@ -19,6 +26,8 @@ from mcp.server.fastmcp import FastMCP
 from supabase import create_async_client, AsyncClient
 
 from backend.db.supabase_client import get_settings
+
+load_dotenv()
 
 mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
 

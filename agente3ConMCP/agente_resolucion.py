@@ -34,9 +34,16 @@ from dotenv import load_dotenv
 # create_agent: fabrica de LangChain 1.x que construye un agente (grafo de
 # langgraph) con bucle modelo -> tools -> modelo hasta obtener respuesta final.
 from langchain.agents import create_agent
+# BaseChatModel: tipo comun de "modelo ya construido" que create_agent acepta
+# ademas de un string "<provider>:<model>" (ver _resolve_model mas abajo).
+from langchain_core.language_models import BaseChatModel
 # Cliente que habla el protocolo MCP y expone las tools de varios servidores
 # MCP a la vez como BaseTool de LangChain.
 from langchain_mcp_adapters.client import MultiServerMCPClient
+# ChatOpenAI: lo construimos "a mano" en vez de dejar que create_agent
+# resuelva el string "openai:..." el solo, para poder activar
+# use_responses_api (ver _resolve_model).
+from langchain_openai import ChatOpenAI
 # BaseModel/Field: definen los esquemas de entrada (ResolutionRequest) y de
 # salida estructurada (ResolutionOutput) del agente.
 from pydantic import BaseModel, Field
@@ -54,7 +61,7 @@ MCP_LOGISTICS_URL = os.getenv("MCP_LOGISTICS_URL", "http://localhost:8002/mcp")
 # directamente (ver requirements.txt: openai / langchain-openai).
 DEFAULT_MODEL = os.getenv("AGENTE3_MODEL", "openai:gpt-4o-mini")
 
-# Umbral de aprobacion automatica en euros (doc/guia.md, US 2.5): por
+# Umbral de aprobacion automatica en euros (doc/guia.md, 100 euros): por
 # encima de este importe el caso se deriva a un administrador en vez de
 # ejecutarse automaticamente.
 HITL_THRESHOLD_EUR = float(os.getenv("HITL_THRESHOLD_EUR", "100"))
@@ -79,10 +86,10 @@ que el Agente Evaluador ya ha validado como elegible y cuyo importe esta \
 dentro del limite de aprobacion automatica: tu trabajo es EJECUTARLA, no \
 volver a decidir si es elegible.
 
-Se te entrega un resumen del caso (pedido, cliente, motivo, importe e \
-items). Debes, en este orden:
+Se te entrega un resumen del caso (pedido, cliente, motivo, importe y \
+productos). Debes, en este orden:
 1. Llamar a create_return_record para registrar la devolucion en Supabase.
-2. Llamar a generate_shipping_label con el order_id y los items para \
+2. Llamar a generate_shipping_label con el order_id y los productos para \
 generar la etiqueta de transporte.
 3. Llamar a send_customer_notification con el email del cliente, un \
 mensaje claro sobre la devolucion aprobada y la ruta del PDF generado \
@@ -108,11 +115,12 @@ class ResolutionRequest(BaseModel):
         description="defective, wrong_item, no_longer_needed, changed_mind u other."
     )
     refund_amount: float = Field(description="Importe a reembolsar, en euros.")
-    items: list[dict] = Field(
+    products: list[dict] = Field(
         default_factory=list,
         description=(
-            "Items a devolver. Se usan tal cual para create_return_record "
-            "([{'order_item_id', 'quantity', 'condition'}]) y para "
+            "Productos a devolver. Se envian tal cual como el parametro "
+            "`items` de create_return_record "
+            "([{'order_item_id', 'quantity', 'condition'}]) y de "
             "generate_shipping_label ([{'name', 'quantity'}])."
         ),
     )
@@ -197,8 +205,39 @@ async def get_resolution_tools(
     return [tool for tool in tools if tool.name in RESOLUTION_TOOL_NAMES]
 
 
+def _resolve_model(model: str | BaseChatModel) -> str | BaseChatModel:
+    """Convierte "openai:<modelo>" en un ChatOpenAI con use_responses_api=True.
+
+    Bug real que motiva esto: al llamar a create_agent(..., tools=[...],
+    response_format=ResolutionOutput) con un modelo OpenAI normal (API de
+    Chat Completions), LangChain activa automaticamente el modo "strict"
+    para TODAS las tools (ver langchain/agents/factory.py). En modo
+    strict, OpenAI valida el JSON Schema de cada tool de forma muy
+    exigente, y el de create_return_record (que tiene un parametro
+    `items: list[dict]`, es decir, una lista de diccionarios "libres" sin
+    forma fija) no pasa esa validacion. El resultado es un error 400 antes
+    de poder llamar a ninguna tool:
+
+        openai.BadRequestError: Invalid schema for function
+        'create_return_record': ... Extra required key 'items' supplied.
+
+    La API de Responses de OpenAI (activada con use_responses_api=True) no
+    fuerza ese modo strict, asi que construir el modelo con esa opcion
+    evita el error sin tener que tocar el esquema de create_return_record
+    en backend/mcp/mcp_supabase.py (compartido con otros agentes/tests).
+
+    Si `model` no es un string "openai:...", se devuelve tal cual (por
+    ejemplo si ya nos pasan un BaseChatModel construido, o un modelo de
+    otro proveedor).
+    """
+    if isinstance(model, str) and model.startswith("openai:"):
+        model_name = model.removeprefix("openai:")
+        return ChatOpenAI(model=model_name, use_responses_api=True)
+    return model
+
+
 async def build_resolution_agent(
-    model: str = DEFAULT_MODEL,
+    model: str | BaseChatModel = DEFAULT_MODEL,
     mcp_supabase_url: str = MCP_SUPABASE_URL,
     mcp_logistics_url: str = MCP_LOGISTICS_URL,
     tools: Optional[list] = None,
@@ -215,7 +254,7 @@ async def build_resolution_agent(
         else await get_resolution_tools(mcp_supabase_url, mcp_logistics_url)
     )
     return create_agent(
-        model=model,
+        model=_resolve_model(model),
         tools=resolved_tools,
         system_prompt=SYSTEM_PROMPT,
         response_format=ResolutionOutput,
@@ -260,7 +299,7 @@ def _get_resolution_request_with_format(request: ResolutionRequest) -> str:
         f"- reason: {request.reason}\n"
         f"- reason_category: {request.reason_category}\n"
         f"- refund_amount: {request.refund_amount}\n"
-        f"- items: {request.items}\n"
+        f"- productos: {request.products}\n"
         f"- notes: {request.notes}\n"
     )
 
@@ -276,7 +315,7 @@ async def run_agent_resolucion(
     """Resuelve un caso ya evaluado como elegible por el Agente 2.
 
     Args:
-        request: Caso a resolver (pedido, cliente, motivo, importe, items).
+        request: Caso a resolver (pedido, cliente, motivo, importe, productos).
         agent: Agente ya construido (permite reutilizarlo entre casos o
             inyectar un doble de prueba en tests). Si no se pasa, se
             construye uno nuevo conectando a los servidores MCP.
@@ -357,7 +396,7 @@ if __name__ == "__main__":
             reason="No era lo que esperaba",
             reason_category="changed_mind",
             refund_amount=34.99,
-            items=[
+            products=[
                 {
                     "order_item_id": "d6e7f8a9-b0c1-2345-defa-456789012345",
                     "quantity": 1,

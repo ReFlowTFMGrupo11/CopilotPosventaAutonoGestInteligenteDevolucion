@@ -84,7 +84,7 @@ request = ResolutionRequest(
     reason="Llegó roto",
     reason_category="defective",
     refund_amount=34.99,
-    items=[{"order_item_id": "...", "quantity": 1, "condition": "unopened", "name": "..."}],
+    products=[{"order_item_id": "...", "quantity": 1, "condition": "unopened", "name": "..."}],
 )
 output = await run_agent_resolucion(request)
 
