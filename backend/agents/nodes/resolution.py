@@ -71,7 +71,7 @@ def _build_llm() -> ChatOpenAI:
     return ChatOpenAI(
         model="gpt-5-nano",
         temperature=0.4,
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
 

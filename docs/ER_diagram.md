@@ -114,6 +114,7 @@ erDiagram
     orders ||--o{ return_requests : "generates"
 
     products ||--o{ order_items : "appears in"
+    products }o--o{ return_policies : "category match"
 
     order_items ||--o{ return_items : "returned as"
 

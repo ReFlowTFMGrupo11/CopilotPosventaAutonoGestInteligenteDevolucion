@@ -1,9 +1,12 @@
-"""
-MCP Server: Logística
+
+"""MCP Server: Logística
 
 Wrapper fino sobre backend.services.logistics_service.
 Expone las funciones como herramientas MCP via Streamable HTTP.
 """
+
+from dotenv import load_dotenv
+load_dotenv(override=True)
 
 import sys
 
