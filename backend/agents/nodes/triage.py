@@ -10,6 +10,7 @@ Primer punto de contacto con el cliente. Se encarga de:
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Optional
 
@@ -144,12 +145,22 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
         return {"error": "No se proporcionó order_id."}
 
     try:
-        order_details = await get_order_details(order_id)
+        raw_order = await get_order_details(order_id)
+        # MCP devuelve lista de content blocks: [{"type": "text", "text": "{...}"}]
+        if isinstance(raw_order, list):
+            order_details = json.loads(raw_order[0]["text"])
+        else:
+            order_details = raw_order
+
         customer_id = order_details["order"]["customer"]["id"]
         customer_name = order_details["order"]["customer"]["full_name"]
         customer_email = order_details["order"]["customer"]["email"]
 
-        return_history = await get_customer_return_history(customer_id)
+        raw_history = await get_customer_return_history(customer_id)
+        if isinstance(raw_history, list):
+            return_history = json.loads(raw_history[0]["text"])
+        else:
+            return_history = raw_history
 
         return {
             "order_details": order_details,

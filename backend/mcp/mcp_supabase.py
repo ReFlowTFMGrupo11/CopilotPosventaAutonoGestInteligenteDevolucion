@@ -1,9 +1,11 @@
-"""
-MCP Server: Supabase (Datos y Políticas)
+"""MCP Server: Supabase (Datos y Políticas)
 
 Wrapper fino sobre backend.services.supabase_service.
 Expone las funciones como herramientas MCP via Streamable HTTP.
 """
+
+from dotenv import load_dotenv
+load_dotenv(override=True)
 
 from mcp.server.fastmcp import FastMCP
 

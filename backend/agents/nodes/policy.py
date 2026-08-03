@@ -63,7 +63,7 @@ def _build_llm() -> ChatOpenAI:
     return ChatOpenAI(
         model="gpt-5-nano",
         temperature=0.0,  # Determinista para auditoría
-        max_tokens=1024,
+        max_tokens=4096,
     )
 
 
@@ -95,10 +95,20 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
                 break
 
     # ── Búsqueda RAG de políticas ──────────────────────────────────────
-    policy_results = await search_return_policy(
+    raw_policy = await search_return_policy(
         query=f"devolución {reason_category} {reason}",
         category=product_category,
     )
+    # MCP devuelve content blocks: [{"type": "text", "text": "{...}"}]
+    if isinstance(raw_policy, list) and raw_policy and "text" in raw_policy[0]:
+        text = raw_policy[0]["text"]
+        try:
+            policy_results = json.loads(text)
+        except json.JSONDecodeError:
+            logger.warning("RAG policy no devolvió JSON válido: %s", text[:200])
+            policy_results = {"error": text}
+    else:
+        policy_results = raw_policy
 
     days_since_order = calculate_days_since_delivery(order_details)
 
