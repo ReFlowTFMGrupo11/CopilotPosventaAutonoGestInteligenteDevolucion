@@ -24,6 +24,10 @@ sys.stderr.reconfigure(encoding="utf-8")
 # FastMCP: clase del SDK oficial "mcp" (paquete PyPI "mcp", serie 1.x; ver
 # el comentario equivalente en mcp_supabase.py sobre por qué 1.x y no 2.x).
 from mcp.server.fastmcp import FastMCP
+# BaseModel/Field: tipan `items` de generate_shipping_label (ver
+# ShippingLabelItem mas abajo) para que el JSON Schema de la tool tenga
+# forma fija (mismo motivo que ReturnItem en mcp_supabase.py).
+from pydantic import BaseModel, Field
 
 mcp = FastMCP("logistics", host="0.0.0.0", port=8002)
 
@@ -38,10 +42,23 @@ LABELS_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 
 
+class ShippingLabelItem(BaseModel):
+    """Item mostrado en la etiqueta de transporte generada.
+
+    Mismo motivo que ReturnItem en mcp_supabase.py: con `items: list[dict]`
+    (forma libre) el modo "strict" de OpenAI (activado por LangChain al
+    combinar tools + response_format, ver _resolve_model en
+    agente3ConMCP/agente_resolucion.py) rechazaba la tool con un 400.
+    """
+
+    name: str = Field(default="Item", description="Nombre del producto, para la etiqueta.")
+    quantity: int = Field(default=1, description="Unidades del producto.")
+
+
 @mcp.tool()
 async def generate_shipping_label(
     order_id: str,
-    items: list[dict],
+    items: list[ShippingLabelItem],
     customer_name: str = "",
     customer_address: str = "",
 ) -> dict:
@@ -51,7 +68,7 @@ async def generate_shipping_label(
 
     Args:
         order_id: UUID del pedido asociado.
-        items: Lista de items a devolver [{"name": "...", "quantity": 1}].
+        items: Lista de items a devolver (ver ShippingLabelItem).
         customer_name: Nombre del cliente para la etiqueta.
         customer_address: Dirección del cliente.
     """
@@ -102,10 +119,10 @@ async def generate_shipping_label(
     c.drawString(10 * mm, y, "Artículos:")
     y -= 5 * mm
     c.setFont("Helvetica", 8)
-    # Limita a los primeros 5 items para que quepan en la etiqueta A6;
-    # item.get(...) usa valores por defecto si faltan claves.
+    # Limita a los primeros 5 items para que quepan en la etiqueta A6; los
+    # valores por defecto de ShippingLabelItem cubren nombre/cantidad ausentes.
     for item in items[:5]:
-        c.drawString(12 * mm, y, f"• {item.get('name', 'Item')} x{item.get('quantity', 1)}")
+        c.drawString(12 * mm, y, f"• {item.name} x{item.quantity}")
         y -= 4 * mm
 
     y -= 5 * mm

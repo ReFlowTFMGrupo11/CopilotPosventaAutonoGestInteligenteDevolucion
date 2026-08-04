@@ -23,6 +23,9 @@ from dotenv import load_dotenv
 # llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
 # mcp 2.x (ver requirements.txt).
 from mcp.server.fastmcp import FastMCP
+# BaseModel/Field: tipan `items` de create_return_record (ver ReturnItem mas
+# abajo) para que el JSON Schema de la tool tenga forma fija.
+from pydantic import BaseModel, Field
 from supabase import create_async_client, AsyncClient
 
 from backend.db.supabase_client import get_settings
@@ -169,6 +172,22 @@ async def search_return_policy(query: str, category: str = "") -> dict:
 # ---------------------------------------------------------------------------
 
 
+class ReturnItem(BaseModel):
+    """Item del pedido incluido en una solicitud de devolucion.
+
+    Antes create_return_record recibia `items: list[dict]` (diccionarios
+    "libres", sin forma fija). El modo "strict" que LangChain activa al
+    combinar tools + response_format (ver _resolve_model en
+    agente3ConMCP/agente_resolucion.py) rechazaba ese schema abierto con un
+    400 antes de poder ejecutar ninguna tool. Tipar `items` con este modelo
+    le da a la tool un JSON Schema fijo, compatible con el modo strict.
+    """
+
+    order_item_id: str = Field(description="UUID del order_item a devolver.")
+    quantity: int = Field(description="Unidades a devolver.")
+    condition: str = Field(default="unknown", description="Estado del articulo (unopened, defective, etc.).")
+
+
 @mcp.tool()
 async def create_return_record(
     order_id: str,
@@ -176,7 +195,7 @@ async def create_return_record(
     reason: str,
     reason_category: str,
     refund_amount: float,
-    items: list[dict],
+    items: list[ReturnItem],
     notes: str = "",
 ) -> dict:
     """
@@ -189,7 +208,7 @@ async def create_return_record(
         reason: Motivo de la devolución.
         reason_category: Categoría del motivo (e.g., "defective", "wrong_item").
         refund_amount: Monto del reembolso.
-        items: Lista de items a devolver [{"order_item_id": "...", "quantity": 1, "condition": "unopened"}].
+        items: Lista de items a devolver (ver ReturnItem).
         notes: Notas adicionales opcionales.
     """
     client = await _get_client()
@@ -212,9 +231,9 @@ async def create_return_record(
     return_items_data = [
         {
             "return_request_id": return_id,
-            "order_item_id": item["order_item_id"],
-            "quantity": item["quantity"],
-            "condition": item.get("condition", "unknown"),
+            "order_item_id": item.order_item_id,
+            "quantity": item.quantity,
+            "condition": item.condition,
         }
         for item in items
     ]

@@ -18,6 +18,7 @@ from agente2ConMCP.agente_evaluacion import (
     EVALUATION_TOOL_NAMES,
     EvaluationOutput,
     EvaluationRequest,
+    Product,
     _classify_return,
     _sum_refund_amount,
     build_evaluation_agent,
@@ -385,13 +386,21 @@ def test_classify_return_matches_golden_dataset():
 
 
 def test_sum_refund_amount_uses_total_price_when_present():
-    products = [{"total_price": 34.99}, {"total_price": 10.0}]
+    products = [Product(total_price=34.99), Product(total_price=10.0)]
     assert _sum_refund_amount(products) == 44.99
 
 
 def test_sum_refund_amount_falls_back_to_unit_price_times_quantity():
-    products = [{"unit_price": 20.0, "quantity": 3}]
+    products = [Product(unit_price=20.0, quantity=3)]
     assert _sum_refund_amount(products) == 60.0
+
+
+def test_sum_refund_amount_handles_explicit_null_unit_price_and_quantity():
+    # El LLM puede devolver unit_price/quantity con `null` explicito en vez de
+    # omitir la clave (mismo comportamiento documentado en EvaluationOutput).
+    # Product tiene todos los campos Optional precisamente por esto.
+    products = [Product(total_price=None, unit_price=None, quantity=None)]
+    assert _sum_refund_amount(products) == 0.0
 
 
 # ---------------------------------------------------------------------------
