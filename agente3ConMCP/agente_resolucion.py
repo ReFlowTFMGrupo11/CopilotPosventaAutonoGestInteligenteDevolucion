@@ -41,8 +41,8 @@ from langchain_core.language_models import BaseChatModel
 # MCP a la vez como BaseTool de LangChain.
 from langchain_mcp_adapters.client import MultiServerMCPClient
 # ChatOpenAI: lo construimos "a mano" en vez de dejar que create_agent
-# resuelva el string "openai:..." el solo, para poder activar
-# use_responses_api (ver _resolve_model).
+# resuelva el string "openai:..." el solo (ver _resolve_model), igual que
+# en agente2ConMCP/agente_evaluacion.py.
 from langchain_openai import ChatOpenAI
 # BaseModel/Field: definen los esquemas de entrada (ResolutionRequest) y de
 # salida estructurada (ResolutionOutput) del agente.
@@ -206,25 +206,25 @@ async def get_resolution_tools(
 
 
 def _resolve_model(model: str | BaseChatModel) -> str | BaseChatModel:
-    """Convierte "openai:<modelo>" en un ChatOpenAI con use_responses_api=True.
+    """Convierte "openai:<modelo>" en un ChatOpenAI normal (Chat Completions).
 
-    Bug real que motiva esto: al llamar a create_agent(..., tools=[...],
-    response_format=ResolutionOutput) con un modelo OpenAI normal (API de
-    Chat Completions), LangChain activa automaticamente el modo "strict"
-    para TODAS las tools (ver langchain/agents/factory.py). En modo
-    strict, OpenAI valida el JSON Schema de cada tool de forma muy
-    exigente, y el de create_return_record (que tiene un parametro
-    `items: list[dict]`, es decir, una lista de diccionarios "libres" sin
-    forma fija) no pasa esa validacion. El resultado es un error 400 antes
-    de poder llamar a ninguna tool:
+    Bug real que motivaba antes forzar use_responses_api=True: al llamar a
+    create_agent(..., tools=[...], response_format=ResolutionOutput) con un
+    modelo OpenAI normal, LangChain activa automaticamente el modo "strict"
+    para TODAS las tools (ver langchain/agents/factory.py), que valida el
+    JSON Schema de cada tool de forma muy exigente. create_return_record y
+    generate_shipping_label tenian un parametro `items: list[dict]` (lista
+    de diccionarios "libres", sin forma fija) que no pasaba esa validacion:
 
         openai.BadRequestError: Invalid schema for function
         'create_return_record': ... Extra required key 'items' supplied.
 
-    La API de Responses de OpenAI (activada con use_responses_api=True) no
-    fuerza ese modo strict, asi que construir el modelo con esa opcion
-    evita el error sin tener que tocar el esquema de create_return_record
-    en backend/mcp/mcp_supabase.py (compartido con otros agentes/tests).
+    Desde que `items` esta tipado (ver ReturnItem en
+    backend/mcp/mcp_supabase.py y ShippingLabelItem en
+    backend/mcp/mcp_logistics.py), el schema completo es compatible con el
+    modo strict normal y ya no hace falta forzar la API de Responses (mismo
+    motivo por el que agente2ConMCP.agente_evaluacion._resolve_model tampoco
+    la necesita desde que Product esta tipado).
 
     Si `model` no es un string "openai:...", se devuelve tal cual (por
     ejemplo si ya nos pasan un BaseChatModel construido, o un modelo de
@@ -232,7 +232,7 @@ def _resolve_model(model: str | BaseChatModel) -> str | BaseChatModel:
     """
     if isinstance(model, str) and model.startswith("openai:"):
         model_name = model.removeprefix("openai:")
-        return ChatOpenAI(model=model_name, use_responses_api=True)
+        return ChatOpenAI(model=model_name)
     return model
 
 

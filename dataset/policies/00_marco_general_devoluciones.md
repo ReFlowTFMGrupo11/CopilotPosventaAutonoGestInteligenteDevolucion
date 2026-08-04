@@ -140,7 +140,8 @@ la política de la categoría correspondiente. De forma orientativa:
     el día 28 o 29 sobre una política de 30 días.
   - El cliente tiene un **historial de devoluciones inusualmente alto**: más de 3
     devoluciones aprobadas en los últimos 90 días, o una tasa de devolución superior
-    al 50% de sus pedidos (posible indicio de *wardrobing* o uso indebido).
+    al 50% de sus pedidos (posible indicio de *wardrobing* —usar el producto una
+    vez y devolverlo como si fuera nuevo— u otro uso indebido).
   - El motivo es `counterfeit_suspicion`, `allergic_reaction` con síntomas graves
     declarados, o cualquier incidente que pueda implicar responsabilidad de
     producto o riesgo para la salud.
@@ -166,22 +167,22 @@ un caso pendiente de aprobación manual en el panel de administración.
 
 | Categoría | Plazo (días naturales) | Embalaje original obligatorio | Recargo de reposición | Notas breves |
 |---|---|---|---|---|
-| Electrónica e Informática | 30 | Sí | 15% si abierto y no defectuoso | Software desprecintado excluido |
-| Electrodomésticos | 30 | Sí | 10% | Garantía legal 3 años aparte |
-| Moda y Complementos | 30 | No | 0% | Ropa interior/bañadores excluidos si sin etiqueta higiénica |
-| Calzado | 30 | Sí (caja) | 0% | Solo probado en interior |
-| Joyería y Relojería | 15 | Sí | 0% | Piezas personalizadas/pendientes excluidos |
+| Electrónica e Informática | 30 | Sí | 15% si abierto y no defectuoso | El software con el precinto roto no se puede devolver |
+| Electrodomésticos | 30 | Sí | 10% | Además de este plazo comercial, sigue aplicando la garantía legal de 3 años |
+| Moda y Complementos | 30 | No | 0% | Ropa interior y bañadores excluidos si se ha quitado la etiqueta higiénica |
+| Calzado | 30 | Sí (caja) | 0% | Solo se puede probar dentro de casa; si se ha usado en la calle, no se admite |
+| Joyería y Relojería | 15 | Sí | 0% | Excluidas: piezas personalizadas y los pendientes (joyas de oreja), por higiene |
 | Hogar y Decoración | 30 | No | 0% | — |
-| Muebles | 14 | Sí | 10% si recogida a domicilio | Montado ≠ defectuoso |
-| Jardinería y Bricolaje | 30 | Sí | 5% | Plantas vivas y químicos abiertos excluidos |
-| Juguetes | 30 (60 en Navidad) | Sí | 0% | Pilas usadas no se reembolsan |
-| Bebé y Puericultura | 30 | Sí | 0% | Biberones/chupetes/sacaleches excluidos si desprecintados |
-| Deportes y Aire Libre | 30 | Sí | 5% | Bicicletas: revisión técnica obligatoria |
-| Cosmética y Perfumería | 21 | Sí | 0% | Excluido si precinto roto sin defecto |
-| Droguería, Higiene y Salud | 21 | Sí | 0% | Excluido si precinto roto sin defecto |
-| Alimentación y Gran Consumo | 14 | Sí | 0% | Solo no perecedero sellado y no caducado |
-| Mascotas | 21 | Sí | 0% | Alimento abierto excluido |
-| Libros, Papelería y Oficina | 21 | No | 0% | Códigos digitales canjeados excluidos |
+| Muebles | 14 | Sí | 10% si recogida a domicilio | Haberlo montado no cuenta como defecto ni excluye la devolución |
+| Jardinería y Bricolaje | 30 | Sí | 5% | Plantas vivas y productos químicos ya abiertos, excluidos |
+| Juguetes | 30 (60 en Navidad) | Sí | 0% | Las pilas ya usadas no se reembolsan |
+| Bebé y Puericultura | 30 | Sí | 0% | Biberones, chupetes y sacaleches excluidos si se les ha quitado el precinto |
+| Deportes y Aire Libre | 30 | Sí | 5% | Las bicicletas pasan una revisión técnica obligatoria antes de reembolsarse |
+| Cosmética y Perfumería | 21 | Sí | 0% | Excluido si se rompió el precinto y no hay defecto de fábrica |
+| Droguería, Higiene y Salud | 21 | Sí | 0% | Excluido si se rompió el precinto y no hay defecto de fábrica |
+| Alimentación y Gran Consumo | 14 | Sí | 0% | Solo se admite si es no perecedero, sigue sellado y no ha caducado |
+| Mascotas | 21 | Sí | 0% | El alimento ya abierto no se admite |
+| Libros, Papelería y Oficina | 21 | No | 0% | Los códigos digitales ya canjeados quedan excluidos |
 
 ## 7. Reembolsos: plazos y método
 
@@ -204,7 +205,8 @@ automático, sino un motivo adicional para revisión humana):
 
 - Más de 3 devoluciones aprobadas en 90 días.
 - Devoluciones recurrentes del mismo `reason_category` en pedidos distintos del
-  mismo cliente (indicio de uso temporal del producto, *wardrobing*).
+  mismo cliente (indicio de uso temporal del producto, *wardrobing*: comprarlo,
+  usarlo una vez para una ocasión puntual y devolverlo).
 - Solicitudes de devolución de artículos de alto valor inmediatamente después de
   un evento (boda, viaje, evento deportivo) inferido por la fecha de compra y
   la categoría del producto.

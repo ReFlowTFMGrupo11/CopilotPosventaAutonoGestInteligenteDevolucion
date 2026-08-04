@@ -154,12 +154,13 @@ async def test_build_resolution_agent_fetches_tools_from_mcp_when_not_injected()
 
 
 # ---------------------------------------------------------------------------
-# _resolve_model: convierte "openai:<modelo>" en ChatOpenAI(use_responses_api=True)
+# _resolve_model: convierte "openai:<modelo>" en un ChatOpenAI normal.
 #
-# Motivo (ver docstring de _resolve_model en agente_resolucion.py): sin
-# use_responses_api=True, OpenAI rechaza el schema de create_return_record
-# con un 400 ("Extra required key 'items' supplied") en cuanto el agente
-# tiene tools + response_format a la vez.
+# Ya no fuerza use_responses_api=True (ver docstring de _resolve_model en
+# agente_resolucion.py): desde que create_return_record y
+# generate_shipping_label tipan `items` (ReturnItem / ShippingLabelItem en
+# backend/mcp/), el modo "strict" de OpenAI ya no rechaza su schema cuando
+# el agente combina tools + response_format.
 # ---------------------------------------------------------------------------
 
 
@@ -170,7 +171,7 @@ def test_resolve_model_converts_openai_prefixed_string(monkeypatch):
 
     assert isinstance(resolved, ChatOpenAI)
     assert resolved.model_name == "gpt-4o-mini"
-    assert resolved.use_responses_api is True
+    assert not resolved.use_responses_api
 
 
 def test_resolve_model_leaves_non_openai_strings_untouched():

@@ -164,3 +164,39 @@ tres encadenados en un único caso, con los dos primeros contra datos reales de
 ```bash
 python demo_flujo_completo.py
 ```
+
+## Correcciones de robustez recientes
+
+- **Agente 2 — `products` tipado (2026-08-04):** `EvaluationOutput.products` era un
+  `list[dict]` "libre", sin validación de Pydantic por campo. Si el LLM devolvía
+  `unit_price` o `quantity` con `null` explícito en vez de omitir la clave (mismo
+  comportamiento ya conocido para otros campos de la salida estructurada, ver el
+  docstring de `EvaluationOutput`), `_sum_refund_amount` hacía `float(None)` y
+  reventaba con `TypeError`, tumbando toda la evaluación. Se sustituyó por un
+  modelo `Product` tipado (`agente2ConMCP/agente_evaluacion.py`) con todos sus
+  campos `Optional` y manejo explícito de `None`, y se propagó el cambio a
+  `demo_flujo_completo.py` (que traducía `evaluation.products` a `ResolutionRequest`
+  accediendo por clave de dict). Cubierto por
+  `agente2ConMCP/tests/test_agente_evaluacion.py::test_sum_refund_amount_handles_explicit_null_unit_price_and_quantity`.
+
+  Como consecuencia, se pudo quitar el workaround `use_responses_api=True` de
+  `_resolve_model` en Agente 2: ese modo solo hacía falta porque el antiguo
+  `products: list[dict]` "libre" no pasaba el modo "strict" que LangChain activa
+  al combinar tools + `response_format`. Verificado con una llamada real a la
+  API de OpenAI (Chat Completions normal, sin Responses API) que devuelve
+  `structured_response` sin error.
+
+- **Agente 3 — `items` tipado en `create_return_record` y `generate_shipping_label`
+  (2026-08-04):** mismo problema que el de `products` arriba, pero en las tools
+  MCP de escritura que usa el Agente 3, no en su salida estructurada. Ambas
+  recibían `items: list[dict]` "libre"; el modo "strict" que LangChain activa al
+  combinar tools + `response_format` rechazaba ese schema abierto con un 400
+  (`Invalid schema for function 'create_return_record': ... Extra required key
+  'items' supplied`) antes de poder ejecutar ninguna tool. Se sustituyó por los
+  modelos tipados `ReturnItem` (`backend/mcp/mcp_supabase.py`) y
+  `ShippingLabelItem` (`backend/mcp/mcp_logistics.py`), y se propagó el cambio a
+  las tools falsas de `demo_flujo_completo.py` (Casos C/D) que las envuelven en
+  `StructuredTool`. Como consecuencia, se pudo quitar también el workaround
+  `use_responses_api=True` de `_resolve_model` en Agente 3, que ya usa
+  `ChatOpenAI` normal igual que Agente 2. Cubierto por
+  `agente3ConMCP/tests/test_agente_resolucion.py::test_resolve_model_converts_openai_prefixed_string`.

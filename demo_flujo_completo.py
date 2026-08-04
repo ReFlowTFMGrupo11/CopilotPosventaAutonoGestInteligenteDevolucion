@@ -31,6 +31,14 @@ from datetime import datetime, timedelta, timezone
 from langchain_core.tools import StructuredTool
 
 from agente1ConMCP.agente_triaje import build_triage_agent, run_agent_triaje
+# ReturnItem/ShippingLabelItem: mismos modelos tipados que usan las tools MCP
+# reales (backend/mcp/mcp_supabase.py y mcp_logistics.py). Los dobles de los
+# Casos C/D deben tiparlos igual: si aqui se dejara `items: list[dict]`
+# "libre", el modo "strict" que LangChain activa al combinar tools +
+# response_format volveria a rechazar la tool con un 400 (ver _resolve_model
+# en agente3ConMCP/agente_resolucion.py).
+from backend.mcp.mcp_logistics import ShippingLabelItem
+from backend.mcp.mcp_supabase import ReturnItem
 from agente2ConMCP.agente_evaluacion import EvaluationRequest, build_evaluation_agent, run_agent_evaluacion
 from agente3ConMCP.agente_resolucion import ResolutionRequest, build_resolution_agent, run_agent_resolucion
 
@@ -56,10 +64,10 @@ def _evaluation_to_resolution_request(evaluation, notes: str = "") -> Resolution
         refund_amount=evaluation.refund_amount,
         products=[
             {
-                "order_item_id": p["order_item_id"],
-                "quantity": p.get("quantity", 1),
+                "order_item_id": p.order_item_id,
+                "quantity": p.quantity or 1,
                 "condition": "unopened",
-                "name": p.get("name", ""),
+                "name": p.name or "",
             }
             for p in evaluation.products
         ],
@@ -180,7 +188,7 @@ def _build_fake_tools(*, delivered_days_ago: int = 3) -> dict[str, StructuredToo
 
     async def fake_create_return_record(
         order_id: str, customer_id: str, reason: str, reason_category: str,
-        refund_amount: float, items: list[dict], notes: str = "",
+        refund_amount: float, items: list[ReturnItem], notes: str = "",
     ) -> dict:
         return {
             "return_request": {
@@ -197,7 +205,7 @@ def _build_fake_tools(*, delivered_days_ago: int = 3) -> dict[str, StructuredToo
         }
 
     async def fake_generate_shipping_label(
-        order_id: str, items: list[dict], customer_name: str = "", customer_address: str = "",
+        order_id: str, items: list[ShippingLabelItem], customer_name: str = "", customer_address: str = "",
     ) -> dict:
         return {
             "tracking_number": "RF-DEMOFAKE01",
