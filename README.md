@@ -35,7 +35,8 @@ la propuesta.
 ```
 backend/
   db/            # Cliente y settings de Supabase (backend/db/supabase_client.py)
-  mcp/           # Servidores MCP: mcp_supabase.py (puerto 8001), mcp_logistics.py (puerto 8002)
+  services/      # Lógica de negocio pura (Supabase, RAG, PDF), sin nada de MCP
+  mcp/           # Servidores MCP: wrappers finos sobre backend/services/ (puertos 8001 y 8002)
 agente1ConMCP/   # Agente 1: Triaje y Empatía (extrae order_id y motivo)
 agente2ConMCP/   # Agente 2: Evaluador de Políticas (decide valid/invalid/human_review)
 agente3ConMCP/   # Agente 3: Resolución y Logística (ejecuta la devolución, HITL >100€)
@@ -204,3 +205,42 @@ python demo_flujo_completo.py
   `use_responses_api=True` de `_resolve_model` en Agente 3, que ya usa
   `ChatOpenAI` normal igual que Agente 2. Cubierto por
   `agente3ConMCP/tests/test_agente_resolucion.py::test_resolve_model_converts_openai_prefixed_string`.
+
+## Fusión con `agentes-tamara-testing`
+
+Esta rama (`integracion/mejor-de-ambas-ramas`) es el resultado de auditar y comparar
+`feature/MCP_Agent_CCS` contra la rama `agentes-tamara-testing`, que implementó el
+mismo flujo con una arquitectura distinta: un único grafo de LangGraph con memoria
+conversacional persistente (checkpointer) y HITL real (`interrupt()`). El informe
+completo, con la comparación punto por punto y la justificación de cada decisión, está
+en [`doc/AUDITORIA_RAMAS.md`](doc/AUDITORIA_RAMAS.md).
+
+Resumen de lo que cambió aquí respecto a `feature/MCP_Agent_CCS`:
+
+- **Nueva capa `backend/services/`** (`supabase_service.py`, `logistics_service.py`):
+  la lógica de negocio que antes vivía dentro de las funciones `@mcp.tool()` de
+  `backend/mcp/mcp_supabase.py` y `mcp_logistics.py` se movió a esta capa, sin nombre
+  de MCP ni de LLM en ningún sitio. `mcp_supabase.py` y `mcp_logistics.py` quedan como
+  wrappers finos: solo tipan los argumentos (para el modo "strict" de OpenAI, ver
+  arriba) y delegan. Ningún comportamiento observable cambia — es una mejora de
+  desacoplamiento (principio de responsabilidad única), portada de
+  `agentes-tamara-testing`, que permitirá en el futuro que un backend FastAPI reutilice
+  esta misma lógica sin pasar por el protocolo MCP.
+- **`backend/db/supabase_client.py::get_supabase_client()`** pasa a cachear el cliente
+  Supabase (antes creaba una conexión nueva en cada llamada y, además, nadie lo
+  invocaba: tanto Rama A como Rama B reimplementaban su propio singleton). Ahora es el
+  único punto de creación del cliente, reusado por `backend/services/supabase_service.py`.
+- **Lo que NO se portó, a propósito**: el grafo único de LangGraph, el checkpointer de
+  memoria conversacional y el HITL con `interrupt()`/`Command(resume=...)` de
+  `agentes-tamara-testing`. Son mejoras reales pero implican cambiar de paradigma de
+  orquestación (de `create_agent` a `StateGraph`) y su rama de origen tiene hoy 4 de 7
+  ficheros de test rotos (imports a módulos renombrados, aserciones desactualizadas
+  tras un fix de routing) — no era razonable fusionarlo "de paso". Tampoco se adoptó el
+  motor de elegibilidad de esa rama (el LLM devuelve JSON en texto libre, parseado con
+  regex): el `_classify_return` de esta rama, determinista y validado contra 480 casos
+  del dataset sintético, es estrictamente más fiable para decidir dinero y plazos. Ver
+  el detalle completo en `doc/AUDITORIA_RAMAS.md`.
+
+Verificación tras la fusión: `pytest agente1ConMCP/tests agente2ConMCP/tests
+agente3ConMCP/tests` sigue en verde (46 tests) y `demo_flujo_completo.py` funciona sin
+cambios — la interfaz pública de los tres agentes y de los servidores MCP no varió.

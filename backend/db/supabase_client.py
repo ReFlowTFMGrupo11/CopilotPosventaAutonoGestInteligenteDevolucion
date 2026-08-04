@@ -7,6 +7,7 @@ Required environment variables:
 """
 
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings
 from supabase import AsyncClient, create_async_client
@@ -27,11 +28,21 @@ def get_settings() -> SupabaseSettings:
     return SupabaseSettings()
 
 
+# Singleton perezoso: antes de la auditoria de ramas (ver doc/AUDITORIA_RAMAS.md),
+# mcp_supabase.py y backend/services/supabase_service.py reimplementaban cada uno
+# su propio cliente en vez de reusar esta funcion, y esta funcion ademas creaba
+# una conexion nueva en cada llamada. Se centraliza aqui: un unico cliente por
+# proceso, cacheado tras la primera llamada.
+_client: Optional[AsyncClient] = None
+
+
 async def get_supabase_client() -> AsyncClient:
-    """Create and return an async Supabase client."""
-    settings = get_settings()
-    client = await create_async_client(
-        supabase_url=settings.supabase_url,
-        supabase_key=settings.supabase_service_key,
-    )
-    return client
+    """Return the async Supabase client, creating it on first use."""
+    global _client
+    if _client is None:
+        settings = get_settings()
+        _client = await create_async_client(
+            supabase_url=settings.supabase_url,
+            supabase_key=settings.supabase_service_key,
+        )
+    return _client
