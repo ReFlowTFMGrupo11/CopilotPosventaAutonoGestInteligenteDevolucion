@@ -143,6 +143,10 @@ python tests/test_mcp_logistics.py
 
 ## Sistema multi-agente (LangChain)
 
+> 📊 Para diagramas de secuencia del ciclo conversacional completo, el grafo interno de
+> cada agente (LangGraph) y el árbol de decisión determinista de cada uno, ver
+> [`doc/FLUJO_CONVERSACIONAL.md`](doc/FLUJO_CONVERSACIONAL.md).
+
 Tres agentes especializados, cada uno en su propio directorio, encadenados en el orden
 Triaje → Evaluador → Resolución (doc/guia.md, Épica 2):
 
