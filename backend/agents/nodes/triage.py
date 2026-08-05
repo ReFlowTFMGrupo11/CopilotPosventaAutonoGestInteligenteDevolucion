@@ -53,12 +53,7 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 
 # ── Modelo de salida estructurada ──────────────────────────────────────────
 
-
-class ReturnItem(BaseModel):
-    """Artículo a devolver."""
-    order_item_id: str = Field(description="UUID del order_item.")
-    quantity: int = Field(default=1, description="Cantidad a devolver.")
-    condition: str = Field(description="Estado: unopened, defective, damaged, used, wrong_item.")
+from backend.models import ReturnItem
 
 
 class TriageOutput(BaseModel):

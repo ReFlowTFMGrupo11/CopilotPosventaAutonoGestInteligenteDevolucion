@@ -24,11 +24,7 @@ sys.stderr.reconfigure(encoding="utf-8")
 # FastMCP: clase del SDK oficial "mcp" (paquete PyPI "mcp", serie 1.x; ver
 # el comentario equivalente en mcp_supabase.py sobre por qué 1.x y no 2.x).
 from mcp.server.fastmcp import FastMCP
-# BaseModel/Field: tipan `items` de generate_shipping_label (ver
-# ShippingLabelItem mas abajo) para que el JSON Schema de la tool tenga
-# forma fija (mismo motivo que ReturnItem en mcp_supabase.py). Frontera
-# propia de MCP: logistics_service.py se queda con `items: list[dict]`.
-from pydantic import BaseModel, Field
+from backend.models import ShippingLabelItem
 
 from backend.services import logistics_service
 
@@ -40,17 +36,7 @@ mcp = FastMCP("logistics", host="0.0.0.0", port=8002)
 # ---------------------------------------------------------------------------
 
 
-class ShippingLabelItem(BaseModel):
-    """Item mostrado en la etiqueta de transporte generada.
-
-    Mismo motivo que ReturnItem en mcp_supabase.py: con `items: list[dict]`
-    (forma libre) el modo "strict" de OpenAI (activado por LangChain al
-    combinar tools + response_format, ver _resolve_model en
-    agente3ConMCP/agente_resolucion.py) rechazaba la tool con un 400.
-    """
-
-    name: str = Field(default="Item", description="Nombre del producto, para la etiqueta.")
-    quantity: int = Field(default=1, description="Unidades del producto.")
+# ShippingLabelItem importado de backend.models
 
 
 @mcp.tool()
