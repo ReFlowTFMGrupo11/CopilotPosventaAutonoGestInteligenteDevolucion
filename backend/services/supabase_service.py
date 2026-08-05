@@ -20,8 +20,37 @@ medio, un `list[dict]` normal es más simple y no tiene ese problema.
 """
 
 import os
+from datetime import datetime, timezone
 
 from backend.db.supabase_client import get_supabase_client
+
+
+# ---------------------------------------------------------------------------
+# Utilidades
+# ---------------------------------------------------------------------------
+
+
+def calculate_days_since_delivery(order_details: dict) -> int:
+    """Calcula los días transcurridos desde la entrega del pedido.
+
+    Usa `delivered_at` si existe, sino `created_at` como fallback.
+    Devuelve 9999 si no hay ninguna fecha disponible.
+    """
+    order = order_details.get("order", {})
+    date_str = order.get("delivered_at") or order.get("created_at")
+    if not date_str:
+        return 9999
+
+    # Parsear la fecha (soporta tanto +00:00 como Z)
+    date_str = date_str.replace("Z", "+00:00")
+    try:
+        delivered = datetime.fromisoformat(date_str)
+    except ValueError:
+        return 9999
+
+    now = datetime.now(timezone.utc)
+    return (now - delivered).days
+
 
 # ---------------------------------------------------------------------------
 # Pedidos
