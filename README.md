@@ -1,41 +1,58 @@
 # ReFlow — Copiloto de Posventa Autónomo y Gestión Inteligente de Devoluciones
 
 TFM que propone "ReFlow", un sistema de agentes de IA Generativa para automatizar la
-gestión de devoluciones y el soporte posventa en e-commerce. La arquitectura objetivo
-combina **LangChain** (orquestación multi-agente), **MCP (Model Context Protocol)** como
-capa de herramientas hacia **Supabase** (PostgreSQL + pgvector para RAG sobre políticas
-de devolución), **FastAPI** como backend y **Streamlit** como frontend conversacional.
-
-El detalle completo del planteamiento, motivación y objetivos está en la propuesta del TFM
-(`propuesta1.pdf`); el diseño técnico, el backlog por épicas y el cronograma están en
-[`doc/guia.md`](doc/guia.md).
+gestión de devoluciones y el soporte posventa en e-commerce. La arquitectura combina
+**LangGraph** (orquestación multi-agente con estado compartido y memoria persistente),
+**MCP (Model Context Protocol)** como capa de herramientas hacia **Supabase**
+(PostgreSQL + pgvector para RAG sobre políticas de devolución), y modelos de OpenAI
+como motor de razonamiento.
 
 ## Estado actual del proyecto
 
-Este repositorio implementa por ahora la **Épica 1** de `doc/guia.md`: la capa de datos y
-los servidores MCP. Todavía no incluyen el sistema multi-agente de LangChain, el backend
-FastAPI ni el frontend Streamlit descritos en la propuesta.
-
 | Bloque | Estado |
 |---|---|
-| Esquema Supabase (PostgreSQL + pgvector) — `supabase/` | ✅ Implementado |
-| Servidor MCP de datos y políticas — `backend/mcp/mcp_supabase.py` | ✅ Implementado |
-| Servidor MCP de logística — `backend/mcp/mcp_logistics.py` | ✅ Implementado |
-| Sistema multi-agente (LangChain: Triaje, Evaluador, Resolución) | ⏳ Pendiente |
+| Esquema Supabase (PostgreSQL + pgvector) — `supabase/` | ✅ |
+| Servidor MCP de datos y políticas — `backend/mcp/mcp_supabase.py` | ✅ |
+| Servidor MCP de logística — `backend/mcp/mcp_logistics.py` | ✅ |
+| Grafo LangGraph (Triaje → Evaluador → Resolución) — `backend/agents/` | ✅ |
+| HITL con `interrupt()` para reembolsos >100€ | ✅ |
+| Memoria conversacional persistente (checkpointer PostgreSQL) | ✅ |
+| Modelos Pydantic centralizados — `backend/models/` | ✅ |
+| Dataset sintético + corpus de políticas RAG — `dataset/` | ✅ |
+| Tests unitarios e integración — `tests/` | ✅ |
 | Backend FastAPI (endpoints de chat y panel admin/HITL) | ⏳ Pendiente |
 | Frontend Streamlit (chat cliente + dashboard admin) | ⏳ Pendiente |
-| Observabilidad (LangSmith) y despliegue en AWS | ⏳ Pendiente |
 
 ## Estructura del repositorio
 
 ```
 backend/
-  db/            # Cliente y settings de Supabase (backend/db/supabase_client.py)
-  mcp/           # Servidores MCP: mcp_supabase.py (puerto 8001), mcp_logistics.py (puerto 8002)
-supabase/        # Migraciones SQL, seed de datos de prueba y diagrama ER
-tests/           # Clientes de prueba para los servidores MCP
-doc/guia.md      # Arquitectura técnica completa, backlog por épicas y cronograma
-defenderMCP.md   # Argumentario de defensa de las decisiones de arquitectura MCP
+  models/        # Modelos Pydantic compartidos (Product, OrderItem, ReturnItem, etc.)
+                 #   returns.py  — modelos de dominio
+                 #   state.py    — ReturnState (TypedDict del grafo LangGraph)
+  agents/        # Sistema multi-agente LangGraph
+    graph.py     #   Grafo: StateGraph con routing condicional y checkpointer
+    state.py     #   Re-export de ReturnState (compatibilidad)
+    nodes/       #   Nodos del grafo:
+                 #     triage.py     — Agente de Triaje y Empatía
+                 #     policy.py     — Agente Evaluador de Políticas (RAG)
+                 #     resolution.py — Agente de Resolución + HITL + Rechazo
+    infra/       #   Infraestructura:
+                 #     mcp_client.py      — Cliente MCP unificado (Supabase + Logistics)
+                 #     session_tracker.py — Registro de sesiones para métricas
+    cli/         #   demo_chat.py — Demo interactiva multi-turno
+  services/      # Lógica de negocio pura (sin MCP ni LLM)
+                 #   supabase_service.py  — consultas, RAG, mutaciones
+                 #   logistics_service.py — etiquetas PDF, notificaciones
+  mcp/           # Servidores MCP: wrappers finos sobre services/ (puertos 8001/8002)
+  db/            # Cliente Supabase (singleton cacheado)
+dataset/         # Dataset sintético + corpus de 17 políticas para RAG + eval_cases.csv
+supabase/        # Migraciones SQL y seed de datos
+tests/
+  unit/          # Tests de routing, logistics_service, supabase_service
+  integration/   # Tests del grafo completo, triage, policy y resolution agents
+docs/            # Diagramas (grafo Mermaid, ER, documentación de la fusión)
+archived/        # Código histórico de referencia (agentes individuales pre-LangGraph)
 ```
 
 ## Configuración del entorno
@@ -50,12 +67,10 @@ source .venv/bin/activate
 ### 2. Instalar dependencias
 
 ```bash
-pip install -r requirements.txt 
+pip install -r requirements.txt
 ```
 
 ### 3. Variables de entorno
-
-Copia el archivo de ejemplo y completa tus credenciales:
 
 ```bash
 cp .env.example .env
@@ -66,6 +81,7 @@ Edita `.env` con tus valores:
 ```
 SUPABASE_URL=https://<tu-proyecto>.supabase.co
 SUPABASE_SERVICE_KEY=<tu-service-role-key>
+SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
 OPENAI_API_KEY=<tu-openai-api-key>
 ```
 
@@ -87,46 +103,76 @@ asyncio.run(test())
 
 ## Servidores MCP
 
-Los servidores MCP utilizan transporte **Streamable HTTP** (el sustituto oficial de
-HTTP+SSE, deprecado en la revisión de spec 2025-03-26). En este MVP se ejecutan como dos
-procesos Python locales; ver [`defenderMCP.md`](defenderMCP.md) para la justificación de
-por qué la arquitectura objetivo los aísla en contenedores independientes.
-
-### Iniciar los servidores
-
-Abre **dos terminales** y ejecuta cada servidor por separado desde la raíz del proyecto:
-
-**Terminal 1** — Supabase (Datos y Políticas) en `http://localhost:8001/mcp`:
+Transporte **Streamable HTTP**. Dos procesos locales:
 
 ```bash
+# Terminal 1 — Supabase (datos + RAG) en http://localhost:8001/mcp
 python -m backend.mcp.mcp_supabase
-```
 
-**Terminal 2** — Logística en `http://localhost:8002/mcp`:
-```bash
+# Terminal 2 — Logística en http://localhost:8002/mcp
 python -m backend.mcp.mcp_logistics
 ```
 
-### Probar la conexión (desde un tercer terminal)
+### Tools disponibles
 
-```bash
-python tests/test_mcp_supabase.py
-python tests/test_mcp_logistics.py
+| Server | Tool | Descripción |
+|--------|------|-------------|
+| Supabase | `get_order_details` | Detalles del pedido + productos |
+| Supabase | `get_customer_return_history` | Historial de devoluciones del cliente |
+| Supabase | `search_return_policy` | Búsqueda semántica RAG sobre políticas |
+| Supabase | `create_return_record` | Crear solicitud de devolución |
+| Supabase | `update_return_status` | Actualizar estado (admin/HITL) |
+| Logistics | `generate_shipping_label` | Generar PDF de etiqueta de transporte |
+| Logistics | `send_customer_notification` | Simular envío de email transaccional |
+
+## Sistema multi-agente (LangGraph)
+
+El grafo orquesta 3 agentes como nodos de un `StateGraph` con estado compartido
+(`ReturnState`) y memoria conversacional persistente:
+
+```
+START → Triage → [¿order_id + items?]
+                    ├─ NO → END (espera siguiente mensaje del usuario)
+                    └─ SÍ → Fetch Order Data → [¿error?]
+                                                  ├─ SÍ → END
+                                                  └─ NO → Evaluador → [¿elegible?]
+                                                                        ├─ NO → Rechazo → END
+                                                                        └─ SÍ → Resolución → [¿>100€?]
+                                                                                               ├─ NO → END (aprobado)
+                                                                                               └─ SÍ → HITL Admin → END
 ```
 
-### `mcp_supabase.py` — Datos y Políticas (puerto 8001)
+Para diagramas Mermaid detallados ver [`docs/graph_diagram.md`](docs/graph_diagram.md).
 
-| Herramienta | Entradas | Descripción |
-|---|---|---|
-| `get_order_details` | `order_id` | Consulta detalles del pedido, fechas y productos (Agentes 1 y 2) |
-| `get_customer_return_history` | `customer_id` | Historial de devoluciones para detectar abusos (Agente 2) |
-| `search_return_policy` | `query`, `category` | Búsqueda semántica RAG con pgvector sobre políticas (Agente 2) |
-| `create_return_record` | `order_id`, `customer_id`, `reason`, ... | Inserta solicitud de devolución (Agente 3) |
-| `update_return_status` | `return_id`, `status` | Actualiza estado de devolución (Admin / HITL) |
+### Demo interactiva
 
-### `mcp_logistics.py` — Logística (puerto 8002)
+```bash
+python -m backend.agents.cli.demo_chat
+```
 
-| Herramienta | Entradas | Descripción |
-|---|---|---|
-| `generate_shipping_label` | `order_id`, `items` | Genera PDF de etiqueta de transporte con reportlab (Agente 3) |
-| `send_customer_notification` | `email`, `message` | Simula envío de correo transaccional con enlace al PDF (Agente 3) |
+Requiere los servidores MCP levantados y `SUPABASE_DB_URL` + `OPENAI_API_KEY` en `.env`.
+
+## Tests
+
+```bash
+# Todos los tests
+pytest tests/
+
+# Solo unitarios
+pytest tests/unit/
+
+# Solo integración
+pytest tests/integration/
+```
+
+## Dataset y políticas RAG
+
+El directorio `dataset/` contiene:
+- **`policies/`** — 17 documentos Markdown con las políticas de devolución por categoría
+  (se vectorizan en `policy_embeddings` de Supabase para el RAG).
+- **`eval_cases.csv`** — Golden dataset etiquetado (valid/invalid/human_review) para
+  benchmarking del Agente Evaluador.
+- **`generate_dataset.py`** — Script determinista (seed fija) que genera los datos
+  sintéticos.
+
+Ver [`dataset/README.md`](dataset/README.md) para más detalle.
