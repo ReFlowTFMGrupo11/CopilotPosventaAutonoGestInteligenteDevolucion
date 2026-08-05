@@ -12,11 +12,10 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field
 
 from backend.agents.state import ReturnState
 from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
@@ -51,33 +50,9 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 """
 
 
-# ── Modelo de salida estructurada ──────────────────────────────────────────
+# ── Modelos ────────────────────────────────────────────────────────────────
 
-from backend.models import ReturnItem
-
-
-class TriageOutput(BaseModel):
-    """Salida estructurada del agente de triaje."""
-
-    response_to_customer: str = Field(
-        description="Respuesta empática a mostrar al cliente en este turno."
-    )
-    order_id: Optional[str] = Field(
-        default=None,
-        description="UUID del pedido. None si el cliente aún no lo ha proporcionado.",
-    )
-    reason: Optional[str] = Field(
-        default=None,
-        description="Motivo de la devolución en palabras del cliente.",
-    )
-    reason_category: Optional[str] = Field(
-        default=None,
-        description="Categoría: defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other.",
-    )
-    items_to_return: Optional[list[ReturnItem]] = Field(
-        default=None,
-        description="Lista de artículos a devolver. None si aún no se conocen.",
-    )
+from backend.models import ReturnItem, TriageOutput
 
 
 def _build_llm() -> ChatOpenAI:
