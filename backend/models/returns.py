@@ -8,6 +8,8 @@ Estos modelos se comparten entre:
 Centralizarlos aquí evita duplicación y garantiza un único schema.
 """
 
+from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -34,3 +36,27 @@ class ShippingLabelItem(BaseModel):
 
     name: str = Field(default="Item", description="Nombre del producto.")
     quantity: int = Field(default=1, description="Unidades del producto.")
+
+
+class TriageOutput(BaseModel):
+    """Salida estructurada del agente de triaje."""
+
+    response_to_customer: str = Field(
+        description="Respuesta empática a mostrar al cliente en este turno."
+    )
+    order_id: Optional[str] = Field(
+        default=None,
+        description="UUID del pedido. None si el cliente aún no lo ha proporcionado.",
+    )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Motivo de la devolución en palabras del cliente.",
+    )
+    reason_category: Optional[str] = Field(
+        default=None,
+        description="Categoría: defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other.",
+    )
+    items_to_return: Optional[list[ReturnItem]] = Field(
+        default=None,
+        description="Lista de artículos a devolver. None si aún no se conocen.",
+    )
