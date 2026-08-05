@@ -26,13 +26,7 @@ from dotenv import load_dotenv
 # llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
 # mcp 2.x (ver requirements.txt).
 from mcp.server.fastmcp import FastMCP
-# BaseModel/Field: tipan `items` de create_return_record (ver ReturnItem mas
-# abajo) para que el JSON Schema de la tool tenga forma fija. Este tipado es
-# una frontera propia de MCP (lo necesita el modo "strict" de OpenAI al
-# combinar tools + response_format, ver _resolve_model en
-# agente3ConMCP/agente_resolucion.py); supabase_service.py, que no habla con
-# ningún LLM directamente, se queda con `items: list[dict]` normal.
-from pydantic import BaseModel, Field
+from backend.models import ReturnItem
 
 from backend.services import supabase_service
 
@@ -98,20 +92,7 @@ async def search_return_policy(query: str, category: str = "") -> dict:
 # ---------------------------------------------------------------------------
 
 
-class ReturnItem(BaseModel):
-    """Item del pedido incluido en una solicitud de devolucion.
-
-    Antes create_return_record recibia `items: list[dict]` (diccionarios
-    "libres", sin forma fija). El modo "strict" que LangChain activa al
-    combinar tools + response_format (ver _resolve_model en
-    agente3ConMCP/agente_resolucion.py) rechazaba ese schema abierto con un
-    400 antes de poder ejecutar ninguna tool. Tipar `items` con este modelo
-    le da a la tool un JSON Schema fijo, compatible con el modo strict.
-    """
-
-    order_item_id: str = Field(description="UUID del order_item a devolver.")
-    quantity: int = Field(description="Unidades a devolver.")
-    condition: str = Field(default="unknown", description="Estado del articulo (unopened, defective, etc.).")
+# ReturnItem importado de backend.models
 
 
 @mcp.tool()
