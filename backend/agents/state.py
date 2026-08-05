@@ -1,57 +1,9 @@
+"""Re-export de ReturnState desde backend.models.state.
+
+Mantiene compatibilidad con imports existentes:
+    from backend.agents.state import ReturnState
 """
-Estado compartido del grafo de devoluciones.
 
-Define el TypedDict que fluye entre los tres agentes (Triaje, Evaluador, Resolución)
-y las aristas condicionales del grafo LangGraph.
-"""
+from backend.models.state import ReturnState
 
-from __future__ import annotations
-
-from typing import Annotated, Any
-
-from langchain_core.messages import AnyMessage
-from langgraph.graph.message import add_messages
-from typing_extensions import TypedDict
-
-
-class ReturnState(TypedDict, total=False):
-    """Estado global del grafo de devoluciones.
-
-    Cada agente lee las claves que necesita y escribe solo las que actualiza.
-    ``messages`` usa el reducer ``add_messages`` para acumular el historial
-    de la conversación sin sobrescribirlo.
-    """
-
-    # ── Historial de conversación ──────────────────────────────────────
-    messages: Annotated[list[AnyMessage], add_messages]
-
-    # ── Datos extraídos por el Agente de Triaje ────────────────────────
-    order_id: str | None
-    customer_id: str | None
-    customer_name: str | None
-    customer_email: str | None
-    reason: str | None
-    reason_category: str | None
-    items_to_return: list[dict[str, Any]]
-
-    # ── Datos del pedido (rellenados tras consultar Supabase) ──────────
-    order_details: dict[str, Any] | None
-    return_history: dict[str, Any] | None
-
-    # ── Resultado del Agente Evaluador ─────────────────────────────────
-    is_eligible: bool | None
-    eligibility_reason: str | None
-    policy_info: dict[str, Any] | None
-    refund_amount: float
-
-    # ── Resultado del Agente de Resolución ─────────────────────────────
-    needs_admin_approval: bool
-    admin_decision: str | None  # "approved" | "rejected" | None
-    tracking_number: str | None
-    label_path: str | None
-    return_request_id: str | None
-    resolution: str | None
-
-    # ── Control de flujo ───────────────────────────────────────────────
-    current_agent: str | None
-    error: str | None
+__all__ = ["ReturnState"]
