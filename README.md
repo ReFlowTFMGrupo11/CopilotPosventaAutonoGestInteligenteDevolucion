@@ -107,6 +107,11 @@ python -m backend.mcp.mcp_supabase
 python -m backend.mcp.mcp_logistics
 ```
 
+**Terminal 3** — Test agents
+```bash
+python -m backend.agents.cli.demo_chat
+```
+
 ### Probar la conexión (desde un tercer terminal)
 
 ```bash
