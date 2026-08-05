@@ -16,10 +16,16 @@ from supabase import AsyncClient, create_async_client
 class SupabaseSettings(BaseSettings):
     """Settings for Supabase connection loaded from environment variables."""
 
-    supabase_url: str
+    supabase_url: Optional[str] = None
+    supabase_api_url: Optional[str] = None
     supabase_service_key: str
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+
+    @property
+    def url(self) -> str:
+        """Devuelve la URL de Supabase (soporta ambos nombres de variable)."""
+        return self.supabase_url or self.supabase_api_url or ""
 
 
 @lru_cache
@@ -42,7 +48,7 @@ async def get_supabase_client() -> AsyncClient:
     if _client is None:
         settings = get_settings()
         _client = await create_async_client(
-            supabase_url=settings.supabase_url,
+            supabase_url=settings.url,
             supabase_key=settings.supabase_service_key,
         )
     return _client
