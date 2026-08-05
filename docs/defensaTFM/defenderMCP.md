@@ -71,8 +71,9 @@ producción, sin que cambie el código de las tools.
 ### Objeción: "¿Por qué no meter todo en un solo script de Python grande?"
 Eso genera deuda técnica: un monolito acopla el acceso a Supabase con la generación de
 PDFs y el envío de notificaciones. Separando `mcp_supabase.py` y `mcp_logistics.py`, cada
-uno se prueba (`tests/test_mcp_supabase.py`, `tests/test_mcp_logistics.py`) y se mantiene
-por separado.
+uno se prueba (ver `tests/unit/` y `tests/integration/`) y se mantiene
+por separado. Además, la lógica de negocio vive en `backend/services/` (desacoplada
+del protocolo MCP), lo que permite reutilizarla desde FastAPI sin pasar por MCP.
 
 ### Objeción: "¿FastMCP añade latencia o restricciones?"
 Al contrario: FastMCP abstrae la complejidad del protocolo MCP de bajo nivel (sesiones,
@@ -83,19 +84,25 @@ desarrollo del MVP.
 
 ```python
 from mcp.server.fastmcp import FastMCP
+from backend.models import ShippingLabelItem  # Modelo Pydantic centralizado
+from backend.services import logistics_service
 
 mcp = FastMCP("logistics", host="0.0.0.0", port=8002)
 
 @mcp.tool()
-async def generate_shipping_label(order_id: str, items: list[dict]) -> dict:
-    """Genera un PDF simulado de etiqueta de transporte para una devolución."""
-    tracking_number = f"RF-{order_id[:8].upper()}"
-    # ... generación del PDF con reportlab ...
-    return {"tracking_number": tracking_number}
-
-if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+async def generate_shipping_label(
+    order_id: str, items: list[ShippingLabelItem], ...
+) -> dict:
+    """Genera un PDF simulado de etiqueta de transporte."""
+    return await logistics_service.generate_shipping_label(
+        order_id=order_id,
+        items=[i.model_dump() for i in items], ...
+    )
 ```
+
+**Nota arquitectónica**: Los servidores MCP son wrappers finos sobre `backend/services/`.
+Toda la lógica real (consultas a Supabase, generación de PDF) vive en la capa de servicios,
+reutilizable desde cualquier consumidor (agentes, FastAPI, scripts).
 
 ## 5. Resumen para la presentación
 

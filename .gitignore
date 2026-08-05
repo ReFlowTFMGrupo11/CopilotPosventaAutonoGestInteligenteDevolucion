@@ -37,3 +37,18 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Config local de Claude Code (contiene tokens de cuenta, org y machineID:
+# no debe subirse aunque esté dentro de la carpeta del proyecto)
+.claude.json
+
+# Artefactos generados en tiempo de ejecución por mcp_logistics.py
+# (etiquetas PDF simuladas y log de notificaciones; se regeneran solos)
+generated_labels/
+
+# Exports/config sueltos de otras herramientas, no forman parte del proyecto
+gemini-code-*.json
+
+# Claude Code: settings.json (compartido) sí se versiona; settings.local.json
+# es la config/permisos personal de cada desarrollador, no se comparte
+.claude/settings.local.json
