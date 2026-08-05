@@ -26,6 +26,7 @@ from backend.agents.infra.mcp_client import (
     generate_shipping_label,
     send_customer_notification,
 )
+from backend.models import OrderItem
 
 logger = logging.getLogger(__name__)
 
@@ -131,9 +132,10 @@ async def resolution_agent(
     order_items = state.get("order_details", {}).get("items", [])
     for item in items_to_return:
         item_name = "Artículo"
-        for oi in order_items:
-            if oi.get("id") == item.get("order_item_id"):
-                item_name = oi.get("product", {}).get("name", "Artículo")
+        for raw_oi in order_items:
+            oi = OrderItem.model_validate(raw_oi)
+            if oi.id == item.get("order_item_id"):
+                item_name = oi.product.name if oi.product and oi.product.name else "Artículo"
                 break
         label_items.append({
             "name": item_name,
