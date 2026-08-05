@@ -23,6 +23,7 @@ from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
 from backend.agents.infra.mcp_client import search_return_policy
+from backend.models import OrderItem
 from backend.services.supabase_service import calculate_days_since_delivery
 
 logger = logging.getLogger(__name__)
@@ -87,11 +88,10 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
     product_category = ""
     order_items = order_details.get("items", [])
     if order_items and items_to_return:
-        # Buscar la categoría del producto a devolver
-        for order_item in order_items:
-            product = order_item.get("product", {})
-            if product:
-                product_category = product.get("category", "")
+        for raw_item in order_items:
+            oi = OrderItem.model_validate(raw_item)
+            if oi.product and oi.product.category:
+                product_category = oi.product.category
                 break
 
     # ── Búsqueda RAG de políticas ──────────────────────────────────────

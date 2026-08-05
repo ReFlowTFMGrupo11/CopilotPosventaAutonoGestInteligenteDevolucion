@@ -13,6 +13,33 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ── Modelos de catálogo / pedido ───────────────────────────────────────────
+
+
+class Product(BaseModel):
+    """Producto del catálogo, tal como lo devuelve Supabase (join en order_items)."""
+
+    name: Optional[str] = Field(default=None, description="Nombre del producto.")
+    sku: Optional[str] = Field(default=None, description="SKU único.")
+    category: Optional[str] = Field(default=None, description="Categoría (electronics, moda, etc.).")
+    price: Optional[float] = Field(default=None, description="Precio unitario en euros.")
+    weight_kg: Optional[float] = Field(default=None, description="Peso en kg.")
+
+
+class OrderItem(BaseModel):
+    """Línea de un pedido (order_item + producto embebido)."""
+
+    id: Optional[str] = Field(default=None, description="UUID del order_item.")
+    order_id: Optional[str] = Field(default=None, description="UUID del pedido.")
+    quantity: Optional[int] = Field(default=None, description="Unidades compradas.")
+    unit_price: Optional[float] = Field(default=None, description="Precio unitario.")
+    total_price: Optional[float] = Field(default=None, description="Precio total de la línea.")
+    product: Optional[Product] = Field(default=None, description="Producto asociado.")
+
+
+# ── Modelos de devolución ──────────────────────────────────────────────────
+
+
 class ReturnItem(BaseModel):
     """Artículo incluido en una solicitud de devolución.
 
