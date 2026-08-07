@@ -18,6 +18,8 @@ import sys
 # no puede representar los emojis usados en los print() de logistics_service.py.
 # Sin esto, send_customer_notification lanza UnicodeEncodeError en el propio
 # proceso servidor en cuanto intenta loguear el correo simulado.
+# reconfigure(): cambia la codificación de stdout/stderr ya abiertos, sin
+# tener que relanzar el proceso con una variable de entorno distinta.
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
@@ -28,6 +30,7 @@ from backend.models import ShippingLabelItem
 
 from backend.services import logistics_service
 
+# Segundo servidor MCP independiente del de Supabase: nombre y puerto distintos.
 mcp = FastMCP("logistics", host="0.0.0.0", port=8002)
 
 
@@ -42,6 +45,8 @@ mcp = FastMCP("logistics", host="0.0.0.0", port=8002)
 @mcp.tool()
 async def generate_shipping_label(
     order_id: str,
+    # Igual que en mcp_supabase.py: se tipa con el modelo Pydantic
+    # (ShippingLabelItem) en vez de dict porque esta es la frontera MCP/LLM.
     items: list[ShippingLabelItem],
     customer_name: str = "",
     customer_address: str = "",
@@ -58,6 +63,8 @@ async def generate_shipping_label(
     """
     return await logistics_service.generate_shipping_label(
         order_id=order_id,
+        # Convierte cada ShippingLabelItem a dict plano antes de pasarlo a
+        # la capa de servicio, que trabaja con dicts normales.
         items=[item.model_dump() for item in items],
         customer_name=customer_name,
         customer_address=customer_address,

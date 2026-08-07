@@ -18,6 +18,10 @@ from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
+# Command: instrucción de LangGraph que, además de actualizar el estado,
+# indica explícitamente a qué nodo saltar a continuación ("goto").
+# interrupt(): pausa la ejecución del grafo en este punto exacto y la
+# reanuda más tarde con el valor que se le pase a Command(resume=...).
 from langgraph.types import Command, interrupt
 
 from backend.agents.state import ReturnState
@@ -31,6 +35,8 @@ from backend.models import OrderItem
 logger = logging.getLogger(__name__)
 
 # ── Umbral HITL ────────────────────────────────────────────────────────────
+# A partir de este importe (en euros) se exige aprobación humana antes de
+# tramitar el reembolso; coincide con lo documentado en dataset/policies/00_....
 HITL_REFUND_THRESHOLD = 100.0  # euros
 
 # ── Prompts ────────────────────────────────────────────────────────────────
@@ -57,6 +63,8 @@ Tu trabajo es comunicar al cliente el resultado de su solicitud de devolución.
 Responde siempre en español, de forma cálida y profesional.
 """
 
+# Este prompt tiene un placeholder {reason} que se rellena con .format()
+# más abajo, según el motivo concreto del rechazo en cada caso.
 REJECTION_SYSTEM_PROMPT = """\
 Eres el **Agente de Resolución** de ReFlow. Redacta un mensaje empático
 de rechazo de devolución en español.
@@ -69,6 +77,8 @@ Sé comprensivo, ofrece alternativas cuando sea posible y cierra de forma positi
 
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de resolución."""
+    # temperature=0.4: algo más de variación que en triage/policy, porque
+    # aquí el objetivo es un mensaje cálido y natural, no extracción exacta.
     return ChatOpenAI(
         model="gpt-5-nano",
         temperature=0.4,
@@ -86,6 +96,8 @@ async def resolution_agent(
     """
     llm = _build_llm()
 
+    # Se recopilan del estado todos los datos necesarios para completar la
+    # devolución (importe, identificadores, motivo, artículos...).
     refund_amount = state.get("refund_amount", 0.0)
     order_id = state.get("order_id", "")
     customer_id = state.get("customer_id", "")
@@ -97,6 +109,11 @@ async def resolution_agent(
 
     # ── HITL: pausar si el reembolso supera el umbral ──────────────────
     if refund_amount > HITL_REFUND_THRESHOLD:
+        # interrupt(): detiene aquí la ejecución del grafo y persiste el
+        # estado (gracias al checkpointer); el payload pasado es la
+        # información que verá el proceso/panel de administración para
+        # decidir. La ejecución no continúa hasta que alguien invoque el
+        # grafo de nuevo con Command(resume={"approved": True/False}).
         admin_response = interrupt({
             "type": "admin_approval_required",
             "refund_amount": refund_amount,
@@ -109,7 +126,11 @@ async def resolution_agent(
             ),
         })
 
+        # Al reanudarse, admin_response contiene lo que el admin decidió.
         if not admin_response.get("approved", False):
+            # El administrador rechazó el reembolso tras revisión manual:
+            # se genera un mensaje de rechazo y el grafo termina aquí, sin
+            # llegar a generar etiqueta ni registrar la devolución.
             rejection_msg = await llm.ainvoke([
                 SystemMessage(
                     content=REJECTION_SYSTEM_PROMPT.format(
@@ -126,12 +147,20 @@ async def resolution_agent(
                 },
                 goto="__end__",
             )
+        # Si sí se aprobó (admin_response["approved"] es True), el flujo
+        # continúa normalmente hacia abajo, como si nunca hubiera habido
+        # que pausar (se genera etiqueta, se registra, se notifica).
 
     # ── Generar etiqueta de transporte ─────────────────────────────────
+    # Antes de pedir la etiqueta hay que resolver el NOMBRE de cada
+    # artículo a devolver, ya que items_to_return solo trae order_item_id.
     label_items = []
     order_items = state.get("order_details", {}).get("items", [])
     for item in items_to_return:
         item_name = "Artículo"
+        # Busca, entre las líneas del pedido original, la que coincide con
+        # el order_item_id que el cliente quiere devolver, para sacar el
+        # nombre real del producto (si no se encuentra, queda "Artículo").
         for raw_oi in order_items:
             oi = OrderItem.model_validate(raw_oi)
             if oi.id == item.get("order_item_id"):
@@ -142,6 +171,8 @@ async def resolution_agent(
             "quantity": item.get("quantity", 1),
         })
 
+    # Llamada MCP al servidor de logística: genera el PDF y devuelve el
+    # número de seguimiento y la ruta del archivo generado.
     label_result = await generate_shipping_label(
         order_id=order_id,
         items=label_items,
@@ -149,6 +180,8 @@ async def resolution_agent(
     )
 
     # ── Registrar devolución en Supabase ───────────────────────────────
+    # Llamada MCP al servidor de datos: inserta la fila en return_requests
+    # (y sus return_items) con estado inicial "pending".
     return_record = await create_return_record(
         order_id=order_id,
         customer_id=customer_id,
@@ -160,6 +193,8 @@ async def resolution_agent(
     )
 
     # ── Notificar al cliente ───────────────────────────────────────────
+    # "Envía" (simulado, ver logistics_service.py) el email de confirmación
+    # con el resumen de la devolución y la etiqueta adjunta.
     await send_customer_notification(
         email=customer_email,
         subject="ReFlow - Tu devolución ha sido aprobada",
@@ -175,6 +210,8 @@ async def resolution_agent(
     )
 
     # ── Generar mensaje final para el usuario ──────────────────────────
+    # Este resumen se le pasa al LLM como contexto para que redacte el
+    # mensaje final al cliente siguiendo RESOLUTION_SYSTEM_PROMPT.
     resolution_context = (
         f"Devolución aprobada. Tracking: {label_result['tracking_number']}. "
         f"Reembolso: {refund_amount:.2f}€. "
@@ -186,12 +223,16 @@ async def resolution_agent(
         SystemMessage(content=f"CONTEXTO: {resolution_context}"),
     ])
 
+    # goto="__end__": termina el turno aquí (no hay más nodos que ejecutar
+    # tras una devolución aprobada, con o sin HITL de por medio).
     return Command(
         update={
             "messages": [final_response],
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
             "return_request_id": return_record["return_request"]["id"],
+            # Distingue si se aprobó automáticamente (importe bajo el
+            # umbral) o tras pasar por HITL, para trazabilidad.
             "admin_decision": "auto_approved" if refund_amount <= HITL_REFUND_THRESHOLD else "approved",
             "resolution": "approved",
             "current_agent": "resolver",
@@ -204,6 +245,8 @@ async def rejection_agent(state: ReturnState) -> dict[str, Any]:
     """Nodo que comunica un rechazo empático cuando la devolución no es elegible."""
     llm = _build_llm()
 
+    # Usa el motivo que dejó el Agente Evaluador (policy.py); si por algún
+    # motivo no está presente, cae en un mensaje genérico.
     eligibility_reason = state.get("eligibility_reason", "No se cumple la política de devoluciones.")
 
     response = await llm.ainvoke([
@@ -225,6 +268,10 @@ async def hitl_admin_node(state: ReturnState) -> dict[str, Any]:
     Este nodo se ejecuta cuando el ``resolution_agent`` redirige aquí
     tras recibir la aprobación del admin via ``Command(resume=...)``.
     """
+    # Nota: en el flujo actual, resolution_agent ya gestiona directamente el
+    # caso de rechazo del admin (goto="__end__") y el de aprobación sigue
+    # en el propio resolution_agent; este nodo queda como punto de entrada
+    # explícito del grafo para el camino "hitl_admin" (ver graph.py).
     admin_decision = state.get("admin_decision", "approved")
 
     if admin_decision == "approved":

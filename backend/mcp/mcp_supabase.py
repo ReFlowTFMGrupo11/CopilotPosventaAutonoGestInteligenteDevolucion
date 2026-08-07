@@ -25,13 +25,19 @@ from dotenv import load_dotenv
 # Se usa la serie 1.x del SDK "mcp" (no la 2.x, donde esta clase pasó a
 # llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
 # mcp 2.x (ver requirements.txt).
+# FastMCP: clase de alto nivel que convierte funciones Python decoradas en
+# un servidor MCP completo (descubrimiento de tools, JSON Schema, transporte HTTP).
 from mcp.server.fastmcp import FastMCP
 from backend.models import ReturnItem
 
 from backend.services import supabase_service
 
+# Carga el .env al importar este módulo, ANTES de que cualquier tool se
+# invoque (ver comentario de arriba sobre por qué es necesario aquí).
 load_dotenv()
 
+# Nombre del server (identificador MCP) + host/puerto donde escuchará.
+# host="0.0.0.0": acepta conexiones de cualquier interfaz de red, no solo localhost.
 mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
 
 
@@ -40,6 +46,10 @@ mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
 # ---------------------------------------------------------------------------
 
 
+# @mcp.tool(): registra esta función como una "tool" MCP invocable por un LLM.
+# FastMCP genera automáticamente el JSON Schema de sus argumentos a partir de
+# las anotaciones de tipo (order_id: str) y usa el docstring como descripción
+# que el LLM lee para decidir cuándo y cómo llamarla.
 @mcp.tool()
 async def get_order_details(order_id: str) -> dict:
     """
@@ -49,6 +59,8 @@ async def get_order_details(order_id: str) -> dict:
     Args:
         order_id: UUID del pedido a consultar.
     """
+    # Delega toda la lógica real en la capa de servicio; esta función no
+    # hace más que "traducir" la llamada MCP a una llamada Python normal.
     return await supabase_service.get_order_details(order_id)
 
 
@@ -102,6 +114,10 @@ async def create_return_record(
     reason: str,
     reason_category: str,
     refund_amount: float,
+    # items: list[ReturnItem] — a diferencia del "list[dict]" que usa
+    # supabase_service, aquí SÍ se tipa con el modelo Pydantic: es la
+    # frontera donde el LLM debe generar un JSON con forma estricta y
+    # FastMCP necesita ese modelo para construir el JSON Schema exacto.
     items: list[ReturnItem],
     notes: str = "",
 ) -> dict:
@@ -126,6 +142,8 @@ async def create_return_record(
         reason=reason,
         reason_category=reason_category,
         refund_amount=refund_amount,
+        # .model_dump(): convierte cada objeto Pydantic ReturnItem de vuelta
+        # a un dict plano, que es lo que espera la capa de servicio.
         items=[item.model_dump() for item in items],
         notes=notes,
     )
@@ -165,6 +183,8 @@ async def update_return_status(
 # Arranque del servidor
 # ---------------------------------------------------------------------------
 
+# Solo se ejecuta si el archivo se lanza directamente
+# (python -m backend.mcp.mcp_supabase), no si se importa desde otro módulo.
 if __name__ == "__main__":
     # streamable-http es el sustituto oficial de HTTP+SSE, deprecado en la
     # revisión de spec 2025-03-26. Accesible en http://0.0.0.0:8001/mcp.
