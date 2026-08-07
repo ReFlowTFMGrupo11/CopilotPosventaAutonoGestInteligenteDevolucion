@@ -4,8 +4,9 @@ TFM que propone "ReFlow", un sistema de agentes de IA Generativa para automatiza
 gestión de devoluciones y el soporte posventa en e-commerce. La arquitectura combina
 **LangGraph** (orquestación multi-agente con estado compartido y memoria persistente),
 **MCP (Model Context Protocol)** como capa de herramientas hacia **Supabase**
-(PostgreSQL + pgvector para RAG sobre políticas de devolución), y modelos de OpenAI
-como motor de razonamiento.
+(PostgreSQL + pgvector para RAG sobre políticas de devolución), modelos de OpenAI
+como motor de razonamiento, y una **API web (FastAPI) + frontend (Streamlit)** para
+usar el sistema desde el navegador en vez de solo por terminal.
 
 ## Estado actual del proyecto
 
@@ -20,8 +21,9 @@ como motor de razonamiento.
 | Modelos Pydantic centralizados — `backend/models/` | ✅ |
 | Dataset sintético + corpus de políticas RAG — `dataset/` | ✅ |
 | Tests unitarios e integración — `tests/` | ✅ |
-| Backend FastAPI (endpoints de chat y panel admin/HITL) | ⏳ Pendiente |
-| Frontend Streamlit (chat cliente + dashboard admin) | ⏳ Pendiente |
+| Demo de consola — `backend/agents/cli/demo_chat.py` | ✅ |
+| Backend FastAPI (chat en streaming + panel admin/HITL) — `backend/main.py` | ✅ |
+| Frontend Streamlit (chat cliente + panel admin) — `frontend/` | ✅ |
 
 ## Estructura del repositorio
 
@@ -40,18 +42,27 @@ backend/
     infra/       #   Infraestructura:
                  #     mcp_client.py      — Cliente MCP unificado (Supabase + Logistics)
                  #     session_tracker.py — Registro de sesiones para métricas
-    cli/         #   demo_chat.py — Demo interactiva multi-turno
+    cli/         #   demo_chat.py — Demo interactiva multi-turno de terminal
   services/      # Lógica de negocio pura (sin MCP ni LLM)
                  #   supabase_service.py  — consultas, RAG, mutaciones
                  #   logistics_service.py — etiquetas PDF, notificaciones
   mcp/           # Servidores MCP: wrappers finos sobre services/ (puertos 8001/8002)
   db/            # Cliente Supabase (singleton cacheado)
+  schemas.py     # Modelos Pydantic del contrato HTTP de la API web
+  dependencies.py# Providers de FastAPI (grafo singleton, registro HITL en memoria)
+  main.py        # API FastAPI: expone el grafo por HTTP con streaming SSE
+  README.md      # Detalle de todo lo anterior
+frontend/        # App Streamlit (chat cliente + panel admin), consume backend/main.py
+  lib/           #   settings.py, api_client.py — cliente HTTP hacia la API
+  Home.py        #   Página de entrada
+  pages/         #   1_💬_Chat_Cliente.py, 2_🛠️_Panel_Admin.py
+  README.md      #   Detalle de todo lo anterior
 dataset/         # Dataset sintético + corpus de 17 políticas para RAG + eval_cases.csv
 supabase/        # Migraciones SQL y seed de datos
 tests/
   unit/          # Tests de routing, logistics_service, supabase_service
   integration/   # Tests del grafo completo, triage, policy y resolution agents
-docs/            # Diagramas (grafo Mermaid, ER, documentación de la fusión)
+docs/            # Diagramas (grafo Mermaid, ER, flujo de llamadas end-to-end)
 archived/        # Código histórico de referencia (agentes individuales pre-LangGraph)
 ```
 
@@ -79,7 +90,7 @@ cp .env.example .env
 Edita `.env` con tus valores:
 
 ```
-SUPABASE_URL=https://<tu-proyecto>.supabase.co
+SUPABASE_API_URL=https://<tu-proyecto>.supabase.co
 SUPABASE_SERVICE_KEY=<tu-service-role-key>
 SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
 OPENAI_API_KEY=<tu-openai-api-key>
@@ -103,7 +114,8 @@ asyncio.run(test())
 
 ## Servidores MCP
 
-Transporte **Streamable HTTP**. Dos procesos locales:
+Transporte **Streamable HTTP**. Dos procesos locales, necesarios tanto para
+la demo de consola como para la API web:
 
 ```bash
 # Terminal 1 — Supabase (datos + RAG) en http://localhost:8001/mcp
@@ -142,15 +154,38 @@ START → Triage → [¿order_id + items?]
                                                                                                └─ SÍ → HITL Admin → END
 ```
 
-Para diagramas Mermaid detallados ver [`docs/graph_diagram.md`](docs/graph_diagram.md).
+Para diagramas Mermaid detallados ver [`docs/graph_diagram.md`](docs/graph_diagram.md)
+(el grafo en sí) y [`docs/FLUJO_LLAMADAS.md`](docs/FLUJO_LLAMADAS.md) (flujo
+completo extremo a extremo: desde el mensaje del cliente hasta la
+vectorización de la búsqueda RAG, incluyendo las llamadas HTTP a los
+servidores MCP).
 
-### Demo interactiva
+## Dos formas de usar el sistema
+
+### A) Demo de consola (CLI)
 
 ```bash
 python -m backend.agents.cli.demo_chat
 ```
 
-Requiere los servidores MCP levantados y `SUPABASE_DB_URL` + `OPENAI_API_KEY` en `.env`.
+Requiere los dos servidores MCP levantados y `SUPABASE_DB_URL` + `OPENAI_API_KEY` en `.env`.
+
+### B) App web (FastAPI + Streamlit)
+
+```bash
+# Terminal 3 — API FastAPI en http://localhost:8000
+uvicorn backend.main:app --reload
+
+# Terminal 4 — Frontend Streamlit en http://localhost:8501
+streamlit run frontend/Home.py
+```
+
+Incluye chat con streaming en vivo del razonamiento de los agentes, descarga
+de la etiqueta PDF cuando la devolución se aprueba, y un panel de
+administración para aprobar/rechazar los casos que el HITL deja pausados
+(reembolso > 100 €) — ver el detalle de cada endpoint y cómo se reanuda el
+grafo tras la decisión del administrador en
+[`backend/README.md`](backend/README.md) y [`frontend/README.md`](frontend/README.md).
 
 ## Tests
 
