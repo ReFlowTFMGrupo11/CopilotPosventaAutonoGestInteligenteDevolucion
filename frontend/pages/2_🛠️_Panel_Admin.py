@@ -2,9 +2,13 @@
 frontend/pages/2_🛠️_Panel_Admin.py
 =====================================
 Panel de administración HITL: lista las conversaciones que el grafo dejó
-en pausa (interrupt()) porque el reembolso solicitado supera el umbral de
-100 €, y permite aprobarlas o rechazarlas. Al decidir, el backend reanuda
-directamente el grafo de LangGraph de ESE thread_id con
+en pausa (interrupt()) por cualquiera de las señales de revisión humana
+obligatoria de dataset/policies/00_marco_general_devoluciones.md (sección
+5) — importe > 100 €, motivo sensible, zona frontera del plazo o historial
+de devoluciones reciente — y permite aprobarlas o rechazarlas. El motivo
+concreto de cada caso llega en "message" (ver
+backend/agents/nodes/resolution.py::_needs_admin_approval). Al decidir, el
+backend reanuda directamente el grafo de LangGraph de ESE thread_id con
 Command(resume=...) — no se vuelve a ejecutar el flujo desde el principio.
 """
 
@@ -15,7 +19,7 @@ from lib.settings import API_BASE_URL
 
 st.set_page_config(page_title="ReFlow — Panel Admin", page_icon="🛠️")
 st.title("🛠️ Panel de Administración (HITL)")
-st.caption("Devoluciones pausadas a la espera de aprobación manual (reembolso > 100 €).")
+st.caption("Devoluciones pausadas a la espera de aprobación manual (importe > 100 €, motivo sensible, zona frontera del plazo o historial reciente).")
 
 client = ReflowApiClient(API_BASE_URL)
 

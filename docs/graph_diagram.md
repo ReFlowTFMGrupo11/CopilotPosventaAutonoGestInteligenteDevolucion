@@ -23,9 +23,9 @@ graph TD
     
     REJECT --> END_R([END])
     
-    RESOLVER --> ROUTE_HITL{¿Importe > 100€?}
+    RESOLVER --> ROUTE_HITL{_needs_admin_approval:<br/>¿importe>100€, motivo sensible,<br/>zona frontera del plazo o<br/>>3 aprobadas en 90 días?}
     ROUTE_HITL -->|NO| END_OK([END<br/>Devolución completada])
-    ROUTE_HITL -->|SÍ| HITL[👤 HITL Admin<br/>Aprobación humana]
+    ROUTE_HITL -->|SÍ, interrupt| HITL[👤 HITL Admin<br/>Retoma tras la decisión del admin:<br/>aprueba → etiqueta+registro+notif.<br/>rechaza → mensaje de rechazo]
     
     HITL --> END_HITL([END])
 ```
@@ -89,9 +89,9 @@ sequenceDiagram
 | `triage` | `nodes/triage.py` | LLM extrae info del cliente conversacionalmente | ❌ |
 | `fetch_order_data` | `nodes/triage.py` | Consulta pedido y historial en Supabase | ✅ supabase:8001 |
 | `evaluator` | `nodes/policy.py` | RAG sobre políticas + verificación de plazos | ✅ supabase:8001 |
-| `resolver` | `nodes/resolution.py` | Crea devolución, genera etiqueta, notifica | ✅ ambos |
+| `resolver` | `nodes/resolution.py` | Si `_needs_admin_approval` no encuentra ninguna señal (importe, motivo sensible, zona frontera, reincidencia): crea devolución, genera etiqueta, notifica. Si encuentra alguna: `interrupt()` y cede a `hitl_admin` (no resuelve él mismo) | ✅ ambos (solo si no hay señales) |
 | `reject` | `nodes/resolution.py` | Genera mensaje empático de rechazo | ❌ |
-| `hitl_admin` | `nodes/resolution.py` | Pausa para aprobación humana (>100€) | ❌ |
+| `hitl_admin` | `nodes/resolution.py` | Retoma tras la decisión del administrador: si aprueba, completa el proceso (mismo código que la aprobación automática); si rechaza, redacta el rechazo | ✅ ambos (solo si aprueba) |
 
 ## Rol del Checkpointer
 

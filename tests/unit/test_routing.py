@@ -15,30 +15,33 @@ class TestRouteAfterTriage:
         }
         assert route_after_triage(state) == "fetch_order_data"
 
-    def test_loops_back_when_no_order_id(self):
+    def test_ends_turn_when_no_order_id(self):
+        """Sin order_id, el turno termina (END) para esperar al siguiente
+        mensaje del cliente; el checkpointer conserva el estado acumulado
+        hasta ahora, así que no hace falta "volver" al nodo triage."""
         state = {
             "order_id": None,
             "items_to_return": [{"order_item_id": "oi-1", "quantity": 1}],
         }
-        assert route_after_triage(state) == "triage"
+        assert route_after_triage(state) == "__end__"
 
-    def test_loops_back_when_no_items(self):
+    def test_ends_turn_when_no_items(self):
         state = {
             "order_id": "ord-001",
             "items_to_return": [],
         }
-        assert route_after_triage(state) == "triage"
+        assert route_after_triage(state) == "__end__"
 
-    def test_loops_back_when_both_missing(self):
+    def test_ends_turn_when_both_missing(self):
         state = {}
-        assert route_after_triage(state) == "triage"
+        assert route_after_triage(state) == "__end__"
 
-    def test_loops_back_when_order_id_empty_string(self):
+    def test_ends_turn_when_order_id_empty_string(self):
         state = {
             "order_id": "",
             "items_to_return": [{"order_item_id": "oi-1", "quantity": 1}],
         }
-        assert route_after_triage(state) == "triage"
+        assert route_after_triage(state) == "__end__"
 
 
 class TestRouteAfterFetch:
@@ -52,9 +55,12 @@ class TestRouteAfterFetch:
         state = {}
         assert route_after_fetch(state) == "evaluator"
 
-    def test_returns_to_triage_on_error(self):
+    def test_ends_turn_on_error(self):
+        """Igual que route_after_triage: si fetch_order_data no encontró el
+        pedido, el turno termina (END) en vez de volver a triage; el mensaje
+        pidiendo verificar el order_id ya lo dejó fetch_order_data."""
         state = {"error": "Pedido no encontrado"}
-        assert route_after_fetch(state) == "triage"
+        assert route_after_fetch(state) == "__end__"
 
 
 class TestRouteAfterEvaluator:

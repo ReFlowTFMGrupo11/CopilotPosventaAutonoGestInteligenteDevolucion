@@ -67,7 +67,13 @@ class TestGetOrderDetails:
 
     @pytest.mark.asyncio
     async def test_returns_order_and_items(self):
-        mock_client = AsyncMock()
+        # MagicMock, no AsyncMock: el builder de Supabase (.table/.select/
+        # .eq/.update/.insert/.order/.single...) es síncrono, solo
+        # .execute() es async. Un AsyncMock() sin spec propaga "asyncness"
+        # a TODOS sus hijos por defecto, así que client.table(...) devolvería
+        # una coroutine en vez de encadenar — por eso se fuerza MagicMock
+        # aquí y solo .execute se declara AsyncMock explícitamente abajo.
+        mock_client = MagicMock()
 
         # Mock para order query
         order_chain = AsyncMock()
@@ -80,7 +86,7 @@ class TestGetOrderDetails:
         mock_client.table.return_value.select.return_value.eq.return_value.single.return_value.execute = AsyncMock(return_value=order_chain)
         mock_client.table.return_value.select.return_value.eq.return_value.execute = AsyncMock(return_value=items_chain)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await get_order_details("ord-1")
 
         assert "order" in result
@@ -97,7 +103,13 @@ class TestGetCustomerReturnHistory:
 
     @pytest.mark.asyncio
     async def test_counts_approved_and_rejected(self):
-        mock_client = AsyncMock()
+        # MagicMock, no AsyncMock: el builder de Supabase (.table/.select/
+        # .eq/.update/.insert/.order/.single...) es síncrono, solo
+        # .execute() es async. Un AsyncMock() sin spec propaga "asyncness"
+        # a TODOS sus hijos por defecto, así que client.table(...) devolvería
+        # una coroutine en vez de encadenar — por eso se fuerza MagicMock
+        # aquí y solo .execute se declara AsyncMock explícitamente abajo.
+        mock_client = MagicMock()
 
         resp_mock = AsyncMock()
         resp_mock.data = [
@@ -108,7 +120,7 @@ class TestGetCustomerReturnHistory:
 
         mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await get_customer_return_history("cust-1")
 
         assert result["total_returns"] == 3
@@ -117,14 +129,20 @@ class TestGetCustomerReturnHistory:
 
     @pytest.mark.asyncio
     async def test_empty_history(self):
-        mock_client = AsyncMock()
+        # MagicMock, no AsyncMock: el builder de Supabase (.table/.select/
+        # .eq/.update/.insert/.order/.single...) es síncrono, solo
+        # .execute() es async. Un AsyncMock() sin spec propaga "asyncness"
+        # a TODOS sus hijos por defecto, así que client.table(...) devolvería
+        # una coroutine en vez de encadenar — por eso se fuerza MagicMock
+        # aquí y solo .execute se declara AsyncMock explícitamente abajo.
+        mock_client = MagicMock()
 
         resp_mock = AsyncMock()
         resp_mock.data = []
 
         mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await get_customer_return_history("cust-1")
 
         assert result["total_returns"] == 0
@@ -142,7 +160,13 @@ class TestCreateReturnRecord:
 
     @pytest.mark.asyncio
     async def test_creates_return_and_items(self):
-        mock_client = AsyncMock()
+        # MagicMock, no AsyncMock: el builder de Supabase (.table/.select/
+        # .eq/.update/.insert/.order/.single...) es síncrono, solo
+        # .execute() es async. Un AsyncMock() sin spec propaga "asyncness"
+        # a TODOS sus hijos por defecto, así que client.table(...) devolvería
+        # una coroutine en vez de encadenar — por eso se fuerza MagicMock
+        # aquí y solo .execute se declara AsyncMock explícitamente abajo.
+        mock_client = MagicMock()
 
         return_resp = AsyncMock()
         return_resp.data = [{"id": "ret-1", "status": "pending"}]
@@ -154,7 +178,7 @@ class TestCreateReturnRecord:
             side_effect=[return_resp, items_resp]
         )
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await create_return_record(
                 order_id="ord-1",
                 customer_id="cust-1",
@@ -178,28 +202,40 @@ class TestUpdateReturnStatus:
 
     @pytest.mark.asyncio
     async def test_updates_status(self):
-        mock_client = AsyncMock()
+        # MagicMock, no AsyncMock: el builder de Supabase (.table/.select/
+        # .eq/.update/.insert/.order/.single...) es síncrono, solo
+        # .execute() es async. Un AsyncMock() sin spec propaga "asyncness"
+        # a TODOS sus hijos por defecto, así que client.table(...) devolvería
+        # una coroutine en vez de encadenar — por eso se fuerza MagicMock
+        # aquí y solo .execute se declara AsyncMock explícitamente abajo.
+        mock_client = MagicMock()
 
         resp_mock = AsyncMock()
         resp_mock.data = [{"id": "ret-1", "status": "approved"}]
 
         mock_client.table.return_value.update.return_value.eq.return_value.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await update_return_status("ret-1", "approved", resolution="full_refund")
 
         assert result["updated_return"]["status"] == "approved"
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self):
-        mock_client = AsyncMock()
+        # MagicMock, no AsyncMock: el builder de Supabase (.table/.select/
+        # .eq/.update/.insert/.order/.single...) es síncrono, solo
+        # .execute() es async. Un AsyncMock() sin spec propaga "asyncness"
+        # a TODOS sus hijos por defecto, así que client.table(...) devolvería
+        # una coroutine en vez de encadenar — por eso se fuerza MagicMock
+        # aquí y solo .execute se declara AsyncMock explícitamente abajo.
+        mock_client = MagicMock()
 
         resp_mock = AsyncMock()
         resp_mock.data = []
 
         mock_client.table.return_value.update.return_value.eq.return_value.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await update_return_status("ret-nonexistent", "approved")
 
         assert result["updated_return"] is None

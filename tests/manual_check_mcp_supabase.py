@@ -1,7 +1,8 @@
 """
-Test script for MCP Supabase server via Streamable HTTP.
+Manual check script for MCP Supabase server via Streamable HTTP.
+Not a pytest test (needs a live server) — run it directly:
 Start the server first: python -m backend.mcp.mcp_supabase
-Then run this: python tests/test_mcp_supabase.py
+Then run this: python tests/manual_check_mcp_supabase.py
 """
 
 import asyncio

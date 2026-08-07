@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from backend.agents.policy_agent import policy_evaluator_agent
+from backend.agents.nodes.policy import policy_evaluator_agent
 
 
 class TestPolicyEvaluatorAgent:
@@ -35,11 +35,14 @@ class TestPolicyEvaluatorAgent:
             "items_to_return": [{"order_item_id": "oi-001-uuid", "quantity": 1, "condition": "defective"}],
         }
 
-        with patch("backend.agents.policy_agent._build_llm", return_value=mock_llm), \
-             patch("backend.agents.policy_agent.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
+        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.policy.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
             result = await policy_evaluator_agent(state)
 
         assert result["is_eligible"] is True
+        # refund_amount no viene del bloque JSON del LLM (79.99 ahí es
+        # ignorado a propósito): se recalcula en Python a partir de
+        # mock_order_details (oi-001-uuid: unit_price 79.99 x quantity 1).
         assert result["refund_amount"] == 79.99
         assert result["current_agent"] == "evaluator"
 
@@ -66,8 +69,8 @@ class TestPolicyEvaluatorAgent:
             "items_to_return": [{"order_item_id": "oi-001-uuid", "quantity": 1, "condition": "used"}],
         }
 
-        with patch("backend.agents.policy_agent._build_llm", return_value=mock_llm), \
-             patch("backend.agents.policy_agent.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
+        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.policy.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
             result = await policy_evaluator_agent(state)
 
         assert result["is_eligible"] is False
@@ -89,8 +92,8 @@ class TestPolicyEvaluatorAgent:
             "items_to_return": [],
         }
 
-        with patch("backend.agents.policy_agent._build_llm", return_value=mock_llm), \
-             patch("backend.agents.policy_agent.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
+        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.policy.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
             result = await policy_evaluator_agent(state)
 
         # Debe defaultear a no elegible si no puede parsear

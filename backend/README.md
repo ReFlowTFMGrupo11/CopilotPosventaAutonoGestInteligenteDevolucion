@@ -72,11 +72,15 @@ de `agents/graph.py`, sin reimplementar el flujo de agentes.
 ### Cómo se gestiona el HITL (Human-in-the-Loop)
 
 `resolution_agent` (`agents/nodes/resolution.py`) llama a `interrupt(...)`
-**antes** de invocar ninguna tool MCP cuando el reembolso supera 100 €. Esto
-importa porque LangGraph, al reanudar un nodo interrumpido, vuelve a
-ejecutarlo desde el principio: como no hay ninguna llamada con efectos
-secundarios (crear la devolución, generar la etiqueta) antes del
-`interrupt()`, reanudar es seguro y no duplica nada.
+**antes** de invocar ninguna tool MCP cuando `_needs_admin_approval(state)`
+detecta alguna señal de `dataset/policies/00_marco_general_devoluciones.md`
+§5 (reembolso > 100 €, motivo sensible como `allergic_reaction`/
+`counterfeit_suspicion`, fecha de entrega en zona frontera del plazo, o
+más de 3 devoluciones aprobadas en los últimos 90 días). Esto importa
+porque LangGraph, al reanudar un nodo interrumpido, vuelve a ejecutarlo
+desde el principio: como no hay ninguna llamada con efectos secundarios
+(crear la devolución, generar la etiqueta) antes del `interrupt()`,
+reanudar es seguro y no duplica nada.
 
 `backend/dependencies.py::get_pending_store()` mantiene, en memoria por
 proceso (`app.state.pending_admin`), qué `thread_id` están pausados — es
