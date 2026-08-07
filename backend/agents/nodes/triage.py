@@ -14,16 +14,23 @@ import json
 import logging
 from typing import Any
 
+# AIMessage: mensaje "del asistente" que se añade al historial de la conversación.
+# SystemMessage: instrucción de sistema (prompt) que no forma parte del diálogo visible.
 from langchain_core.messages import AIMessage, SystemMessage
+# ChatOpenAI: wrapper de LangChain sobre la API de chat de OpenAI.
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
+# Funciones que llaman, vía MCP, al servidor de Supabase para traer el
+# pedido y el historial de devoluciones del cliente.
 from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
 
 logger = logging.getLogger(__name__)
 
 # ── Prompt del sistema ─────────────────────────────────────────────────────
 
+# Prompt fijo que define el "rol" y las reglas de comportamiento del LLM en
+# este nodo; se envía en cada invocación junto con el historial de mensajes.
 TRIAGE_SYSTEM_PROMPT = """\
 Eres ReFlow, un asistente de atención al cliente especializado en devoluciones.
 Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
@@ -52,11 +59,15 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 
 # ── Modelos ────────────────────────────────────────────────────────────────
 
+# Modelos Pydantic que definen la forma exacta que debe tener la respuesta
+# del LLM (ver backend/models/returns.py).
 from backend.models import ReturnItem, TriageOutput
 
 
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de triaje con salida estructurada."""
+    # temperature=0: respuestas deterministas (poca variación creativa),
+    # apropiado para un agente que debe extraer datos con precisión.
     return ChatOpenAI(
         model="gpt-5-nano",
         temperature=0,
@@ -71,27 +82,41 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     (Pydantic) para garantizar un schema válido en cada respuesta.
     """
     llm = _build_llm()
+    # with_structured_output(TriageOutput): en vez de devolver texto libre,
+    # el LLM está obligado a devolver un objeto que cumpla el schema de
+    # TriageOutput (campos y tipos fijos) — evita tener que parsear texto.
     llm_structured = llm.with_structured_output(TriageOutput)
 
     # Construir la lista de mensajes para el LLM
+    # Se antepone el prompt de sistema al historial de conversación real
+    # acumulado en el estado (mensajes previos del cliente y del asistente).
     system = SystemMessage(content=TRIAGE_SYSTEM_PROMPT)
     llm_messages = [system, *state.get("messages", [])]
 
+    # ainvoke(): llamada asíncrona al LLM; devuelve directamente una
+    # instancia de TriageOutput (o None si no pudo generar salida válida).
     result: TriageOutput | None = await llm_structured.ainvoke(llm_messages)
 
     if result is None:
         # Fallback: el LLM no generó structured output válido
+        # Caso raro pero posible (fallo de red, respuesta cortada...): se
+        # responde algo genérico en vez de dejar el turno sin respuesta.
         logger.warning("Triaje: structured output devolvió None, usando fallback.")
         return {
             "messages": [AIMessage(content="Lo siento, no he podido procesar tu mensaje. ¿Podrías repetirlo?")],
             "current_agent": "triage",
         }
 
+    # Diccionario de actualizaciones que este nodo devuelve a LangGraph; solo
+    # estas claves del estado se sobrescriben (el resto queda intacto).
     updates: dict[str, Any] = {
         "messages": [AIMessage(content=result.response_to_customer)],
         "current_agent": "triage",
     }
 
+    # Cada campo solo se añade a "updates" si el LLM lo rellenó (no es None):
+    # así, si en este turno el cliente no dio el order_id, no se sobrescribe
+    # con None el order_id que ya se hubiera capturado en un turno anterior.
     if result.order_id:
         updates["order_id"] = result.order_id
     if result.reason:
@@ -99,6 +124,8 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     if result.reason_category:
         updates["reason_category"] = result.reason_category
     if result.items_to_return:
+        # .model_dump(): convierte cada ReturnItem (objeto Pydantic) a dict
+        # plano, porque ReturnState.items_to_return se define como list[dict].
         updates["items_to_return"] = [item.model_dump() for item in result.items_to_return]
 
     return updates
@@ -112,16 +139,24 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
     """
     order_id = state.get("order_id")
     if not order_id:
+        # Salvaguarda: en la práctica el grafo solo llega a este nodo cuando
+        # route_after_triage ya comprobó que hay order_id, pero se protege
+        # igualmente por si se invoca este nodo desde otro lugar (tests...).
         return {"error": "No se proporcionó order_id."}
 
     try:
         raw_order = await get_order_details(order_id)
         # MCP devuelve lista de content blocks: [{"type": "text", "text": "{...}"}]
+        # El protocolo MCP envuelve las respuestas de las tools en una lista
+        # de "bloques de contenido"; aquí se desenvuelve para quedarse con
+        # el JSON real (parseándolo desde el campo "text").
         if isinstance(raw_order, list):
             order_details = json.loads(raw_order[0]["text"])
         else:
             order_details = raw_order
 
+        # Se extraen del pedido los datos del cliente para no tener que
+        # volver a consultarlos más adelante en el grafo.
         customer_id = order_details["order"]["customer"]["id"]
         customer_name = order_details["order"]["customer"]["full_name"]
         customer_email = order_details["order"]["customer"]["email"]
@@ -140,6 +175,9 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
             "return_history": return_history,
         }
     except Exception as exc:
+        # Captura amplia deliberada: cualquier fallo (pedido inexistente,
+        # error de red con el servidor MCP, JSON corrupto...) se traduce en
+        # un mensaje entendible para el cliente, en vez de romper el grafo.
         logger.error("Error al consultar datos del pedido: %s", exc)
         return {
             "error": f"No se pudo recuperar el pedido {order_id}. Verifica que el ID sea correcto.",

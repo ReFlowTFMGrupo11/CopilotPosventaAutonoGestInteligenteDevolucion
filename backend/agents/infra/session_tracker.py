@@ -28,11 +28,16 @@ async def start_session(thread_id: str, customer_id: Optional[str] = None) -> st
         El ID de la sesión creada.
     """
     client = await get_supabase_client()
+    # Se reutiliza el thread_id de LangGraph como id de la fila en
+    # chat_sessions: así una misma conversación queda enlazada 1:1 entre el
+    # checkpointer (memoria del grafo) y esta tabla de métricas.
     row = {
         "id": thread_id,
         "status": "active",
         "metadata": {"source": "demo_chat"},
     }
+    # customer_id normalmente aún no se conoce al empezar la conversación
+    # (el cliente todavía no dio su order_id), por eso es opcional.
     if customer_id:
         row["customer_id"] = customer_id
 
@@ -60,6 +65,8 @@ async def record_message(
         "session_id": session_id,
         "role": role,
         "content": content,
+        # metadata or {}: evita guardar "None" si el llamante no pasa nada,
+        # se guarda un objeto JSON vacío en su lugar.
         "metadata": metadata or {},
     }
     await client.table("chat_messages").insert(row).execute()
@@ -80,8 +87,13 @@ async def end_session(
     client = await get_supabase_client()
     updates: dict = {
         "status": status,
+        # isoformat(): convierte el datetime a texto ISO-8601 (formato que
+        # Supabase/PostgreSQL entiende directamente para columnas timestamp).
         "ended_at": datetime.now(timezone.utc).isoformat(),
     }
+    # Si al principio de la conversación no se sabía el customer_id (ver
+    # start_session) pero se descubrió durante el chat, se completa aquí
+    # al cerrar la sesión.
     if customer_id:
         updates["customer_id"] = customer_id
 

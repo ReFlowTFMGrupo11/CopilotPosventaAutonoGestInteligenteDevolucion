@@ -8,8 +8,11 @@ Estos modelos se comparten entre:
 Centralizarlos aquí evita duplicación y garantiza un único schema.
 """
 
+# Optional[x] es equivalente a "x | None": el campo puede no venir informado.
 from typing import Optional
 
+# BaseModel: clase base de Pydantic, valida tipos y genera JSON Schema.
+# Field: permite añadir metadatos (valor por defecto, descripción) a cada campo.
 from pydantic import BaseModel, Field
 
 
@@ -19,6 +22,8 @@ from pydantic import BaseModel, Field
 class Product(BaseModel):
     """Producto del catálogo, tal como lo devuelve Supabase (join en order_items)."""
 
+    # Todos los campos son Optional porque el join de Supabase puede devolver
+    # el producto incompleto o nulo si se borró del catálogo.
     name: Optional[str] = Field(default=None, description="Nombre del producto.")
     sku: Optional[str] = Field(default=None, description="SKU único.")
     category: Optional[str] = Field(default=None, description="Categoría (electronics, moda, etc.).")
@@ -34,6 +39,8 @@ class OrderItem(BaseModel):
     quantity: Optional[int] = Field(default=None, description="Unidades compradas.")
     unit_price: Optional[float] = Field(default=None, description="Precio unitario.")
     total_price: Optional[float] = Field(default=None, description="Precio total de la línea.")
+    # Modelo anidado: Pydantic valida automáticamente el dict "product" del
+    # join de Supabase contra la clase Product de arriba.
     product: Optional[Product] = Field(default=None, description="Producto asociado.")
 
 
@@ -47,6 +54,8 @@ class ReturnItem(BaseModel):
     un JSON Schema fijo) como por el structured output del agente de triaje.
     """
 
+    # Sin default: es obligatorio, el LLM/tool debe indicar qué order_item
+    # concreto del pedido se está devolviendo.
     order_item_id: str = Field(description="UUID del order_item a devolver.")
     quantity: int = Field(default=1, description="Unidades a devolver.")
     condition: str = Field(
@@ -61,6 +70,8 @@ class ShippingLabelItem(BaseModel):
     Usado por la tool MCP generate_shipping_label y por el agente de resolución.
     """
 
+    # Modelo deliberadamente simple (solo nombre + cantidad): es lo único que
+    # se imprime físicamente en la etiqueta PDF, no hace falta más detalle.
     name: str = Field(default="Item", description="Nombre del producto.")
     quantity: int = Field(default=1, description="Unidades del producto.")
 
@@ -68,9 +79,14 @@ class ShippingLabelItem(BaseModel):
 class TriageOutput(BaseModel):
     """Salida estructurada del agente de triaje."""
 
+    # Este es el único campo siempre obligatorio: el LLM SIEMPRE debe generar
+    # algo que decirle al cliente, aunque el resto de campos estén vacíos.
     response_to_customer: str = Field(
         description="Respuesta empática a mostrar al cliente en este turno."
     )
+    # Todos los siguientes son None hasta que el cliente los proporciona en
+    # la conversación; el nodo triage_agent solo actualiza el estado cuando
+    # dejan de ser None (ver backend/agents/nodes/triage.py).
     order_id: Optional[str] = Field(
         default=None,
         description="UUID del pedido. None si el cliente aún no lo ha proporcionado.",
@@ -83,6 +99,7 @@ class TriageOutput(BaseModel):
         default=None,
         description="Categoría: defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other.",
     )
+    # Lista de ReturnItem: Pydantic valida cada elemento contra ese modelo.
     items_to_return: Optional[list[ReturnItem]] = Field(
         default=None,
         description="Lista de artículos a devolver. None si aún no se conocen.",
