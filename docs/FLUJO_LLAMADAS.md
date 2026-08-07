@@ -16,12 +16,16 @@ paso exacto de vectorización dentro de ellos.
 `CLI (demo_chat.py) → grafo LangGraph (Triaje → Evaluador → Resolución) → tools MCP por HTTP (Supabase :8001 / Logística :8002) → PostgreSQL+pgvector / OpenAI`,
 y la respuesta vuelve por el mismo camino en sentido inverso, turno a turno.
 
-> **Nota de arquitectura**: a diferencia de otros proyectos del grupo, aquí
-> no hay (todavía) backend FastAPI ni frontend Streamlit — están marcados
-> como "⏳ Pendiente" en el [README](../README.md). La única puerta de
-> entrada hoy es la demo de consola `backend/agents/cli/demo_chat.py`, y los
-> dos servidores MCP se sirven por **HTTP** (`streamable-http`, no stdio)
-> como procesos aparte que hay que levantar a mano.
+> **Nota de arquitectura**: este documento describe el camino de la demo de
+> consola (`backend/agents/cli/demo_chat.py`), que sigue siendo la forma más
+> directa de trazar el flujo completo paso a paso. Desde entonces el proyecto
+> también tiene un backend FastAPI + frontend Streamlit (ambos ✅ en el
+> [README](../README.md)) que exponen el mismo grafo por HTTP con streaming
+> y panel de administración HITL — ver [`backend/README.md`](../backend/README.md)
+> y [`frontend/README.md`](../frontend/README.md). La diferencia relevante
+> entre ambas puertas de entrada es el manejo del HITL: ver la nota más abajo.
+> Los dos servidores MCP se sirven por **HTTP** (`streamable-http`, no stdio)
+> como procesos aparte que hay que levantar a mano, para las dos puertas de entrada.
 
 ## Diagrama de secuencia
 
@@ -84,7 +88,7 @@ sequenceDiagram
                 G-->>CLI: fin de turno
             else elegible
                 Note over G: NODO 4b — resolution_agent
-                alt refund_amount > 100€ (umbral HITL)
+                alt _needs_admin_approval(state): importe>100€,<br/>motivo sensible, zona frontera del plazo<br/>o >3 aprobadas en 90 días
                     G->>G: interrupt({...}) → PAUSA el grafo<br/>(estado queda checkpointeado)
                     Note over CLI,G: ⚠️ el CLI actual no reanuda interrupts:<br/>no implementa Command(resume=...)
                 end
@@ -172,10 +176,15 @@ empático a partir de `eligibility_reason`. No usa ninguna tool MCP.
 ### 6b. NODO 4b — Resolución (si es elegible)
 [`backend/agents/nodes/resolution.py`](../backend/agents/nodes/resolution.py) → `resolution_agent()`
 
-- Si `refund_amount > 100€`, llama a `interrupt()` de LangGraph: **pausa el
-  grafo** en ese punto exacto (el estado queda guardado por el
+- Si `_needs_admin_approval(state)` devuelve alguna razón — importe > 100€,
+  motivo sensible (`allergic_reaction`/`counterfeit_suspicion`), fecha de
+  entrega en zona frontera del plazo (±3 días) o más de 3 devoluciones
+  aprobadas en los últimos 90 días —, llama a `interrupt()` de LangGraph:
+  **pausa el grafo** en ese punto exacto (el estado queda guardado por el
   checkpointer) a la espera de que alguien lo reanude con
-  `Command(resume={"approved": bool})`.
+  `Command(resume={"approved": bool})`. Las razones concretas del caso
+  viajan en el payload del `interrupt()` (`hitl_reasons`) y en el mensaje
+  que ve el panel de administración.
 - Genera la etiqueta (`generate_shipping_label`, tool MCP de logística,
   puerto 8002 → [`backend/mcp/mcp_logistics.py`](../backend/mcp/mcp_logistics.py) → [`backend/services/logistics_service.py`](../backend/services/logistics_service.py), que dibuja el PDF con `reportlab`).
 - Registra la devolución (`create_return_record`, tool MCP de Supabase →
@@ -207,21 +216,53 @@ solo con fines de métricas — no afecta al flujo del grafo.
   (ahí el LLM usa *structured output*, no RAG) ni la respuesta final del
   nodo de Resolución (texto libre generado directamente por el LLM a partir
   de un resumen, sin ningún paso de embeddings).
-- ⚠️ **HITL incompleto en el CLI actual**: `resolution_agent` sí llama a
+- ⚠️ **HITL incompleto en el CLI, por diseño**: `resolution_agent` sí llama a
   `interrupt()` cuando el reembolso supera 100€, pero
   `backend/agents/cli/demo_chat.py` no comprueba si el resultado de
   `ainvoke()` es una interrupción ni sabe reanudarla con
-  `Command(resume=...)` — coherente con que el panel de administración
-  (backend FastAPI) aparezca como "⏳ Pendiente" en el README. Hoy, un caso
-  que dispara HITL se queda pausado sin una vía en el CLI para aprobarlo o
-  rechazarlo.
-- ℹ️ **Nodo `hitl_admin` sin arista de entrada activa**: `graph.py` registra
-  el nodo `hitl_admin` y una arista `hitl_admin → END`, pero revisando
-  `resolution_agent()` ambas ramas (aprobado tras HITL y rechazado tras
-  HITL) devuelven `Command(goto="__end__")` directamente — ninguna usa
-  `goto="hitl_admin"`. Parece pensado para un flujo que aún no está
-  conectado (probablemente a la vez que se implemente el endpoint de
-  aprobación admin), no algo que debas dar por hecho que se ejecuta hoy.
+  `Command(resume=...)`. A diferencia de lo que decía una versión anterior
+  de esta nota, esto **ya no** es por falta de un panel de administración:
+  el backend FastAPI (`GET /api/admin/pending` + `POST
+  /api/admin/approve/{thread_id}`, ver `backend/main.py`) sí implementa el
+  ciclo completo de aprobación/rechazo con `Command(resume=...)`. Es
+  simplemente que el CLI, pensado como demo de un solo terminal, nunca
+  adoptó ese camino — la vía soportada para aprobar/rechazar un caso en
+  HITL es siempre la web (FastAPI + Streamlit), no la consola.
+- ✅ **Nodo `hitl_admin` conectado**: `resolution_agent`, al reanudar tras el
+  `interrupt()`, ya no resuelve el caso él mismo — dejas la decisión del
+  administrador en el estado (`admin_decision`) y hace
+  `Command(goto="hitl_admin")`. Es `hitl_admin_node` (en
+  `backend/agents/nodes/resolution.py`) quien completa el proceso: genera
+  la etiqueta, registra la devolución y notifica si se aprobó (reutilizando
+  el mismo helper que la aprobación automática, `_build_approved_return_updates`),
+  o redacta el rechazo si no. La aprobación automática (reembolso ≤ umbral,
+  sin HITL) sigue resolviéndose directamente en `resolution_agent`, sin
+  pasar por `hitl_admin`.
+- ℹ️ **`refund_amount` no lo decide el LLM**: `policy_evaluator_agent` le
+  pide al modelo un `refund_amount` en el bloque JSON, pero ese número se
+  descarta; el importe real se recalcula en Python
+  (`_calculate_refund_amount`, en `backend/agents/nodes/policy.py`) sumando
+  `unit_price × quantity` de las líneas del pedido que coinciden con
+  `items_to_return`. Mismo patrón que
+  `archived/agente2ConMCP/agente_evaluacion.py::_sum_refund_amount`: ese
+  importe alimenta directamente el corte HITL de 100€, así que no puede
+  depender de que el LLM sume bien los precios.
+- ✅ **Las señales de HITL de la sección 5 están implementadas — casi
+  todas**: `resolution.py::_needs_admin_approval` evalúa en Python
+  determinista (no en un prompt) 4 de las señales de
+  `dataset/policies/00_marco_general_devoluciones.md` §5: importe > 100€,
+  motivo sensible, zona frontera del plazo (usando `days_since_delivery` y
+  `policy_max_return_days`, que ahora expone `policy.py` en el estado) y
+  más de 3 aprobadas en los últimos 90 días (calculado a partir de
+  `return_history`, sin consulta nueva). **Quedan sin implementar**, igual
+  que ya reconocía `archived/agente2ConMCP/agente_evaluacion.py` en su
+  propio docstring, por falta de datos: la tasa de devolución >50% de los
+  pedidos del cliente (no hay ninguna consulta que traiga el total de
+  pedidos), la falta de evidencia — fotos/embalaje — (el triaje no las
+  recoge) y la duda sobre precintos de higiene en categorías con excepción
+  legal (no hay ese dato en el pedido). `reason_category` en `triage.py`
+  ahora sí incluye `allergic_reaction`/`counterfeit_suspicion` (antes ni
+  siquiera eran una opción para el LLM de triaje).
 
 ## Tabla resumen: componente → fichero
 

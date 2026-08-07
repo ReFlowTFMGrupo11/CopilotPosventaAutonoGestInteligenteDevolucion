@@ -60,6 +60,13 @@ class ReturnState(TypedDict, total=False):
     eligibility_reason: str | None     # Explicación textual de la decisión (para el rechazo/aprobación).
     policy_info: dict[str, Any] | None # Resultados crudos de la búsqueda RAG sobre políticas.
     refund_amount: float               # Importe a reembolsar (0 si no es elegible).
+    # days_since_delivery/policy_max_return_days: mismos datos que usa
+    # policy.py para razonar el plazo, reexpuestos en el estado porque
+    # resolution.py los necesita para detectar la "zona frontera" del plazo
+    # (dataset/policies/00_marco_general_devoluciones.md, sección 5) sin
+    # tener que recalcularlos.
+    days_since_delivery: int | None
+    policy_max_return_days: int | None
 
     # ── Resultado del Agente de Resolución ─────────────────────────────
     needs_admin_approval: bool       # True si el importe supera el umbral HITL.

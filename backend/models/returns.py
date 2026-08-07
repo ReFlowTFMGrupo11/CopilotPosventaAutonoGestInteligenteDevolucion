@@ -97,7 +97,13 @@ class TriageOutput(BaseModel):
     )
     reason_category: Optional[str] = Field(
         default=None,
-        description="Categoría: defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other.",
+        description=(
+            "Categoría cerrada (dataset/policies/00_marco_general_devoluciones.md, "
+            "sección 3): defective, wrong_item_shipped, wrong_size, not_as_described, "
+            "damaged_in_transit, missing_parts, changed_mind, duplicate_order, "
+            "arrived_late, better_price_found, allergic_reaction, quality_issue, "
+            "assembly_issue, incompatible, counterfeit_suspicion."
+        ),
     )
     # Lista de ReturnItem: Pydantic valida cada elemento contra ese modelo.
     items_to_return: Optional[list[ReturnItem]] = Field(

@@ -102,10 +102,15 @@ FastAPI importa directamente de `services/` (no pasa por MCP) porque:
 | `interrupt_before=["nodo"]` | Debugging estático (breakpoints) |
 | `interrupt()` dentro del nodo | HITL dinámico basado en lógica de negocio |
 
-Usamos `interrupt()` porque la pausa es **condicional** (solo si `refund_amount > 100€`), no siempre.
+Usamos `interrupt()` porque la pausa es **condicional** — solo si
+`_needs_admin_approval(state)` encuentra alguna señal de
+`dataset/policies/00_marco_general_devoluciones.md` §5 (importe > 100€,
+motivo sensible, zona frontera del plazo o reincidencia reciente) —, no
+siempre.
 
 ```python
-if refund_amount > HITL_REFUND_THRESHOLD:
+needs_hitl, reasons = _needs_admin_approval(state)
+if needs_hitl:
     admin_response = interrupt({...})  # Pausa y espera respuesta del admin
 ```
 
@@ -182,8 +187,9 @@ START → triage ──────────────────┐
                     │   ▼                 ▼
                     │ resolver          reject → END
                     │   │
-                    │   ├── ≤100€ → END (auto-aprobado)
-                    │   └── >100€ → interrupt (HITL)
+                    │   ├── sin señales HITL → END (auto-aprobado)
+                    │   └── >100€ / motivo sensible / zona frontera /
+                    │       reincidencia → interrupt (HITL)
                     │                    │
                     │              hitl_admin → END
                     └─── (order no encontrado)

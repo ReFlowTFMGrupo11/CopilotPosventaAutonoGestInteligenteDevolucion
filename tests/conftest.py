@@ -24,6 +24,11 @@ def mock_order_details():
                 "id": "oi-001-uuid",
                 "order_id": "ord-001-uuid",
                 "quantity": 1,
+                # unit_price/total_price: columnas reales de order_items
+                # (ver supabase/migrations/005_create_order_items.sql), no
+                # solo el precio de catálogo embebido en "product".
+                "unit_price": 79.99,
+                "total_price": 79.99,
                 "product": {
                     "name": "Auriculares Bluetooth Pro",
                     "sku": "AUR-BT-001",
@@ -36,6 +41,8 @@ def mock_order_details():
                 "id": "oi-002-uuid",
                 "order_id": "ord-001-uuid",
                 "quantity": 2,
+                "unit_price": 15.00,
+                "total_price": 30.00,
                 "product": {
                     "name": "Funda Protectora",
                     "sku": "FUN-001",

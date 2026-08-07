@@ -185,8 +185,8 @@ principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
 ## Cómo cargar el dataset en Supabase
 
 Este fichero es **adicional** a [`supabase/seed.sql`](../supabase/seed.sql)
-(el seed pequeño de 3 clientes / 5 productos que usan los tests de
-`tests/test_mcp_supabase.py`), no lo sustituye. Para un entorno de desarrollo
+(el seed pequeño de 3 clientes / 5 productos que usa el script manual
+`tests/manual_check_mcp_supabase.py`), no lo sustituye. Para un entorno de desarrollo
 o de pruebas de RAG dedicado a este dataset grande, se recomienda:
 
 1. Aplicar las migraciones (`supabase/migrations/*.sql` o `supabase/run_all.sql`

@@ -8,7 +8,11 @@ Actúa como auditor. Consulta:
 Verifica de forma estricta si la devolución es elegible basándose en:
 - Plazos de devolución según categoría.
 - Estado del producto.
-- Historial de devoluciones del cliente (detección de abuso).
+
+No decide aquí si el caso necesita revisión humana (HITL) más allá de la
+elegibilidad — eso (zona frontera del plazo, motivo sensible, historial de
+abuso, importe > 100€) lo evalúa resolution.py de forma determinista, no
+este LLM (ver dataset/policies/00_marco_general_devoluciones.md, sección 5).
 """
 
 from __future__ import annotations
@@ -43,12 +47,16 @@ Tu trabajo es determinar de forma objetiva y estricta si una devolución es eleg
 - Políticas de devolución relevantes (resultados RAG).
 - Motivo y artículos que el cliente quiere devolver.
 
-## Criterios de evaluación
+## Criterios de evaluación (elegibilidad)
 1. **Plazo**: ¿Han pasado más días de los permitidos por la política de la categoría?
 2. **Estado del producto**: ¿La condición del artículo está dentro de las condiciones permitidas?
 3. **Embalaje original**: ¿Se requiere y el cliente lo tiene?
-4. **Historial de abuso**: Si el cliente tiene más de 5 devoluciones aprobadas en los últimos
-   6 meses, marca como sospechoso.
+
+NO evalúes aquí el historial de devoluciones del cliente, si el motivo es
+sensible (reacción alérgica, sospecha de falsificación) ni si la fecha está
+en zona frontera del plazo: esas señales NO cambian si la devolución es
+elegible o no, solo si además debe pasar por revisión humana — eso lo
+decide un paso Python posterior (ver resolution.py), no tú.
 
 ## Formato de respuesta
 Responde SIEMPRE con un bloque JSON ```json ... ``` con las siguientes claves:
@@ -71,6 +79,41 @@ def _build_llm() -> ChatOpenAI:
         temperature=0.0,  # Determinista para auditoría
         max_tokens=4096,
     )
+
+
+def _calculate_refund_amount(order_details: dict, items_to_return: list[dict]) -> float:
+    """Suma el importe a reembolsar en Python puro, a partir de las líneas
+    reales del pedido — nunca del número que el LLM haya podido escribir en
+    su bloque JSON.
+
+    Mismo motivo que ``_sum_refund_amount`` en
+    ``archived/agente2ConMCP/agente_evaluacion.py``: este importe alimenta
+    directamente el corte HITL (``resolution.py::HITL_REFUND_THRESHOLD``),
+    así que no puede depender de que el LLM copie o sume bien los precios.
+    """
+    order_items_by_id = {
+        oi.id: oi
+        for oi in (OrderItem.model_validate(raw) for raw in order_details.get("items", []))
+        if oi.id
+    }
+
+    total = 0.0
+    for item in items_to_return:
+        oi = order_items_by_id.get(item.get("order_item_id"))
+        if oi is None:
+            # Artículo que el cliente quiere devolver pero que no aparece en
+            # el pedido consultado: no se puede saber su precio, se ignora
+            # en vez de asumir un importe arbitrario.
+            continue
+        quantity = item.get("quantity") or 1
+        if oi.unit_price is not None:
+            total += float(oi.unit_price) * float(quantity)
+        elif oi.total_price is not None:
+            # Sin unit_price no se puede prorratear por cantidad devuelta;
+            # se usa el total de la línea completa como aproximación.
+            total += float(oi.total_price)
+
+    return round(total, 2)
 
 
 async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
@@ -166,10 +209,20 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
     # Se guarda ya la respuesta completa del LLM en el historial y policy_info
     # en el estado; is_eligible/eligibility_reason/refund_amount se rellenan
     # más abajo tras parsear el bloque JSON.
+    # policy_max_return_days: viene de la política estructurada del RAG, no
+    # de los "semantic_results" de texto libre. days_since_delivery y este
+    # campo se reexponen en el estado porque resolution.py los necesita
+    # para detectar la "zona frontera" del plazo (ver más abajo, HITL).
+    policy_max_return_days = None
+    if isinstance(policy_results, dict):
+        policy_max_return_days = (policy_results.get("policy_info") or {}).get("max_return_days")
+
     updates: dict[str, Any] = {
         "messages": [response],
         "current_agent": "evaluator",
         "policy_info": policy_results,
+        "days_since_delivery": days_since_order,
+        "policy_max_return_days": policy_max_return_days,
     }
 
     # re.DOTALL: hace que "." también capture saltos de línea, necesario
@@ -180,11 +233,10 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
             result = json.loads(match.group(1))
             updates["is_eligible"] = result.get("is_eligible", False)
             updates["eligibility_reason"] = result.get("eligibility_reason", "")
-            updates["refund_amount"] = float(result.get("refund_amount", 0.0))
-        except (json.JSONDecodeError, ValueError) as exc:
+        except json.JSONDecodeError as exc:
             # El LLM incluyó un bloque ```json``` pero con contenido
-            # inválido (JSON roto o refund_amount no numérico): se falla
-            # "seguro" tratando el caso como no elegible.
+            # inválido (JSON roto): se falla "seguro" tratando el caso
+            # como no elegible.
             logger.warning("Error parseando resultado del evaluador: %s", exc)
             updates["is_eligible"] = False
             updates["eligibility_reason"] = "Error interno al evaluar la política."
@@ -193,5 +245,15 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
         # fallback "seguro" (rechazar) que en el caso anterior.
         updates["is_eligible"] = False
         updates["eligibility_reason"] = "No se pudo evaluar la política correctamente."
+
+    # refund_amount NUNCA se toma del número que escriba el LLM: se recalcula
+    # siempre en Python a partir de los importes reales del pedido
+    # (order_details), igual que archived/agente2ConMCP/agente_evaluacion.py
+    # ::_sum_refund_amount. Alimenta directamente el corte HITL de
+    # resolution.py (HITL_REFUND_THRESHOLD), así que no puede depender de
+    # que el LLM copie o sume bien los precios.
+    updates["refund_amount"] = (
+        _calculate_refund_amount(order_details, items_to_return) if updates["is_eligible"] else 0.0
+    )
 
     return updates

@@ -41,7 +41,17 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 3. Extraer la siguiente información de forma conversacional (NO interrogatorio):
    - **order_id**: UUID del pedido (el cliente lo tiene en su email de confirmación).
    - **reason**: motivo de la devolución en texto libre.
-   - **reason_category**: una de [defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other].
+   - **reason_category**: una de las categorías cerradas de
+     dataset/policies/00_marco_general_devoluciones.md (sección 3):
+     defective, wrong_item_shipped, wrong_size, not_as_described,
+     damaged_in_transit, missing_parts, changed_mind, duplicate_order,
+     arrived_late, better_price_found, allergic_reaction, quality_issue,
+     assembly_issue, incompatible, counterfeit_suspicion.
+     IMPORTANTE: allergic_reaction (reacción alérgica) y
+     counterfeit_suspicion (sospecha de falsificación) disparan SIEMPRE
+     revisión humana obligatoria (ver resolution.py) — extráelas con la
+     misma naturalidad que el resto, no las evites ni las suavices a otra
+     categoría.
    - **items_to_return**: lista de artículos con formato [{"order_item_id": "...", "quantity": 1, "condition": "..."}].
      Las condiciones posibles son: unopened, defective, damaged, used, wrong_item.
 
