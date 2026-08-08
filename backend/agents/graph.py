@@ -91,6 +91,7 @@ async def build_return_graph(checkpointer=None):
                 # Abrir explícitamente (establece las conexiones al DB)
                 await pool.open()
                 checkpointer = AsyncPostgresSaver(pool)
+                await checkpointer.setup()
                 logger.info("Checkpointer: AsyncPostgresSaver (persistente).")
             except Exception as exc:
                 logger.warning(
