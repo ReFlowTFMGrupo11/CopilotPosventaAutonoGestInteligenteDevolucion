@@ -1,74 +1,83 @@
-# ReFlow: E-commerce Returns
+# ReFlow — Frontend (Streamlit)
 
-Crea una aplicación web React con dos vistas para un sistema de gestión de devoluciones e-commerce llamado "ReFlow":
+Interfaz web de ReFlow: chat de devoluciones para clientes y panel de
+administración para el equipo. Reimplementación en Streamlit + Python
++ HTML/CSS de la versión original generada con Lovable (React).
 
-Vista 1: Chat del cliente (/)
+## Resumen de la migración (React/Lovable → Streamlit)
 
-Interfaz de chat tipo WhatsApp/ChatGPT
+Se eliminó por completo el frontend generado con Lovable (React +
+TypeScript + TanStack Router/Query + Tailwind + shadcn/ui, ~90
+ficheros) y se reescribió desde cero en Streamlit, replicando la misma
+funcionalidad y el mismo contrato con el backend (`backend/api/`), sin
+cambiar una línea del backend.
 
-Al entrar, hace POST http://localhost:8000/api/chat/new para obtener un thread_id
+**Eliminado:** `frontend/src/` (rutas, componentes shadcn/ui, cliente
+`api.ts`), `package.json`/`package-lock.json`, `vite.config.ts`,
+`tsconfig.json`, `eslint.config.js`, `components.json`,
+`LOVABLE_PROMPT.md` y demás tooling de Node/Vite.
 
-El usuario escribe mensajes que se envían a POST http://localhost:8000/api/chat/stream con body {"thread_id": "...", "message": "..."}
+**Añadido**, con equivalencia directa a la versión React:
 
-La respuesta es Server-Sent Events (SSE). Cada evento es un JSON con type que puede ser:
+| React/Lovable | Streamlit | Notas |
+|---|---|---|
+| `routes/index.tsx` (`/`) | `Chat.py` | página de inicio |
+| `routes/admin.tsx` (`/admin`) | `pages/1_Admin.py` | Streamlit genera la navegación lateral automáticamente a partir de `pages/` |
+| `routes/__root.tsx` (header + nav) | `lib/styles.py::render_header()` | logo "R" + título; la navegación Chat/Admin la da la sidebar nativa de Streamlit |
+| `components/BackendBanner.tsx` | `lib/styles.py::render_backend_banner()` | mismo texto y color si `/health` falla |
+| `lib/api.ts` (fetch + parseo SSE manual) | `lib/api.py` (httpx) | una función por endpoint, sin envoltorios innecesarios |
+| `styles.css` (tokens oklch) | `lib/styles.py::_CSS` | misma paleta (marca índigo, éxito verde, error rojo, aviso ámbar) traducida a hex, con variante `prefers-color-scheme: dark` |
+| Burbujas de chat hechas a mano | `st.chat_message` / `st.chat_input` | se usan los componentes nativos de chat de Streamlit en vez de reconstruir HTML de burbujas |
+| `window.prompt()` para el motivo de aprobar/rechazar | `st.text_input` inline por fila | Streamlit no tiene prompts bloqueantes; un input junto a los botones es el equivalente más simple |
+| `JSON.stringify(order, null, 2)` en `<pre>` | `st.json(order)` | visor JSON nativo, plegable |
 
-"agent_step": mostrar un indicador sutil "Agente {agent} procesando..."
+**Contrato de API sin cambios:** `POST /api/chat/new`, `POST
+/api/chat/stream` (SSE), `GET /api/admin/pending`, `GET
+/api/admin/returns`, `POST /api/admin/{thread_id}/approve|reject`,
+`GET /api/orders/{order_id}`, `GET /api/stats`, `GET /health`.
 
-"final": mostrar la respuesta del agente como mensaje en el chat
+**Dependencias:** se añadieron `streamlit` y `httpx` a
+`requirements.txt` (sección "Frontend"); no se tocó nada del backend.
 
-"awaiting_admin": mostrar un aviso amarillo "Tu solicitud está pendiente de revisión"
+Verificado con `streamlit run frontend/Chat.py`: arranca sin errores y
+sirve correctamente tanto `/` (Chat) como `/Admin`.
 
-"error": mostrar error en rojo
+## Vistas
 
-Diseño moderno, minimalista, con avatares distintos para usuario y agente
+- **Chat** (`Chat.py`): el cliente pide su devolución conversando con
+  los agentes. Muestra el progreso en tiempo real (SSE) y los avisos
+  de "pendiente de aprobación" o error.
+- **Admin** (`pages/1_Admin.py`): KPIs, aprobación/rechazo de
+  devoluciones pendientes (HITL), listado filtrable de devoluciones y
+  buscador de pedidos.
 
-Vista 2: Panel de administración (/admin)
+## Estructura
 
-Dashboard con KPIs arriba: total devoluciones, aprobadas, rechazadas, pendientes, tasa de aprobación. Datos de GET http://localhost:8000/api/stats
+```
+frontend/
+  Chat.py            # página de inicio (vista de chat)
+  pages/
+    1_Admin.py        # panel de administración
+  lib/
+    api.py            # cliente HTTP del backend (httpx)
+    styles.py          # CSS de marca + helpers HTML (header, KPIs, badges)
+```
 
-Tabla de devoluciones pendientes de aprobación (GET http://localhost:8000/api/admin/pending). Cada fila muestra: order_id, customer_id, refund_amount, reason. Con botones "Aprobar" y "Rechazar"
+## Ejecutar
 
-Aprobar: POST http://localhost:8000/api/admin/{thread_id}/approve con body {"reason": "..."}
-
-Rechazar: POST http://localhost:8000/api/admin/{thread_id}/reject con body {"reason": "..."}
-
-Tabla de todas las devoluciones (GET http://localhost:8000/api/admin/returns?status=) con filtro por estado (dropdown: all, approved, rejected, pending_approval)
-
-Buscador de pedidos: input para order_id que consulta GET http://localhost:8000/api/orders/{order_id} y muestra los detalles
-
-Requisitos técnicos:
-
-React + TypeScript + Tailwind CSS
-
-Navegación con React Router (sidebar o navbar con "Chat" y "Admin")
-
-Para SSE usar fetch con reader.read() (ReadableStream), no EventSource (porque es POST)
-
-El backend corre en http://localhost:8000 (ya tiene CORS habilitado)
-
-Colores: azul/índigo para la marca, verde para aprobado, rojo para rechazado, amarillo para pendiente
-
-Responsive (mobile-first)
-
-Health check al cargar: GET http://localhost:8000/health — si falla, mostrar banner "Backend desconectado"
-
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/eb3feb27-901e-4ac7-9661-a3e319beafc9).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+El backend (`backend/api/main.py`) debe estar corriendo en
+`http://localhost:8000`:
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+uvicorn backend.api.main:app --reload
 ```
+
+Y en otra terminal, el frontend:
+
+```sh
+pip install -r requirements.txt
+streamlit run frontend/Chat.py
+```
+
+Streamlit añade automáticamente la navegación "Chat" / "Admin" en la
+barra lateral a partir de `pages/`.
