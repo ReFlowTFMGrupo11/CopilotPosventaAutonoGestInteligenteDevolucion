@@ -21,7 +21,7 @@ como motor de razonamiento.
 | Dataset sintético + corpus de políticas RAG — `dataset/` | ✅ |
 | Tests unitarios e integración — `tests/` | ✅ |
 | Backend FastAPI (endpoints de chat y panel admin/HITL) — `backend/api/` | ✅ |
-| Frontend Streamlit (chat cliente + dashboard admin) | ⏳ Pendiente |
+| Frontend React (chat cliente + dashboard admin) — `frontend/` | ✅ |
 
 ## Estructura del repositorio
 
@@ -221,6 +221,25 @@ curl http://localhost:8000/api/stats
 Con el servidor arrancado, accede a:
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
+
+---
+
+## Frontend (React + TypeScript + Tailwind)
+
+Aplicación web con dos vistas:
+- **Chat del cliente** (`/`) — interfaz conversacional con SSE streaming
+- **Panel admin** (`/admin`) — KPIs, aprobación HITL, listado de devoluciones, buscador de pedidos
+
+### Arrancar el frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+# → http://localhost:5173
+```
+
+Requiere el backend corriendo en `http://localhost:8000` (ver sección API FastAPI).
 
 ---
 
