@@ -15,20 +15,20 @@ Ejecutar:
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from backend.agents.graph import get_return_graph
 from backend.api.routers import admin, chat, orders
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: pre-construye el grafo para que el primer request no espere."""
-    from backend.api.dependencies import get_graph
-
-    await get_graph()
+    app.state.graph = await get_return_graph()
     yield
 
 

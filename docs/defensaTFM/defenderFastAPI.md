@@ -130,7 +130,51 @@ Con FastAPI + `graph.ainvoke()` tenemos lo mismo que LangGraph Platform ofrece (
 
 ---
 
-## 7. Resumen para la presentación
+## 7. Decisiones arquitectónicas relevantes
+
+### 7.1 Streaming SSE vs. respuesta síncrona
+
+Se implementaron **dos modos de consumo** para el endpoint de chat:
+
+| Endpoint | Modo | Uso |
+|----------|------|-----|
+| `POST /api/chat` | JSON síncrono (`graph.ainvoke`) | Pruebas con curl/Postman, clientes simples |
+| `POST /api/chat/stream` | SSE streaming (`graph.astream`) | Frontend, UX en tiempo real |
+
+El endpoint síncrono espera a que todo el grafo termine (~10-20s) y devuelve la respuesta de golpe. El endpoint streaming emite un evento SSE cada vez que un nodo del grafo termina, reduciendo la **latencia percibida** a 2-3s (aunque la latencia real sea la misma). Esto se alinea con los umbrales de Nielsen: >1s requiere indicador de progreso, >10s requiere feedback continuo.
+
+La clave técnica es la diferencia entre `async` y `streaming`:
+- `await graph.ainvoke()` — asíncrono (no bloquea el servidor), pero el caller espera el resultado completo.
+- `async for chunk in graph.astream(..., stream_mode="updates")` — asíncrono **y** streaming: emite resultados parciales conforme cada nodo termina.
+
+### 7.2 Gestión de pendientes HITL: caché en memoria vs. base de datos
+
+Para listar las devoluciones pendientes de aprobación humana (HITL >100€), se evaluaron dos estrategias:
+
+1. **Caché en memoria** (`dict` en `app.state`): el endpoint de streaming almacena el payload del `interrupt()` en un diccionario Python al detectar que el grafo se ha pausado. Ventaja: acceso instantáneo. Desventajas: no sobrevive reinicios del servidor, no es compatible con despliegues multi-worker (cada instancia de uvicorn tendría su propia caché), e introduce una segunda fuente de verdad que requiere sincronización manual.
+
+2. **Consulta directa a base de datos** (`return_requests.status = 'pending_approval'`): la fuente de verdad es Supabase. Ventaja: persistente, consistente, compatible con múltiples workers. Desventaja: una query por cada consulta (mitigable con índices).
+
+**Decisión**: se optó por la base de datos como **fuente única de verdad**, complementada con `graph.aget_state()` del checkpointer de LangGraph para verificar si un thread específico está realmente pausado antes de re-invocarlo (guard anti re-invocación).
+
+**Escalabilidad a producción**: en un entorno productivo, esta solución escalaría con una tabla dedicada `pending_approvals` con campos de SLA (`expires_at` para escalar si nadie responde en 24h) y asignación a operadores (`assigned_to`).
+
+### 7.3 Inyección de dependencias con `Depends()` + `app.state`
+
+El grafo LangGraph se inyecta en los endpoints mediante `Depends(get_graph)`, que lo cachea en `request.app.state.graph`:
+
+```python
+async def get_graph(request: Request):
+    if getattr(request.app.state, "graph", None) is None:
+        request.app.state.graph = await get_return_graph()
+    return request.app.state.graph
+```
+
+Esto permite sustituir el grafo real por un mock en tests con `app.dependency_overrides[get_graph] = mock_graph`, sin modificar el código de producción.
+
+---
+
+## 8. Resumen para la presentación
 
 > "FastAPI actúa como gateway entre el frontend (Streamlit) y el sistema multi-agente.
 > Para endpoints de chat y HITL, invoca el grafo LangGraph completo con `ainvoke()` —

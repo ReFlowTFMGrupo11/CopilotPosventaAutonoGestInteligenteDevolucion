@@ -1,6 +1,6 @@
 """Schemas de request/response para la API."""
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,25 @@ class ChatResponse(BaseModel):
     current_agent: Optional[str] = None
     order_id: Optional[str] = None
     is_eligible: Optional[bool] = None
+    resolution: Optional[str] = None
+
+
+class ChatStreamEvent(BaseModel):
+    """Evento SSE emitido durante el streaming de un turno de chat.
+
+    - agent_step: un nodo del grafo completó su ejecución.
+    - final: respuesta definitiva del agente.
+    - awaiting_admin: el grafo se pausó por HITL (reembolso >100€).
+    - error: falló la ejecución del grafo.
+    """
+
+    type: Literal["agent_step", "final", "awaiting_admin", "error"]
+    content: str
+    agent: Optional[str] = None
+    order_id: Optional[str] = None
+    is_eligible: Optional[bool] = None
+    tracking_number: Optional[str] = None
+    label_path: Optional[str] = None
     resolution: Optional[str] = None
 
 
