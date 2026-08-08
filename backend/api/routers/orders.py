@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from backend.api.schemas import OrderDetailResponse, ReturnHistoryResponse
+from backend.db.supabase_client import get_supabase_client
 from backend.services import supabase_service
 
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -31,8 +32,6 @@ async def get_customer_history(customer_id: str):
 @router.get("/stats")
 async def get_stats():
     """KPIs generales del sistema de devoluciones."""
-    from backend.db.supabase_client import get_supabase_client
-
     client = await get_supabase_client()
 
     # Total de devoluciones por estado
