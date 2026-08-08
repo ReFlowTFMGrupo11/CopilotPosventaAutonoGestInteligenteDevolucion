@@ -30,7 +30,7 @@ from backend.models import ReturnItem
 
 from backend.services import supabase_service
 
-load_dotenv()
+load_dotenv(override=True)
 
 mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
 

@@ -8,6 +8,12 @@ import json
 from typing import Iterator
 
 import httpx
+from dotenv import load_dotenv
+
+# override=True: en máquinas con conda activado automáticamente, conda ya deja
+# SSL_CERT_FILE puesto (a veces con una ruta rota) antes de que arranque Python;
+# sin override, load_dotenv() no lo sustituiría por el valor bueno de .env.
+load_dotenv(override=True)
 
 API_BASE = "http://localhost:8000"
 
