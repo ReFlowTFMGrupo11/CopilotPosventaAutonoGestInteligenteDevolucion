@@ -20,7 +20,7 @@ como motor de razonamiento.
 | Modelos Pydantic centralizados — `backend/models/` | ✅ |
 | Dataset sintético + corpus de políticas RAG — `dataset/` | ✅ |
 | Tests unitarios e integración — `tests/` | ✅ |
-| Backend FastAPI (endpoints de chat y panel admin/HITL) | ⏳ Pendiente |
+| Backend FastAPI (endpoints de chat y panel admin/HITL) — `backend/api/` | ✅ |
 | Frontend Streamlit (chat cliente + dashboard admin) | ⏳ Pendiente |
 
 ## Estructura del repositorio
@@ -30,6 +30,13 @@ backend/
   models/        # Modelos Pydantic compartidos (Product, OrderItem, ReturnItem, etc.)
                  #   returns.py  — modelos de dominio
                  #   state.py    — ReturnState (TypedDict del grafo LangGraph)
+  api/           # FastAPI — capa HTTP
+                 #   main.py        — App, lifespan, CORS
+                 #   schemas.py     — Pydantic DTOs (request/response)
+                 #   dependencies.py— get_graph() dependency
+                 #   routers/chat.py   — /api/chat endpoints
+                 #   routers/admin.py  — /api/admin HITL endpoints
+                 #   routers/orders.py — /api/orders, /api/stats
   agents/        # Sistema multi-agente LangGraph
     graph.py     #   Grafo: StateGraph con routing condicional y checkpointer
     state.py     #   Re-export de ReturnState (compatibilidad)
@@ -151,6 +158,71 @@ python -m backend.agents.cli.demo_chat
 ```
 
 Requiere los servidores MCP levantados y `SUPABASE_DB_URL` + `OPENAI_API_KEY` en `.env`.
+
+## API FastAPI
+
+### Arrancar el servidor
+
+```bash
+# Asegúrate de tener los servidores MCP levantados (terminales 1 y 2 de arriba)
+# Terminal 3 — API REST en http://localhost:8000
+uvicorn backend.api.main:app --reload --port 8000
+```
+
+### Endpoints disponibles
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/api/chat/new` | Crear sesión de chat (devuelve `thread_id`) |
+| POST | `/api/chat` | Enviar mensaje al grafo de agentes |
+| GET | `/api/chat/{thread_id}/state` | Estado actual del grafo |
+| GET | `/api/admin/pending` | Devoluciones pendientes de HITL |
+| POST | `/api/admin/{thread_id}/approve` | Aprobar devolución (reanuda grafo) |
+| POST | `/api/admin/{thread_id}/reject` | Rechazar devolución (reanuda grafo) |
+| GET | `/api/admin/returns` | Listar devoluciones (filtro `?status=`) |
+| GET | `/api/admin/returns/{id}` | Detalle de una devolución |
+| GET | `/api/orders/{order_id}` | Detalle de pedido |
+| GET | `/api/customers/{id}/history` | Historial de devoluciones del cliente |
+| GET | `/api/stats` | KPIs generales |
+
+### Testear con curl
+
+```bash
+# 1. Health check
+curl http://localhost:8000/health
+
+# 2. Crear sesión
+curl -X POST http://localhost:8000/api/chat/new
+# → {"thread_id": "abc-123-..."}
+
+# 3. Enviar mensaje (usa el thread_id del paso anterior)
+curl -X POST http://localhost:8000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"thread_id": "abc-123-...", "message": "Quiero devolver mi pedido ORD-001"}'
+
+# 4. Consultar estado
+curl http://localhost:8000/api/chat/abc-123-.../state
+
+# 5. Ver devoluciones pendientes de aprobación
+curl http://localhost:8000/api/admin/pending
+
+# 6. Aprobar una devolución (HITL)
+curl -X POST http://localhost:8000/api/admin/abc-123-.../approve \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "Cliente VIP"}'
+
+# 7. Consultar KPIs
+curl http://localhost:8000/api/stats
+```
+
+### Documentación interactiva (Swagger)
+
+Con el servidor arrancado, accede a:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+---
 
 ## Tests
 
