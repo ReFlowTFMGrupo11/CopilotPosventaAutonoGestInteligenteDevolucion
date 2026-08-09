@@ -25,6 +25,7 @@ from backend.agents.infra.mcp_client import (
     create_return_record,
     generate_shipping_label,
     send_customer_notification,
+    update_return_status,
 )
 from backend.models import OrderItem
 
@@ -161,6 +162,14 @@ async def resolution_agent(
         refund_amount=refund_amount,
         items=items_to_return,
         notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
+    )
+
+    # ── Marcar como aprobada (auto-aprobación ≤ umbral) ────────────────
+    await update_return_status(
+        return_id=return_record["return_request"]["id"],
+        status="approved",
+        resolution="auto_approved",
+        notes=f"Aprobado automáticamente. Tracking: {label_result['tracking_number']}",
     )
 
     # ── Notificar al cliente ───────────────────────────────────────────
