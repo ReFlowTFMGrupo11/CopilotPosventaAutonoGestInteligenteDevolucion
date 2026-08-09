@@ -273,3 +273,60 @@ async def update_return_status(
     ).execute()
 
     return {"updated_return": resp.data[0] if resp.data else None}
+
+
+# ---------------------------------------------------------------------------
+# Consultas admin (panel HITL y dashboard)
+# ---------------------------------------------------------------------------
+
+
+async def list_pending_approvals() -> list[dict]:
+    """Devuelve devoluciones con status pending_approval (HITL)."""
+    client = await get_supabase_client()
+    resp = await client.table("return_requests").select(
+        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, created_at"
+    ).eq("status", "pending_approval").order("created_at", desc=True).execute()
+    return resp.data or []
+
+
+async def list_returns(status: str | None = None, limit: int = 50) -> list[dict]:
+    """Lista devoluciones con filtro opcional por estado."""
+    client = await get_supabase_client()
+    query = client.table("return_requests").select(
+        "id, order_id, customer_id, status, reason, reason_category, refund_amount, created_at, resolved_at"
+    ).order("created_at", desc=True).limit(limit)
+
+    if status:
+        query = query.eq("status", status)
+
+    resp = await query.execute()
+    return resp.data or []
+
+
+async def get_return_detail(return_id: str) -> dict | None:
+    """Detalle de una devolución específica con sus items."""
+    client = await get_supabase_client()
+    resp = await client.table("return_requests").select(
+        "*, return_items(id, order_item_id, quantity, condition)"
+    ).eq("id", return_id).single().execute()
+    return resp.data
+
+
+async def get_return_stats() -> dict:
+    """KPIs generales del sistema de devoluciones."""
+    client = await get_supabase_client()
+    resp = await client.table("return_requests").select("status").execute()
+    returns = resp.data or []
+
+    total = len(returns)
+    approved = sum(1 for r in returns if r["status"] == "approved")
+    rejected = sum(1 for r in returns if r["status"] == "rejected")
+    pending = sum(1 for r in returns if r["status"] in ("pending", "pending_approval"))
+
+    return {
+        "total_returns": total,
+        "approved": approved,
+        "rejected": rejected,
+        "pending": pending,
+        "approval_rate": round(approved / total * 100, 1) if total > 0 else 0,
+    }
