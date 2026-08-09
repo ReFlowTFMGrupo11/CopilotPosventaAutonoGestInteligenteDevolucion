@@ -27,6 +27,7 @@ from backend.agents.infra.mcp_client import (
     send_customer_notification,
     update_return_status,
 )
+from backend.db.supabase_client import get_supabase_client
 from backend.models import OrderItem
 
 logger = logging.getLogger(__name__)
@@ -125,9 +126,7 @@ async def resolution_agent(
         except (RuntimeError, ValueError) as exc:
             # Guard de duplicados: el registro ya existe (resume tras interrupt)
             logger.info("HITL record ya existe, reutilizando: %s", exc)
-            from backend.agents.infra.mcp_client import _get_server_client
             # Buscar el ID del registro existente via BD
-            from backend.db.supabase_client import get_supabase_client
             client = await get_supabase_client()
             resp = await client.table("return_requests").select("id").eq(
                 "order_id", order_id
