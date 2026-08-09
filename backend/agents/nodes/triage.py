@@ -4,7 +4,7 @@ Agente de Triaje y Empatía.
 Primer punto de contacto con el cliente. Se encarga de:
 1. Saludar y empatizar con el usuario.
 2. Comprender el motivo de insatisfacción.
-3. Extraer parámetros clave (order_id, razón, artículos) de forma conversacional.
+3. Extraer parámetros clave (order_number, razón, artículos) de forma conversacional.
 4. Consultar los detalles del pedido en Supabase.
 """
 
@@ -32,15 +32,24 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 1. Saludar amablemente y mostrar empatía por la situación del cliente.
 2. Entender el motivo de la devolución.
 3. Extraer la siguiente información de forma conversacional (NO interrogatorio):
-   - **order_id**: UUID del pedido (el cliente lo tiene en su email de confirmación).
+   - **order_number**: número de pedido (el cliente lo tiene en su email de confirmación,
+     formato "ORD-2026-00177"). NUNCA le pidas un UUID.
    - **reason**: motivo de la devolución en texto libre.
    - **reason_category**: una de [defective, wrong_item, not_as_described, no_longer_needed, arrived_late, other].
    - **items_to_return**: lista de artículos con formato [{"order_item_id": "...", "quantity": 1, "condition": "..."}].
      Las condiciones posibles son: unopened, defective, damaged, used, wrong_item.
 
+## Artículos del pedido (order_item_id)
+- El cliente identifica el artículo por su NOMBRE, nunca por un ID técnico.
+- Si el contexto incluye un mensaje "ARTÍCULOS DEL PEDIDO", cruza lo que dice el
+  cliente con esa lista y usa el "id" de la línea que corresponda como order_item_id.
+- Si ese contexto todavía no existe, no puedes rellenar items_to_return: limítate a
+  pedir el order_number primero.
+
 ## Reglas
 - Sé empático, cálido y profesional. Usa español.
-- Si el cliente no proporciona el order_id, pídelo amablemente.
+- Si el cliente no proporciona el order_number, pídelo amablemente.
+- Si ya conoces el order_number (aparece en el contexto), no lo vuelvas a pedir.
 - Si falta información, pregunta de forma natural (una cosa a la vez).
 - Cuando tengas TODA la información necesaria, rellena todos los campos.
 - NO inventes datos. Si no tienes algo, déjalo como null.
@@ -74,8 +83,13 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     llm_structured = llm.with_structured_output(TriageOutput)
 
     # Construir la lista de mensajes para el LLM
-    system = SystemMessage(content=TRIAGE_SYSTEM_PROMPT)
-    llm_messages = [system, *state.get("messages", [])]
+    context = [SystemMessage(content=TRIAGE_SYSTEM_PROMPT)]
+    if state.get("order_number"):
+        context.append(SystemMessage(content=f"order_number ya conocido: {state['order_number']}"))
+    if state.get("order_details"):
+        items = state["order_details"].get("items", [])
+        context.append(SystemMessage(content=f"ARTÍCULOS DEL PEDIDO: {json.dumps(items, default=str, ensure_ascii=False)}"))
+    llm_messages = [*context, *state.get("messages", [])]
 
     result: TriageOutput | None = await llm_structured.ainvoke(llm_messages)
 
@@ -92,8 +106,8 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
         "current_agent": "triage",
     }
 
-    if result.order_id:
-        updates["order_id"] = result.order_id
+    if result.order_number:
+        updates["order_number"] = result.order_number
     if result.reason:
         updates["reason"] = result.reason
     if result.reason_category:
@@ -107,21 +121,23 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
 async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
     """Nodo auxiliar que consulta los detalles del pedido en Supabase.
 
-    Se ejecuta después del triaje, cuando ya tenemos el ``order_id``.
-    Utiliza las herramientas MCP de ``mcp_supabase`` directamente.
+    Se ejecuta después del triaje, cuando ya tenemos el ``order_number``. Si
+    todavía no sabemos qué artículo quiere devolver el cliente, muestra los
+    artículos del pedido y pregunta, en vez de exigirle un ID técnico.
     """
-    order_id = state.get("order_id")
-    if not order_id:
-        return {"error": "No se proporcionó order_id."}
+    order_number = state.get("order_number")
+    if not order_number:
+        return {"error": "No se proporcionó order_number."}
 
     try:
-        raw_order = await get_order_details(order_id)
+        raw_order = await get_order_details(order_number)
         # MCP devuelve lista de content blocks: [{"type": "text", "text": "{...}"}]
         if isinstance(raw_order, list):
             order_details = json.loads(raw_order[0]["text"])
         else:
             order_details = raw_order
 
+        order_id = order_details["order"]["id"]
         customer_id = order_details["order"]["customer"]["id"]
         customer_name = order_details["order"]["customer"]["full_name"]
         customer_email = order_details["order"]["customer"]["email"]
@@ -132,22 +148,42 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
         else:
             return_history = raw_history
 
-        return {
+        updates: dict[str, Any] = {
+            "order_id": order_id,
             "order_details": order_details,
             "customer_id": customer_id,
             "customer_name": customer_name,
             "customer_email": customer_email,
             "return_history": return_history,
         }
+
+        # Primera vez que vemos este pedido: aún no sabemos qué artículo
+        # devolver. Se lo mostramos al cliente en vez de pedirle un ID.
+        if not state.get("items_to_return"):
+            items_text = "\n".join(
+                f"- {(item.get('product') or {}).get('name', 'Artículo')} "
+                f"(cantidad: {item.get('quantity', 1)}, precio: {item.get('unit_price')}€)"
+                for item in order_details.get("items", [])
+            ) or "(no se encontraron artículos en este pedido)"
+            updates["messages"] = [
+                AIMessage(
+                    content=(
+                        f"He encontrado tu pedido {order_number}. Estos son los artículos:\n"
+                        f"{items_text}\n\n¿Cuál quieres devolver y por qué motivo?"
+                    )
+                )
+            ]
+
+        return updates
     except Exception as exc:
         logger.error("Error al consultar datos del pedido: %s", exc)
         return {
-            "error": f"No se pudo recuperar el pedido {order_id}. Verifica que el ID sea correcto.",
+            "error": f"No se pudo recuperar el pedido {order_number}.",
             "messages": [
                 AIMessage(
                     content=(
-                        f"Lo siento, no he podido encontrar el pedido con ID `{order_id}`. "
-                        "¿Podrías verificar que el identificador sea correcto?"
+                        f"Lo siento, no he podido encontrar el pedido con número `{order_number}`. "
+                        "¿Podrías verificar que sea correcto?"
                     )
                 )
             ],

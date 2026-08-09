@@ -88,6 +88,7 @@ async def resolution_agent(
 
     refund_amount = state.get("refund_amount", 0.0)
     order_id = state.get("order_id", "")
+    order_number = state.get("order_number", "")
     customer_id = state.get("customer_id", "")
     customer_name = state.get("customer_name", "")
     customer_email = state.get("customer_email", "")
@@ -95,8 +96,11 @@ async def resolution_agent(
     reason_category = state.get("reason_category", "")
     items_to_return = state.get("items_to_return", [])
 
-    # ── HITL: pausar si el reembolso supera el umbral ──────────────────
-    if refund_amount > HITL_REFUND_THRESHOLD:
+    # ── HITL: pausar si el importe supera el umbral o si el Evaluador
+    #    marcó el caso como "needs_admin_approval" (zona frontera de plazo,
+    #    motivo sensible o cliente frecuente, aunque el importe sea bajo) ──
+    needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > HITL_REFUND_THRESHOLD
+    if needs_admin_approval:
         admin_response = interrupt({
             "type": "admin_approval_required",
             "refund_amount": refund_amount,
@@ -165,7 +169,7 @@ async def resolution_agent(
         subject="ReFlow - Tu devolución ha sido aprobada",
         message=(
             f"Hola {customer_name},\n\n"
-            f"Tu devolución para el pedido {order_id[:8]}... ha sido aprobada.\n"
+            f"Tu devolución para el pedido {order_number or order_id} ha sido aprobada.\n"
             f"Número de seguimiento: {label_result['tracking_number']}\n"
             f"Reembolso estimado: {refund_amount:.2f}€\n\n"
             "Adjuntamos la etiqueta de envío. Imprímela y pégala en el paquete.\n\n"
