@@ -10,6 +10,27 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
+# Desactivar conda si está activo en esta terminal: su python/pip no deben
+# usarse para crear el .venv del proyecto, y su activate.d suele dejar puesto
+# SSL_CERT_FILE (a veces roto) que interfiere con las conexiones HTTPS/SSL.
+if [ -n "${CONDA_PREFIX:-}" ]; then
+    echo "==> Entorno conda activo detectado (${CONDA_DEFAULT_ENV:-desconocido}), desactivando..."
+    if declare -F conda >/dev/null 2>&1; then
+        # 'conda' está cargado como función de shell (conda init): usar
+        # 'conda deactivate' tantas veces como niveles apilados haya.
+        while [ -n "${CONDA_PREFIX:-}" ]; do
+            conda deactivate
+        done
+    else
+        # Sin la función de shell (script no interactivo): limpiar a mano lo
+        # que deja puesto la activación de conda.
+        PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vi '/conda' | paste -sd: -)"
+        export PATH
+        unset CONDA_PREFIX CONDA_DEFAULT_ENV CONDA_SHLVL CONDA_PROMPT_MODIFIER CONDA_PYTHON_EXE
+        unset SSL_CERT_FILE SSL_CERT_DIR __CONDA_OPENSSL_CERT_FILE_SET __CONDA_OPENSSL_CERT_DIR_SET
+    fi
+fi
+
 GIT_BASH="/c/Program Files/Git/git-bash.exe"
 if [ ! -f "$GIT_BASH" ]; then
     echo "No se encuentra Git Bash en '$GIT_BASH'." >&2
