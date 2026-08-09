@@ -118,6 +118,69 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     return updates
 
 
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _parse_mcp_response(raw: Any) -> dict:
+    """Normaliza la respuesta MCP (lista de content blocks o dict directo)."""
+    if isinstance(raw, list):
+        return json.loads(raw[0]["text"])
+    return raw
+
+
+def _check_existing_return(
+    return_history: dict, order_id: str, order_number: str
+) -> dict[str, Any] | None:
+    """Si ya existe una devolución activa para el pedido, devuelve error+mensaje."""
+    existing = [
+        r for r in (return_history.get("returns") or [])
+        if r.get("order_id") == order_id and r.get("status") not in ("rejected",)
+    ]
+    if not existing:
+        return None
+    status_display = existing[0].get("status", "en curso")
+    return {
+        "error": f"Ya existe una devolución para este pedido (estado: {status_display}).",
+        "messages": [
+            AIMessage(
+                content=(
+                    f"El pedido **{order_number}** ya tiene una solicitud de devolución "
+                    f"registrada (estado: **{status_display}**). No es posible crear otra "
+                    f"devolución para el mismo pedido.\n\n"
+                    f"Si necesitas más información sobre el estado de tu devolución o "
+                    f"tienes alguna otra consulta, estoy aquí para ayudarte."
+                )
+            )
+        ],
+    }
+
+
+def _build_items_prompt(order_number: str, items: list[dict]) -> AIMessage:
+    """Construye el mensaje para preguntar al cliente qué artículo quiere devolver."""
+    if len(items) == 1:
+        single = items[0]
+        product_name = (single.get("product") or {}).get("name", "Artículo")
+        return AIMessage(
+            content=(
+                f"He encontrado tu pedido {order_number} con el artículo "
+                f"**{product_name}** ({single.get('unit_price')}€). "
+                f"¿Cuál es el motivo de la devolución y en qué estado "
+                f"se encuentra el artículo (sin abrir, defectuoso, artículo incorrecto, etc.)?"
+            )
+        )
+    items_text = "\n".join(
+        f"- {(item.get('product') or {}).get('name', 'Artículo')} "
+        f"(cantidad: {item.get('quantity', 1)}, precio: {item.get('unit_price')}€)"
+        for item in items
+    ) or "(no se encontraron artículos en este pedido)"
+    return AIMessage(
+        content=(
+            f"He encontrado tu pedido {order_number}. Estos son los artículos:\n"
+            f"{items_text}\n\n¿Cuál quieres devolver y por qué motivo?"
+        )
+    )
+
+
 async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
     """Nodo auxiliar que consulta los detalles del pedido en Supabase.
 
@@ -130,23 +193,16 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
         return {"error": "No se proporcionó order_number."}
 
     try:
-        raw_order = await get_order_details(order_number)
-        # MCP devuelve lista de content blocks: [{"type": "text", "text": "{...}"}]
-        if isinstance(raw_order, list):
-            order_details = json.loads(raw_order[0]["text"])
-        else:
-            order_details = raw_order
+        order_details = _parse_mcp_response(await get_order_details(order_number))
 
         order_id = order_details["order"]["id"]
         customer_id = order_details["order"]["customer"]["id"]
         customer_name = order_details["order"]["customer"]["full_name"]
         customer_email = order_details["order"]["customer"]["email"]
 
-        raw_history = await get_customer_return_history(customer_id)
-        if isinstance(raw_history, list):
-            return_history = json.loads(raw_history[0]["text"])
-        else:
-            return_history = raw_history
+        return_history = _parse_mcp_response(
+            await get_customer_return_history(customer_id)
+        )
 
         updates: dict[str, Any] = {
             "order_id": order_id,
@@ -157,42 +213,17 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
             "return_history": return_history,
         }
 
-        # Primera vez que vemos este pedido: aún no sabemos qué artículo
-        # devolver.
+        # ── Verificar si ya existe una devolución para este pedido ─────────
+        duplicate_msg = _check_existing_return(return_history, order_id, order_number)
+        if duplicate_msg:
+            updates["error"] = duplicate_msg["error"]
+            updates["messages"] = duplicate_msg["messages"]
+            return updates
+
+        # Primera vez que vemos este pedido: preguntar artículo y motivo.
         if not state.get("items_to_return"):
             items = order_details.get("items", [])
-            if len(items) == 1:
-                # Solo un artículo → seleccionarlo automáticamente
-                single = items[0]
-                product_name = (single.get("product") or {}).get("name", "Artículo")
-                updates["items_to_return"] = [{
-                    "order_item_id": single["id"],
-                    "quantity": single.get("quantity", 1),
-                    "condition": "unknown",
-                }]
-                updates["messages"] = [
-                    AIMessage(
-                        content=(
-                            f"He encontrado tu pedido {order_number} con el artículo "
-                            f"**{product_name}** ({single.get('unit_price')}€). "
-                            f"¿Cuál es el motivo de la devolución?"
-                        )
-                    )
-                ]
-            else:
-                items_text = "\n".join(
-                    f"- {(item.get('product') or {}).get('name', 'Artículo')} "
-                    f"(cantidad: {item.get('quantity', 1)}, precio: {item.get('unit_price')}€)"
-                    for item in items
-                ) or "(no se encontraron artículos en este pedido)"
-                updates["messages"] = [
-                    AIMessage(
-                        content=(
-                            f"He encontrado tu pedido {order_number}. Estos son los artículos:\n"
-                            f"{items_text}\n\n¿Cuál quieres devolver y por qué motivo?"
-                        )
-                    )
-                ]
+            updates["messages"] = [_build_items_prompt(order_number, items)]
 
         return updates
     except Exception as exc:
