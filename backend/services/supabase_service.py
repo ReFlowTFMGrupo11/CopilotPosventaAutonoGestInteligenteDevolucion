@@ -187,6 +187,20 @@ async def create_return_record(
     """
     client = await get_supabase_client()
 
+    # ── Guard: evitar devoluciones duplicadas para el mismo pedido ──────
+    existing = await (
+        client.table("return_requests")
+        .select("id, status")
+        .eq("order_id", order_id)
+        .in_("status", ["pending", "approved", "pending_approval"])
+        .execute()
+    )
+    if existing.data:
+        raise ValueError(
+            f"Ya existe una devolución activa para el pedido {order_id} "
+            f"(id={existing.data[0]['id']}, status={existing.data[0]['status']})."
+        )
+
     # Toda devolución nueva arranca en estado "pending".
     return_data = {
         "order_id": order_id,
