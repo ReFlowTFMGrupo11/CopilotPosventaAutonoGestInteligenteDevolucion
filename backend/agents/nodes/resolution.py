@@ -102,12 +102,31 @@ async def resolution_agent(
     #    motivo sensible o cliente frecuente, aunque el importe sea bajo) ──
     needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > HITL_REFUND_THRESHOLD
     if needs_admin_approval:
+        # Crear registro en BD con status pending_approval ANTES de pausar,
+        # para que el panel admin pueda listar las devoluciones pendientes.
+        hitl_record = await create_return_record(
+            order_id=order_id,
+            customer_id=customer_id,
+            reason=reason,
+            reason_category=reason_category,
+            refund_amount=refund_amount,
+            items=items_to_return,
+            notes="Pendiente de aprobación manual (HITL).",
+        )
+        await update_return_status(
+            return_id=hitl_record["return_request"]["id"],
+            status="pending_approval",
+            resolution="",
+            notes=f"Reembolso de {refund_amount:.2f}€ supera umbral o requiere revisión.",
+        )
+
         admin_response = interrupt({
             "type": "admin_approval_required",
             "refund_amount": refund_amount,
             "order_id": order_id,
             "customer_id": customer_id,
             "reason": reason,
+            "return_request_id": hitl_record["return_request"]["id"],
             "message": (
                 f"Se requiere aprobación manual: reembolso de {refund_amount:.2f}€ "
                 f"(umbral: {HITL_REFUND_THRESHOLD:.2f}€)."
@@ -115,6 +134,13 @@ async def resolution_agent(
         })
 
         if not admin_response.get("approved", False):
+            # Admin rechazó: actualizar BD y comunicar al cliente
+            await update_return_status(
+                return_id=hitl_record["return_request"]["id"],
+                status="rejected",
+                resolution="rejected_by_admin",
+                notes=admin_response.get("reason", "Rechazado por administrador."),
+            )
             rejection_msg = await llm.ainvoke([
                 SystemMessage(
                     content=REJECTION_SYSTEM_PROMPT.format(
@@ -127,10 +153,13 @@ async def resolution_agent(
                     "messages": [rejection_msg],
                     "admin_decision": "rejected",
                     "resolution": "rejected_by_admin",
+                    "return_request_id": hitl_record["return_request"]["id"],
                     "current_agent": "resolver",
                 },
                 goto="__end__",
             )
+
+        # Admin aprobó: continuar con etiqueta + notificación (el registro ya existe)
 
     # ── Generar etiqueta de transporte ─────────────────────────────────
     label_items = []
@@ -154,23 +183,32 @@ async def resolution_agent(
     )
 
     # ── Registrar devolución en Supabase ───────────────────────────────
-    return_record = await create_return_record(
-        order_id=order_id,
-        customer_id=customer_id,
-        reason=reason,
-        reason_category=reason_category,
-        refund_amount=refund_amount,
-        items=items_to_return,
-        notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
-    )
-
-    # ── Marcar como aprobada (auto-aprobación ≤ umbral) ────────────────
-    await update_return_status(
-        return_id=return_record["return_request"]["id"],
-        status="approved",
-        resolution="auto_approved",
-        notes=f"Aprobado automáticamente. Tracking: {label_result['tracking_number']}",
-    )
+    # Si viene de HITL aprobado, el registro ya existe (hitl_record).
+    if needs_admin_approval:
+        return_record = hitl_record
+        await update_return_status(
+            return_id=return_record["return_request"]["id"],
+            status="approved",
+            resolution="approved_by_admin",
+            notes=f"Aprobado por administrador. Tracking: {label_result['tracking_number']}",
+        )
+    else:
+        return_record = await create_return_record(
+            order_id=order_id,
+            customer_id=customer_id,
+            reason=reason,
+            reason_category=reason_category,
+            refund_amount=refund_amount,
+            items=items_to_return,
+            notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
+        )
+        # ── Marcar como aprobada (auto-aprobación ≤ umbral) ────────────────
+        await update_return_status(
+            return_id=return_record["return_request"]["id"],
+            status="approved",
+            resolution="auto_approved",
+            notes=f"Aprobado automáticamente. Tracking: {label_result['tracking_number']}",
+        )
 
     # ── Notificar al cliente ───────────────────────────────────────────
     await send_customer_notification(
