@@ -64,72 +64,11 @@ sea definitiva.
 """
 
 
-# ── Reglas objetivas de la política general (dataset/policies/00_marco_general_devoluciones.md, sec. 5) ──
-# Se calculan en código para no depender solo del criterio libre del LLM.
-
-HITL_REFUND_THRESHOLD = 100.0  # debe coincidir con resolution.HITL_REFUND_THRESHOLD
-SENSITIVE_REASONS = {"allergic_reaction", "counterfeit_suspicion"}
-HYGIENE_CATEGORIES = {"cosmetica_perfumeria", "drogueria_salud", "alimentacion", "mascotas", "bebe_puericultura"}
-MERCADIA_FAULT_REASONS = {"defective", "damaged_in_transit", "wrong_item_shipped", "missing_parts", "not_as_described"}
-FREQUENT_RETURNER_THRESHOLD = 5
-
-
-def _deterministic_check(
-    days_since_order: int,
-    max_return_days: int | None,
-    allowed_conditions: list[str] | None,
-    condition: str,
-    category: str,
-    reason_category: str,
-    refund_amount: float,
-    approved_returns: int,
-) -> tuple[str, list[str]]:
-    """Aplica las reglas objetivas de la política antes de consultar al LLM.
-
-    Devuelve (veredicto, motivos), con veredicto en {"invalid", "human_review", "valid"}.
-    """
-    if max_return_days is None:
-        return "valid", []  # sin política de categoría cargada: decide el LLM sin veto
-
-    if days_since_order > max_return_days + 5:
-        return "invalid", [f"Plazo superado: {days_since_order} días desde la entrega (máximo {max_return_days})."]
-
-    if (
-        category in HYGIENE_CATEGORIES
-        and condition in {"opened_tested", "opened_unused", "used"}
-        and reason_category not in MERCADIA_FAULT_REASONS
-    ):
-        return "invalid", [
-            f"Precinto/uso roto ('{condition}') en categoría con exclusión legal de higiene "
-            f"y motivo '{reason_category}' no imputable a Mercadia."
-        ]
-
-    if allowed_conditions and condition not in allowed_conditions and reason_category not in MERCADIA_FAULT_REASONS:
-        return "invalid", [f"Estado '{condition}' no admitido para esta categoría ({allowed_conditions})."]
-
-    reasons = []
-    if refund_amount > HITL_REFUND_THRESHOLD:
-        reasons.append(f"Importe {refund_amount:.2f}€ supera el umbral de {HITL_REFUND_THRESHOLD:.2f}€.")
-    if max_return_days - 2 <= days_since_order <= max_return_days + 5:
-        reasons.append(f"Solicitud en zona frontera del plazo ({days_since_order} de {max_return_days} días).")
-    if reason_category in SENSITIVE_REASONS:
-        reasons.append(f"Motivo sensible ('{reason_category}').")
-    if approved_returns > FREQUENT_RETURNER_THRESHOLD:
-        reasons.append(f"Cliente con {approved_returns} devoluciones aprobadas (posible abuso).")
-
-    return ("human_review", reasons) if reasons else ("valid", [])
-
-
-def _compute_refund(order_items: list[dict], items_to_return: list[dict], restocking_fee_percent: float) -> float:
-    """Suma precio x cantidad de las líneas a devolver (no se confía en que
-    el LLM haga aritmética de dinero), descontando el recargo de reposición."""
-    by_id = {item["id"]: item for item in order_items if item.get("id")}
-    total = sum(
-        by_id[item["order_item_id"]]["unit_price"] * item.get("quantity", 1)
-        for item in items_to_return
-        if item.get("order_item_id") in by_id
-    )
-    return round(total * (1 - restocking_fee_percent / 100), 2)
+from backend.agents.nodes.policy_rules import (
+    compute_refund,
+    deterministic_check,
+    HITL_REFUND_THRESHOLD,
+)
 
 
 def _build_llm() -> ChatOpenAI:
@@ -188,8 +127,8 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
     # ── Comprobación determinista + importe calculado a partir de las líneas ──
     policy_info = policy_results.get("policy_info") or {}
     condition = items_to_return[0].get("condition", "unknown") if items_to_return else "unknown"
-    computed_refund = _compute_refund(order_items, items_to_return, policy_info.get("restocking_fee_percent") or 0)
-    verdict, det_reasons = _deterministic_check(
+    computed_refund = compute_refund(order_items, items_to_return, policy_info.get("restocking_fee_percent") or 0)
+    verdict, det_reasons = deterministic_check(
         days_since_order=days_since_order,
         max_return_days=policy_info.get("max_return_days"),
         allowed_conditions=policy_info.get("allowed_conditions"),
