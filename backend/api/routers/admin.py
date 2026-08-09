@@ -15,7 +15,7 @@ async def list_pending_returns():
     """Lista devoluciones pendientes de aprobación humana (HITL >100€)."""
     client = await get_supabase_client()
     resp = await client.table("return_requests").select(
-        "id, order_id, customer_id, reason, reason_category, refund_amount, created_at"
+        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, created_at"
     ).eq("status", "pending_approval").order("created_at", desc=True).execute()
 
     return {"pending": resp.data, "count": len(resp.data)}
