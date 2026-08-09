@@ -1,5 +1,7 @@
 # ReFlow — Copiloto de Posventa Autónomo y Gestión Inteligente de Devoluciones
 
+> 📐 [Ver diagrama de arquitectura (Draw.io)](docs/architecture.drawio)
+
 TFM que propone "ReFlow", un sistema de agentes de IA Generativa para automatizar la
 gestión de devoluciones y el soporte posventa en e-commerce. La arquitectura combina
 **LangGraph** (orquestación multi-agente con estado compartido y memoria persistente),
