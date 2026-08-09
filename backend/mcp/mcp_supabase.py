@@ -41,15 +41,15 @@ mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
 
 
 @mcp.tool()
-async def get_order_details(order_id: str) -> dict:
+async def get_order_details(order_number: str) -> dict:
     """
     Consulta en PostgreSQL los detalles del pedido, fechas y productos comprados.
     Usado por Agentes 1 y 2.
 
     Args:
-        order_id: UUID del pedido a consultar.
+        order_number: Número de pedido tal como lo tiene el cliente (ej. "ORD-2026-00177").
     """
-    return await supabase_service.get_order_details(order_id)
+    return await supabase_service.get_order_details(order_number)
 
 
 # ---------------------------------------------------------------------------

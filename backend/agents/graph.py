@@ -35,35 +35,44 @@ logger = logging.getLogger(__name__)
 def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "__end__"]:
     """Decide si avanzar a consultar datos o terminar el turno.
 
-    Avanza cuando tenemos ``order_id`` y al menos un artículo a devolver.
-    Si falta información, el turno termina (END) y el caller re-invoca
-    el grafo con el siguiente mensaje del usuario. El checkpointer
-    preserva el estado entre turnos.
+    Avanza en cuanto tenemos ``order_number``: primero para mostrarle al
+    cliente los artículos del pedido (``order_details`` aún vacío), y de
+    nuevo una vez que ya sabe qué artículo devolver (``items_to_return``
+    relleno) para evaluar la devolución. Si solo tenemos el pedido pero
+    todavía no el artículo, el turno termina (END) a la espera de que el
+    cliente responda; el checkpointer preserva el estado entre turnos.
     """
-    order_id = state.get("order_id")
-    items = state.get("items_to_return", [])
-
-    if order_id and items:
+    order_number = state.get("order_number")
+    if not order_number:
+        return "__end__"
+    if not state.get("order_details") or state.get("items_to_return"):
         return "fetch_order_data"
-
-    # Falta información → terminar turno; el usuario responderá
     return "__end__"
 
 
 def route_after_fetch(state: ReturnState) -> Literal["evaluator", "__end__"]:
-    """Decide si avanzar al evaluador o terminar turno (si hubo error).
+    """Decide si avanzar al evaluador o terminar turno.
 
-    Si el pedido no se encontró, el agente de triaje ya dejó un mensaje
-    pidiendo corrección. Terminamos el turno para que el usuario responda.
+    Termina el turno si hubo un error (pedido no encontrado) o si todavía
+    no sabemos qué artículo quiere devolver el cliente (fetch_order_data ya
+    ha dejado el mensaje preguntándolo).
     """
-    if state.get("error"):
+    if state.get("error") or not state.get("items_to_return"):
         return "__end__"
     return "evaluator"
 
 
 def route_after_evaluator(state: ReturnState) -> Literal["resolver", "reject"]:
-    """Decide si la devolución es elegible o debe rechazarse."""
-    if state.get("is_eligible"):
+    """Decide si la devolución avanza a resolución o se rechaza directamente.
+
+    Avanza a "resolver" tanto si el Evaluador la considera elegible como si
+    la marcó ``needs_admin_approval`` (zona frontera de plazo, motivo
+    sensible, cliente frecuente o importe > umbral): en ambos casos la
+    decisión final la confirma un administrador vía HITL (ver
+    ``resolution_agent``). Solo va directa a "reject" un caso claramente
+    inválido según la política.
+    """
+    if state.get("is_eligible") or state.get("needs_admin_approval"):
         return "resolver"
     return "reject"
 
