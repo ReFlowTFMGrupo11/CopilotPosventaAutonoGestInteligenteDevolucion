@@ -45,7 +45,7 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
     """
     try:
         result = await graph.ainvoke(
-            {"messages": [HumanMessage(content=request.message)]},
+            {"messages": [HumanMessage(content=request.message)], "thread_id": request.thread_id},
             config={"configurable": {"thread_id": request.thread_id}},
         )
     except Exception as exc:
@@ -85,7 +85,7 @@ async def _stream_chat_events(
             )
             return
 
-        input_state = {"messages": [HumanMessage(content=message)]}
+        input_state = {"messages": [HumanMessage(content=message)], "thread_id": thread_id}
 
         # stream_mode="updates": emite un chunk por cada nodo que termina
         async for chunk in graph.astream(input_state, config=config, stream_mode="updates"):

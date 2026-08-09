@@ -158,21 +158,41 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
         }
 
         # Primera vez que vemos este pedido: aún no sabemos qué artículo
-        # devolver. Se lo mostramos al cliente en vez de pedirle un ID.
+        # devolver.
         if not state.get("items_to_return"):
-            items_text = "\n".join(
-                f"- {(item.get('product') or {}).get('name', 'Artículo')} "
-                f"(cantidad: {item.get('quantity', 1)}, precio: {item.get('unit_price')}€)"
-                for item in order_details.get("items", [])
-            ) or "(no se encontraron artículos en este pedido)"
-            updates["messages"] = [
-                AIMessage(
-                    content=(
-                        f"He encontrado tu pedido {order_number}. Estos son los artículos:\n"
-                        f"{items_text}\n\n¿Cuál quieres devolver y por qué motivo?"
+            items = order_details.get("items", [])
+            if len(items) == 1:
+                # Solo un artículo → seleccionarlo automáticamente
+                single = items[0]
+                product_name = (single.get("product") or {}).get("name", "Artículo")
+                updates["items_to_return"] = [{
+                    "order_item_id": single["id"],
+                    "quantity": single.get("quantity", 1),
+                    "condition": "unknown",
+                }]
+                updates["messages"] = [
+                    AIMessage(
+                        content=(
+                            f"He encontrado tu pedido {order_number} con el artículo "
+                            f"**{product_name}** ({single.get('unit_price')}€). "
+                            f"¿Cuál es el motivo de la devolución?"
+                        )
                     )
-                )
-            ]
+                ]
+            else:
+                items_text = "\n".join(
+                    f"- {(item.get('product') or {}).get('name', 'Artículo')} "
+                    f"(cantidad: {item.get('quantity', 1)}, precio: {item.get('unit_price')}€)"
+                    for item in items
+                ) or "(no se encontraron artículos en este pedido)"
+                updates["messages"] = [
+                    AIMessage(
+                        content=(
+                            f"He encontrado tu pedido {order_number}. Estos son los artículos:\n"
+                            f"{items_text}\n\n¿Cuál quieres devolver y por qué motivo?"
+                        )
+                    )
+                ]
 
         return updates
     except Exception as exc:
