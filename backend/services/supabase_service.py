@@ -57,21 +57,24 @@ def calculate_days_since_delivery(order_details: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-async def get_order_details(order_id: str) -> dict:
+async def get_order_details(order_number: str) -> dict:
     """Consulta en PostgreSQL los detalles del pedido, fechas y productos comprados.
 
+    Se busca por el número de pedido (el dato que tiene el cliente), no por el
+    UUID interno: ese se devuelve dentro de "order"/"id" para uso interno del grafo.
+
     Args:
-        order_id: UUID del pedido a consultar.
+        order_number: Número de pedido tal como lo tiene el cliente (ej. "ORD-2026-00177").
     """
     client = await get_supabase_client()
 
     order_resp = await client.table("orders").select(
         "*, customer:customers(id, email, full_name)"
-    ).eq("id", order_id).single().execute()
+    ).eq("order_number", order_number).single().execute()
 
     items_resp = await client.table("order_items").select(
         "*, product:products(name, sku, category, price, weight_kg)"
-    ).eq("order_id", order_id).execute()
+    ).eq("order_id", order_resp.data["id"]).execute()
 
     return {
         "order": order_resp.data,

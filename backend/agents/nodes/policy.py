@@ -51,12 +51,85 @@ Tu trabajo es determinar de forma objetiva y estricta si una devolución es eleg
 Responde SIEMPRE con un bloque JSON ```json ... ``` con las siguientes claves:
 - **is_eligible** (bool): si la devolución es elegible.
 - **eligibility_reason** (str): explicación detallada de la decisión.
-- **refund_amount** (float): monto del reembolso (0 si no elegible).
-  Si aplica restocking_fee, descuéntalo del precio.
 - **policy_applied** (dict): resumen de la política aplicada.
 
 Sé objetivo e imparcial. Basa tu decisión EXCLUSIVAMENTE en las políticas y datos.
+
+## Comprobación determinista
+El contexto incluye un veredicto calculado con las reglas objetivas de la
+política (plazo, importe, motivo sensible, cliente frecuente). Si es
+"invalid", tu is_eligible DEBE ser false. Si es "human_review", da igualmente
+tu valoración de fondo: un administrador revisará la decisión antes de que
+sea definitiva.
 """
+
+
+# ── Reglas objetivas de la política general (dataset/policies/00_marco_general_devoluciones.md, sec. 5) ──
+# Se calculan en código para no depender solo del criterio libre del LLM.
+
+HITL_REFUND_THRESHOLD = 100.0  # debe coincidir con resolution.HITL_REFUND_THRESHOLD
+SENSITIVE_REASONS = {"allergic_reaction", "counterfeit_suspicion"}
+HYGIENE_CATEGORIES = {"cosmetica_perfumeria", "drogueria_salud", "alimentacion", "mascotas", "bebe_puericultura"}
+MERCADIA_FAULT_REASONS = {"defective", "damaged_in_transit", "wrong_item_shipped", "missing_parts", "not_as_described"}
+FREQUENT_RETURNER_THRESHOLD = 5
+
+
+def _deterministic_check(
+    days_since_order: int,
+    max_return_days: int | None,
+    allowed_conditions: list[str] | None,
+    condition: str,
+    category: str,
+    reason_category: str,
+    refund_amount: float,
+    approved_returns: int,
+) -> tuple[str, list[str]]:
+    """Aplica las reglas objetivas de la política antes de consultar al LLM.
+
+    Devuelve (veredicto, motivos), con veredicto en {"invalid", "human_review", "valid"}.
+    """
+    if max_return_days is None:
+        return "valid", []  # sin política de categoría cargada: decide el LLM sin veto
+
+    if days_since_order > max_return_days + 5:
+        return "invalid", [f"Plazo superado: {days_since_order} días desde la entrega (máximo {max_return_days})."]
+
+    if (
+        category in HYGIENE_CATEGORIES
+        and condition in {"opened_tested", "opened_unused", "used"}
+        and reason_category not in MERCADIA_FAULT_REASONS
+    ):
+        return "invalid", [
+            f"Precinto/uso roto ('{condition}') en categoría con exclusión legal de higiene "
+            f"y motivo '{reason_category}' no imputable a Mercadia."
+        ]
+
+    if allowed_conditions and condition not in allowed_conditions and reason_category not in MERCADIA_FAULT_REASONS:
+        return "invalid", [f"Estado '{condition}' no admitido para esta categoría ({allowed_conditions})."]
+
+    reasons = []
+    if refund_amount > HITL_REFUND_THRESHOLD:
+        reasons.append(f"Importe {refund_amount:.2f}€ supera el umbral de {HITL_REFUND_THRESHOLD:.2f}€.")
+    if max_return_days - 2 <= days_since_order <= max_return_days + 5:
+        reasons.append(f"Solicitud en zona frontera del plazo ({days_since_order} de {max_return_days} días).")
+    if reason_category in SENSITIVE_REASONS:
+        reasons.append(f"Motivo sensible ('{reason_category}').")
+    if approved_returns > FREQUENT_RETURNER_THRESHOLD:
+        reasons.append(f"Cliente con {approved_returns} devoluciones aprobadas (posible abuso).")
+
+    return ("human_review", reasons) if reasons else ("valid", [])
+
+
+def _compute_refund(order_items: list[dict], items_to_return: list[dict], restocking_fee_percent: float) -> float:
+    """Suma precio x cantidad de las líneas a devolver (no se confía en que
+    el LLM haga aritmética de dinero), descontando el recargo de reposición."""
+    by_id = {item["id"]: item for item in order_items if item.get("id")}
+    total = sum(
+        by_id[item["order_item_id"]]["unit_price"] * item.get("quantity", 1)
+        for item in items_to_return
+        if item.get("order_item_id") in by_id
+    )
+    return round(total * (1 - restocking_fee_percent / 100), 2)
 
 
 def _build_llm() -> ChatOpenAI:
@@ -112,6 +185,21 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
 
     days_since_order = calculate_days_since_delivery(order_details)
 
+    # ── Comprobación determinista + importe calculado a partir de las líneas ──
+    policy_info = policy_results.get("policy_info") or {}
+    condition = items_to_return[0].get("condition", "unknown") if items_to_return else "unknown"
+    computed_refund = _compute_refund(order_items, items_to_return, policy_info.get("restocking_fee_percent") or 0)
+    verdict, det_reasons = _deterministic_check(
+        days_since_order=days_since_order,
+        max_return_days=policy_info.get("max_return_days"),
+        allowed_conditions=policy_info.get("allowed_conditions"),
+        condition=condition,
+        category=product_category,
+        reason_category=reason_category,
+        refund_amount=computed_refund,
+        approved_returns=return_history.get("approved", 0),
+    )
+
     # ── Construir contexto para el LLM ─────────────────────────────────
     context = f"""
 ## Datos del pedido
@@ -132,6 +220,11 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
 
 ## Políticas encontradas (RAG)
 {json.dumps(policy_results, default=str, ensure_ascii=False)}
+
+## Comprobación determinista (obligatoria, no la contradigas)
+- Veredicto: {verdict}
+- Motivos: {'; '.join(det_reasons) or 'ninguno'}
+- Importe calculado a partir de las líneas del pedido: {computed_refund:.2f}€
 """
 
     messages = [
@@ -153,15 +246,25 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
     if match:
         try:
             result = json.loads(match.group(1))
-            updates["is_eligible"] = result.get("is_eligible", False)
-            updates["eligibility_reason"] = result.get("eligibility_reason", "")
-            updates["refund_amount"] = float(result.get("refund_amount", 0.0))
+            llm_eligible = result.get("is_eligible", False)
+            llm_reason = result.get("eligibility_reason", "")
         except (json.JSONDecodeError, ValueError) as exc:
             logger.warning("Error parseando resultado del evaluador: %s", exc)
-            updates["is_eligible"] = False
-            updates["eligibility_reason"] = "Error interno al evaluar la política."
+            llm_eligible, llm_reason = False, "Error interno al evaluar la política."
     else:
+        llm_eligible, llm_reason = False, "No se pudo evaluar la política correctamente."
+
+    # El veredicto determinista nunca se "ablanda": si es "invalid", se rechaza
+    # sin más; si es "human_review", se respeta la valoración del LLM pero se
+    # obliga a pasar por un administrador (needs_admin_approval).
+    if verdict == "invalid":
         updates["is_eligible"] = False
-        updates["eligibility_reason"] = "No se pudo evaluar la política correctamente."
+        updates["needs_admin_approval"] = False
+        updates["eligibility_reason"] = det_reasons[0]
+    else:
+        updates["is_eligible"] = llm_eligible
+        updates["needs_admin_approval"] = verdict == "human_review"
+        updates["eligibility_reason"] = llm_reason
+    updates["refund_amount"] = computed_refund if (updates["is_eligible"] or updates["needs_admin_approval"]) else 0.0
 
     return updates
