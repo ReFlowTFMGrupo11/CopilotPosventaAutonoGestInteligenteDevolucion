@@ -5,7 +5,6 @@ Dos modos de consumo:
 - POST /api/chat/stream  → Server-Sent Events con progreso en tiempo real.
 """
 
-import json
 import logging
 import uuid
 from typing import AsyncIterator

@@ -61,7 +61,7 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 
 # ── Modelos ────────────────────────────────────────────────────────────────
 
-from backend.models import ReturnItem, TriageOutput
+from backend.models import TriageOutput
 
 
 def _build_llm() -> ChatOpenAI:
