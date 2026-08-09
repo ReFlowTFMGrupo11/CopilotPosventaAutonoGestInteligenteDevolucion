@@ -54,3 +54,4 @@ gemini-code-*.json
 .claude/settings.local.json
 node_modules/
 frontend/node_modules/
+.reflow_pids
