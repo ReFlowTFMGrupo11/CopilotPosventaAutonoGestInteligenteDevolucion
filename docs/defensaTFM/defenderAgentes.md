@@ -164,7 +164,76 @@ tests/integration/   → Nodos individuales + grafo completo (LLM mockeado)
 
 ---
 
-## 9. Flujo del grafo
+## 9. Evaluador híbrido: guardrails deterministas + LLM
+
+### Problema
+
+Dejar que el LLM decida solo si una devolución es elegible introduce errores en:
+- Aritmética (calcular reembolsos con descuentos).
+- Comparación de fechas (¿está en plazo o no?).
+- Aplicación estricta de reglas (categorías excluidas por higiene).
+
+### Solución: patrón Chain of Rules (`policy_rules.py`)
+
+Se aplican **reglas de negocio en código puro** antes de invocar al LLM. El LLM
+solo aporta la explicación en lenguaje natural y valora los casos grises.
+
+```
+┌──────────────────────────────────────────────┐
+│ CAPA 1: Código (policy_rules.py)             │
+│ Funciones puras, 100% deterministas          │
+│ • rule_deadline     • rule_hygiene           │
+│ • rule_condition    • rule_high_amount       │
+│ • rule_borderline   • rule_sensitive_reason  │
+│ • rule_frequent_returner                     │
+└──────────────────────────────────────────────┘
+                    ↓ veredicto
+┌──────────────────────────────────────────────┐
+│ CAPA 2: LLM (policy.py)                     │
+│ Recibe el veredicto como contexto obligatorio │
+│ NO puede contradecir un "invalid"            │
+└──────────────────────────────────────────────┘
+                    ↓ reconciliación
+┌──────────────────────────────────────────────┐
+│ Resultado final:                             │
+│ invalid → rechazado (veto del código)        │
+│ human_review → pasa por HITL                 │
+│ valid → se respeta al LLM                   │
+└──────────────────────────────────────────────┘
+```
+
+### Arquitectura del módulo
+
+```
+backend/agents/nodes/
+  policy_rules.py   ← Código puro Python (sin dependencias externas)
+                       PolicyContext (dataclass inmutable)
+                       RuleResult (dataclass)
+                       7 reglas individuales (funciones puras)
+                       POLICY_RULES (cadena ordenada)
+                       deterministic_check() (orquestador)
+                       compute_refund() (aritmética exacta)
+  policy.py         ← Agente LLM + RAG + reconciliación
+```
+
+### Best practices aplicadas
+
+| Principio | Cómo se aplica |
+|-----------|----------------|
+| **Single Responsibility** | Cada regla es una función que hace una sola comprobación |
+| **Open/Closed** | Añadir regla = crear función + meterla en `POLICY_RULES` |
+| **Inmutabilidad** | `PolicyContext` es `frozen=True` |
+| **Testeabilidad** | Cada regla se testea sin mocks de LLM/MCP |
+| **Separación de capas** | `policy_rules.py` no importa nada de LangChain/OpenAI |
+
+### ¿Por qué no se usa Pydantic para validar la respuesta del MCP?
+
+`call_tool()` es genérico (7 tools con respuestas distintas). Un `json.loads()`
+genérico en un solo punto es más limpio que un modelo Pydantic por cada tool.
+
+---
+
+## 10. Flujo del grafo
 
 ```
 START → triage ──────────────────┐
@@ -191,7 +260,7 @@ START → triage ──────────────────┐
 
 ---
 
-## 10. Decisiones descartadas
+## 11. Decisiones descartadas
 
 | Alternativa | Por qué se descartó |
 |-------------|---------------------|

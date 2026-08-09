@@ -42,7 +42,8 @@ backend/
     state.py     #   Re-export de ReturnState (compatibilidad)
     nodes/       #   Nodos del grafo:
                  #     triage.py     — Agente de Triaje y Empatía
-                 #     policy.py     — Agente Evaluador de Políticas (RAG)
+                 #     policy.py       — Agente Evaluador de Políticas (RAG + LLM)
+                 #     policy_rules.py — Reglas de negocio deterministas (Chain of Rules)
                  #     resolution.py — Agente de Resolución + HITL + Rechazo
     infra/       #   Infraestructura:
                  #     mcp_client.py      — Cliente MCP unificado (Supabase + Logistics)

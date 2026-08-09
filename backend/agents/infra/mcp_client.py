@@ -14,6 +14,7 @@ Requiere que los MCP servers estén levantados:
 
 from __future__ import annotations
 
+import json
 import os
 import logging
 from typing import Any
@@ -96,6 +97,22 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
         raise ValueError(f"Tool '{tool_name}' no encontrada en server '{server_name}'.")
 
     result = await tool.ainvoke(args)
+
+    # MCP tool responses may come as raw JSON strings or content blocks.
+    # Parse them to return a proper Python dict/list.
+    if isinstance(result, str):
+        try:
+            return json.loads(result)
+        except (json.JSONDecodeError, ValueError):
+            return result
+    if isinstance(result, list) and result:
+        # Content block list — extract text from first block
+        first = result[0]
+        text = first.get("text", first) if isinstance(first, dict) else str(first)
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return result
     return result
 
 
