@@ -8,14 +8,22 @@ con soporte HITL para reembolsos > 100 €.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import sys
 from typing import Literal
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg_pool import AsyncConnectionPool
+
+if sys.platform == "win32":
+    # psycopg en modo async no soporta el ProactorEventLoop (el por defecto en
+    # asyncio en Windows desde Python 3.8); necesita SelectorEventLoop. Sin esto,
+    # AsyncConnectionPool falla al conectar aunque las credenciales sean correctas.
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from backend.agents.nodes.policy import policy_evaluator_agent
 from backend.agents.nodes.resolution import (
@@ -86,8 +94,17 @@ async def build_return_graph(checkpointer=None):
         db_url = os.getenv("SUPABASE_DB_URL")
         if db_url:
             try:
-                # Crear pool async con open=False para evitar deprecation warning
-                pool = AsyncConnectionPool(db_url, min_size=1, max_size=3, open=False)
+                # autocommit=True y prepare_threshold=0: mismo patrón que usa
+                # AsyncPostgresSaver.from_conn_string() internamente. Sin autocommit,
+                # checkpointer.setup() falla porque ejecuta CREATE INDEX CONCURRENTLY,
+                # que Postgres no permite dentro de un bloque de transacción.
+                pool = AsyncConnectionPool(
+                    db_url,
+                    min_size=1,
+                    max_size=3,
+                    open=False,
+                    kwargs={"autocommit": True, "prepare_threshold": 0},
+                )
                 # Abrir explícitamente (establece las conexiones al DB)
                 await pool.open()
                 checkpointer = AsyncPostgresSaver(pool)
@@ -97,7 +114,7 @@ async def build_return_graph(checkpointer=None):
                 logger.warning(
                     "No se pudo conectar a PostgreSQL (%s). Usando InMemorySaver.", exc
                 )
-                #checkpointer = InMemorySaver()
+                checkpointer = InMemorySaver()
         else:
             logger.warning("SUPABASE_DB_URL no configurada. Usando InMemorySaver (no persistente).")
             checkpointer = InMemorySaver()
