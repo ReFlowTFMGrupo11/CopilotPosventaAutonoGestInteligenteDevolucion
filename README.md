@@ -21,7 +21,7 @@ como motor de razonamiento.
 | Dataset sintético + corpus de políticas RAG — `dataset/` | ✅ |
 | Tests unitarios e integración — `tests/` | ✅ |
 | Backend FastAPI (endpoints de chat y panel admin/HITL) — `backend/api/` | ✅ |
-| Frontend Streamlit (chat cliente + dashboard admin) | ⏳ Pendiente |
+| Frontend Streamlit (chat cliente + dashboard admin) — `frontend/` | ✅ |
 
 ## Estructura del repositorio
 
@@ -224,6 +224,25 @@ Con el servidor arrancado, accede a:
 
 ---
 
+## Frontend (Streamlit)
+
+Aplicación web con dos vistas:
+- **Chat del cliente** (`Chat.py`) — interfaz conversacional con streaming (SSE)
+- **Panel admin** (`pages/1_Admin.py`) — KPIs, aprobación HITL, listado de devoluciones, buscador de pedidos
+
+### Arrancar el frontend
+
+```bash
+pip install -r requirements.txt
+streamlit run frontend/Chat.py
+# → http://localhost:8501
+```
+
+Requiere el backend corriendo en `http://localhost:8000` (ver sección API FastAPI). Más
+detalle en [`frontend/README.md`](frontend/README.md).
+
+---
+
 ## Tests
 
 ```bash
@@ -248,3 +267,36 @@ El directorio `dataset/` contiene:
   sintéticos.
 
 Ver [`dataset/README.md`](dataset/README.md) para más detalle.
+
+## Guía rápida de arranque (todos los servicios)
+
+Resumen de todos los pasos, en orden, para levantar la app completa desde cero.
+Los pasos 1-4 se hacen una sola vez; los pasos 5-8 requieren **4 terminales
+abiertas en paralelo** (uno por proceso).
+
+| # | Terminal | Paso | Comando |
+|---|----------|------|---------|
+| 1 | — | Crear y activar entorno virtual | `python3 -m venv .venv` <br> `source .venv/Scripts/activate` |
+| 2 | — | Instalar dependencias | `pip install -r requirements.txt` |
+| 3 | — | Configurar variables de entorno | `cp .env.example .env` y editar `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_DB_URL`, `OPENAI_API_KEY` |
+| 4 | — | Verificar conexión a Supabase *(opcional)* | Ver script en [Configuración del entorno → 4. Verificar conexión](#configuración-del-entorno) |
+| 5 | Terminal 1 | Arrancar MCP Supabase (datos + RAG) | `python -m backend.mcp.mcp_supabase` → `http://localhost:8001/mcp` |
+| 6 | Terminal 2 | Arrancar MCP Logística | `python -m backend.mcp.mcp_logistics` → `http://localhost:8002/mcp` |
+| 7 | Terminal 3 | Arrancar API FastAPI | `uvicorn backend.api.main:app --reload --port 8000` → `http://localhost:8000` |
+| 8 | Terminal 4 | Arrancar frontend Streamlit | `streamlit run frontend/Chat.py` → `http://localhost:8501` |
+
+Orden de arranque importante: **MCP servers (5-6) → API (7) → Frontend (8)**,
+ya que cada capa depende de que la anterior esté levantada. Con los 4 procesos
+activos, la app queda disponible en `http://localhost:8501` (frontend) con el
+backend en `http://localhost:8000` (Swagger en `/docs`).
+
+### Arranque automático
+
+[`start_all.sh`](start_all.sh) (Git Bash) automatiza los 8 pasos anteriores:
+crea el `.venv` si no existe, instala dependencias, genera `.env` desde
+`.env.example` si falta, y abre los 4 procesos en ventanas de Git Bash
+separadas, en el orden correcto.
+
+```bash
+./start_all.sh
+```
