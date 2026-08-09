@@ -104,9 +104,9 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 
 
-async def get_order_details(order_id: str) -> dict:
+async def get_order_details(order_number: str) -> dict:
     """Consulta detalles del pedido via MCP."""
-    return await call_tool("get_order_details", {"order_id": order_id})
+    return await call_tool("get_order_details", {"order_number": order_number})
 
 
 async def get_customer_return_history(customer_id: str) -> dict:

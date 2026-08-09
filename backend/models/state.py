@@ -26,7 +26,8 @@ class ReturnState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
 
     # ── Datos extraídos por el Agente de Triaje ────────────────────────
-    order_id: str | None
+    order_number: str | None  # número de pedido tal cual lo da el cliente (ej. "ORD-2026-00177")
+    order_id: str | None  # UUID interno, resuelto en fetch_order_data a partir de order_number
     customer_id: str | None
     customer_name: str | None
     customer_email: str | None
