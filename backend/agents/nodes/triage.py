@@ -115,6 +115,37 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     if result.items_to_return:
         updates["items_to_return"] = [item.model_dump() for item in result.items_to_return]
 
+    # Override determinista opcional desde UI (checkboxes en frontend).
+    selected_item_ids = state.get("selected_item_ids") or []
+    order_items = (state.get("order_details") or {}).get("items", [])
+    if selected_item_ids and order_items:
+        valid_items_by_id = {
+            item.get("id"): item
+            for item in order_items
+            if item.get("id")
+        }
+        normalized_items: list[dict[str, Any]] = []
+        default_condition = "unknown"
+        if result.items_to_return:
+            default_condition = result.items_to_return[0].condition
+        for item_id in selected_item_ids:
+            matched = valid_items_by_id.get(item_id)
+            if not matched:
+                continue
+            normalized_items.append(
+                {
+                    "order_item_id": item_id,
+                    "quantity": 1,
+                    "condition": default_condition,
+                }
+            )
+        if normalized_items:
+            updates["items_to_return"] = normalized_items
+
+    # Limpiar selección transitoria para no arrastrarla a turnos posteriores.
+    if state.get("selected_item_ids") is not None:
+        updates["selected_item_ids"] = None
+
     return updates
 
 

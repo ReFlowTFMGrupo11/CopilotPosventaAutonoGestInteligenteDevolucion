@@ -29,6 +29,14 @@ if "thread_id" not in st.session_state:
 
 thread_id = st.session_state.thread_id
 
+order_items: list[dict] = []
+if thread_id:
+    try:
+        chat_state = api.chat_state(thread_id)
+        order_items = chat_state.get("order_items") or []
+    except httpx.HTTPError:
+        order_items = []
+
 
 def render_bubble(kind: str, text: str) -> None:
     if kind == "user":
@@ -56,6 +64,19 @@ if not st.session_state.messages:
 for message in st.session_state.messages:
     render_bubble(message["kind"], message["text"])
 
+selected_item_ids: list[str] = []
+if order_items:
+    st.markdown("### Selección de artículo")
+    st.caption("Marca el/los artículo(s) a devolver para selección determinista.")
+    for item in order_items:
+        item_id = item.get("id")
+        item_name = item.get("name", "Artículo")
+        item_qty = item.get("quantity", 1)
+        item_price = item.get("unit_price")
+        label = f"{item_name} · cant: {item_qty} · precio: {item_price}€"
+        if item_id and st.checkbox(label, key=f"item_select_{item_id}"):
+            selected_item_ids.append(item_id)
+
 prompt = st.chat_input("Escribe tu mensaje..." if thread_id else "Conectando...", disabled=not thread_id)
 
 if prompt:
@@ -67,7 +88,11 @@ if prompt:
         body = st.empty()
         kind, text = "agent", "(sin contenido)"
         try:
-            for event in api.stream_chat(thread_id, prompt):
+            for event in api.stream_chat(
+                thread_id,
+                prompt,
+                selected_item_ids=selected_item_ids or None,
+            ):
                 etype = event.get("type")
                 content = event.get("content") or ""
                 if etype == "agent_step":
