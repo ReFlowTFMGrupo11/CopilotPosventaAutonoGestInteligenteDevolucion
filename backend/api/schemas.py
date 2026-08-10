@@ -13,6 +13,10 @@ class ChatRequest(BaseModel):
 
     thread_id: str = Field(description="UUID de la sesión de chat.")
     message: str = Field(description="Mensaje del usuario.")
+    selected_item_ids: Optional[list[str]] = Field(
+        default=None,
+        description="Selección explícita de order_item_id hecha por el cliente en UI.",
+    )
 
 
 class ChatResponse(BaseModel):
