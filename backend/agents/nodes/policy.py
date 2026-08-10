@@ -9,6 +9,30 @@ Verifica de forma estricta si la devolución es elegible basándose en:
 - Plazos de devolución según categoría.
 - Estado del producto.
 - Historial de devoluciones del cliente (detección de abuso).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ FRONTERA  DETERMINISTA  vs  LLM  en este módulo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ DETERMINISTA  (policy_rules.deterministic_check)
+  - Plazo de devolución: días desde entrega vs max_return_days de la política.
+  - Estado del producto: condition in allowed_conditions.
+  - Detección de abuso: approved_returns > umbral.
+  - Importe del reembolso: compute_refund sobre líneas de pedido.
+  - Veredicto ("valid" | "human_review" | "invalid") → NUNCA lo contradice el LLM.
+    Si es "invalid", is_eligible=False sin excepción.
+
+ LLM  (policy_evaluator_agent)
+  - Búsqueda semántica RAG de políticas relevantes para el motivo.
+  - Redacción de eligibility_reason explicativa para el cliente.
+  - Valoración contextual cuando el veredicto es "human_review"
+    (el administrador lee la narrativa del LLM antes de decidir).
+  - Fallback: si el LLM no devuelve JSON válido, se usa el veredicto
+    determinista directamente (sin bloquear el flujo).
+
+ REGLA GENERAL:
+  - El veredicto determinista siempre manda.
+  - El LLM solo añade contexto narrativo que un humano o el cliente lee.
 """
 
 from __future__ import annotations
@@ -67,7 +91,6 @@ sea definitiva.
 from backend.agents.nodes.policy_rules import (
     compute_refund,
     deterministic_check,
-    HITL_REFUND_THRESHOLD,
 )
 
 
@@ -78,10 +101,6 @@ def _build_llm() -> ChatOpenAI:
         temperature=0.0,  # Determinista para auditoría
         max_tokens=4096,
     )
-
-
-
-
 
 async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
     """Nodo del agente Evaluador de Políticas.
@@ -181,12 +200,14 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
         "policy_info": policy_results,
     }
 
+    llm_parse_ok = False
     match = re.search(r"```json\s*(.*?)\s*```", response.content, re.DOTALL)
     if match:
         try:
             result = json.loads(match.group(1))
             llm_eligible = result.get("is_eligible", False)
             llm_reason = result.get("eligibility_reason", "")
+            llm_parse_ok = True
         except (json.JSONDecodeError, ValueError) as exc:
             logger.warning("Error parseando resultado del evaluador: %s", exc)
             llm_eligible, llm_reason = False, "Error interno al evaluar la política."
@@ -201,9 +222,23 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
         updates["needs_admin_approval"] = False
         updates["eligibility_reason"] = det_reasons[0]
     else:
-        updates["is_eligible"] = llm_eligible
-        updates["needs_admin_approval"] = verdict == "human_review"
-        updates["eligibility_reason"] = llm_reason
+        if llm_parse_ok:
+            updates["is_eligible"] = llm_eligible
+            updates["needs_admin_approval"] = verdict == "human_review"
+            updates["eligibility_reason"] = llm_reason
+        else:
+            logger.warning(
+                "Evaluator: fallback determinista por salida LLM no parseable "
+                "(verdict=%s).",
+                verdict,
+            )
+            updates["is_eligible"] = verdict == "valid"
+            updates["needs_admin_approval"] = verdict == "human_review"
+            updates["eligibility_reason"] = (
+                det_reasons[0]
+                if det_reasons
+                else "Evaluación completada con reglas deterministas."
+            )
     updates["refund_amount"] = computed_refund if (updates["is_eligible"] or updates["needs_admin_approval"]) else 0.0
 
     return updates

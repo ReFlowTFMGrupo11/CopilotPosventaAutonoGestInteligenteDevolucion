@@ -30,12 +30,15 @@ if "thread_id" not in st.session_state:
 thread_id = st.session_state.thread_id
 
 order_items: list[dict] = []
+selection_required = False
 if thread_id:
     try:
         chat_state = api.chat_state(thread_id)
         order_items = chat_state.get("order_items") or []
+        selection_required = bool(chat_state.get("selection_required"))
     except httpx.HTTPError:
         order_items = []
+        selection_required = False
 
 
 def render_bubble(kind: str, text: str) -> None:
@@ -52,6 +55,33 @@ def render_bubble(kind: str, text: str) -> None:
             st.error(text)
 
 
+def _render_item_selection(
+    items: list[dict],
+) -> tuple[list[str], list[str], bool]:
+    """Renderiza checkboxes de selección de ítems.
+
+    Returns:
+        selected_ids, selected_names, submitted
+    """
+    st.markdown("### Selección de artículo")
+    st.caption("Marca el/los artículo(s) a devolver para selección determinista.")
+    selected_ids: list[str] = []
+    selected_names: list[str] = []
+    for item in items:
+        item_id = item.get("id")
+        label = f"{item.get('name','Artículo')} · cant: {item.get('quantity',1)} · precio: {item.get('unit_price')}€"
+        if item_id and st.checkbox(label, key=f"item_select_{item_id}"):
+            selected_ids.append(item_id)
+            selected_names.append(item.get("name", "Artículo"))
+    st.caption(f"Seleccionados: {len(selected_ids)}")
+    submitted = st.button(
+        "Confirmar selección y continuar",
+        disabled=not selected_ids,
+        use_container_width=True,
+    )
+    return selected_ids, selected_names, submitted
+
+
 if not st.session_state.messages:
     st.markdown(
         '<div style="text-align:center;margin-top:2.5rem;color:var(--muted);">'
@@ -65,23 +95,22 @@ for message in st.session_state.messages:
     render_bubble(message["kind"], message["text"])
 
 selected_item_ids: list[str] = []
-if order_items:
-    st.markdown("### Selección de artículo")
-    st.caption("Marca el/los artículo(s) a devolver para selección determinista.")
-    for item in order_items:
-        item_id = item.get("id")
-        item_name = item.get("name", "Artículo")
-        item_qty = item.get("quantity", 1)
-        item_price = item.get("unit_price")
-        label = f"{item_name} · cant: {item_qty} · precio: {item_price}€"
-        if item_id and st.checkbox(label, key=f"item_select_{item_id}"):
-            selected_item_ids.append(item_id)
+selected_item_names: list[str] = []
+selection_submitted = False
+if order_items and selection_required:
+    selected_item_ids, selected_item_names, selection_submitted = _render_item_selection(order_items)
 
 prompt = st.chat_input("Escribe tu mensaje..." if thread_id else "Conectando...", disabled=not thread_id)
 
-if prompt:
-    st.session_state.messages.append({"kind": "user", "text": prompt})
-    render_bubble("user", prompt)
+user_text: str | None = None
+if selection_submitted:
+    user_text = "Quiero devolver: " + ", ".join(selected_item_names)
+elif prompt:
+    user_text = prompt
+
+if user_text:
+    st.session_state.messages.append({"kind": "user", "text": user_text})
+    render_bubble("user", user_text)
 
     with st.chat_message("assistant", avatar="🤖"):
         status = st.empty()
@@ -90,7 +119,7 @@ if prompt:
         try:
             for event in api.stream_chat(
                 thread_id,
-                prompt,
+                user_text,
                 selected_item_ids=selected_item_ids or None,
             ):
                 etype = event.get("type")
@@ -115,3 +144,4 @@ if prompt:
             body.error(text)
 
     st.session_state.messages.append({"kind": kind, "text": text})
+    st.rerun()
