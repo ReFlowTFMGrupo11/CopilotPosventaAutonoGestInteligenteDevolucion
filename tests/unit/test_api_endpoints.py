@@ -84,9 +84,8 @@ def mock_supabase():
     async def fake_get_client():
         return client
 
-    with patch("backend.api.routers.admin.get_supabase_client", new=fake_get_client):
-        with patch("backend.api.routers.orders.get_supabase_client", new=fake_get_client):
-            yield client
+    with patch("backend.services.supabase_service.get_supabase_client", new=fake_get_client):
+        yield client
 
 
 @pytest.fixture

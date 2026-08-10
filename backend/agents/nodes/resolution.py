@@ -9,6 +9,26 @@ Si la devolución es elegible:
 
 Si no es elegible:
 - Redacta un mensaje empático de rechazo.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ FRONTERA  DETERMINISTA  vs  LLM  en este módulo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ DETERMINISTA  (resolution_agent)
+  - Umbral HITL: refund_amount > 100€ → pausa obligatoria (interrupt).
+  - Creación del registro en BD (create_return_record).
+  - Generación de la etiqueta de transporte (generate_shipping_label).
+  - Actualización de estado en BD (update_return_status).
+  - Envío de notificación al cliente (send_customer_notification).
+  - Decisión de HITL: si admin aprueba/rechaza → actualiza BD y continúa.
+
+ LLM  (resolution_agent + rejection_agent)
+  - Redacción del mensaje final al cliente (aprobación, rechazo, HITL pendiente).
+  - Tono empático y explicación clara de los pasos siguientes.
+
+ REGLA GENERAL:
+  - Todas las acciones sobre BD y servicios externos son deterministas.
+  - El LLM solo redacta los mensajes que ve el cliente.
 """
 
 from __future__ import annotations

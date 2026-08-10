@@ -184,6 +184,7 @@ async def get_chat_state(thread_id: str, graph=Depends(get_graph)):
 
     values = state.values if state else {}
     raw_items = (values.get("order_details") or {}).get("items", [])
+    items_to_return = values.get("items_to_return") or []
     order_items = [
         {
             "id": item.get("id"),
@@ -202,4 +203,5 @@ async def get_chat_state(thread_id: str, graph=Depends(get_graph)):
         "resolution": values.get("resolution"),
         "refund_amount": values.get("refund_amount"),
         "order_items": order_items,
+        "selection_required": bool(order_items) and not bool(items_to_return),
     }

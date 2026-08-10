@@ -189,17 +189,48 @@ async def create_return_record(
     client = await get_supabase_client()
 
     # ── Guard: evitar devoluciones duplicadas para el mismo pedido ──────
+    # - Bloquear si ya hay una devolución ACTIVA del pedido.
+    # - Bloquear si alguno de los order_item_id ya fue devuelto antes
+    #   (approved/completed o también activo).
+    active_statuses = {"pending", "pending_approval", "processing"}
+    historical_statuses = active_statuses | {"approved", "completed"}
+
     existing = await (
         client.table("return_requests")
-        .select("id, status")
+        .select("id, status, return_items(order_item_id)")
         .eq("order_id", order_id)
-        .in_("status", ["pending", "approved", "pending_approval"])
+        .in_("status", list(historical_statuses))
         .execute()
     )
-    if existing.data:
+
+    active_returns = [
+        row for row in (existing.data or [])
+        if row.get("status") in active_statuses
+    ]
+    if active_returns:
         raise ValueError(
             f"Ya existe una devolución activa para el pedido {order_id} "
-            f"(id={existing.data[0]['id']}, status={existing.data[0]['status']})."
+            f"(id={active_returns[0]['id']}, status={active_returns[0]['status']})."
+        )
+
+    requested_item_ids = {
+        item.get("order_item_id")
+        for item in items
+        if item.get("order_item_id")
+    }
+    previously_returned_item_ids = {
+        ret_item.get("order_item_id")
+        for row in (existing.data or [])
+        for ret_item in (row.get("return_items") or [])
+        if ret_item.get("order_item_id")
+    }
+
+    duplicated_item_ids = requested_item_ids & previously_returned_item_ids
+    if duplicated_item_ids:
+        duplicated_str = ", ".join(sorted(duplicated_item_ids))
+        raise ValueError(
+            "Ya existe una devolución previa para el/los artículo(s): "
+            f"{duplicated_str}."
         )
 
     # Toda devolución nueva arranca en estado "pending".
