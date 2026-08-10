@@ -18,7 +18,7 @@ import logging
 import re
 from typing import Any
 
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState

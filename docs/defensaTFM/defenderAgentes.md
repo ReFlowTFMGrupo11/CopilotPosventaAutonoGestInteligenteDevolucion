@@ -269,3 +269,85 @@ START → triage ──────────────────┐
 | LLM elige tools libremente (`bind_tools` sin restricción) | No determinista; el LLM puede llamar a la tool incorrecta o no llamar ninguna |
 | Import directo de services (sin MCP) | No demuestra el protocolo MCP end-to-end; no refleja la arquitectura de producción |
 | Pydantic para el estado del grafo | Overhead de validación en cada nodo; TypedDict es lo idiomático en LangGraph |
+
+---
+
+## 12. HITL: Flujo Human-in-the-Loop end-to-end
+
+### El patrón
+
+El sistema no es "todo automático" ni "todo manual" — es **híbrido con umbral configurable**:
+- Devoluciones ≤ 100 € → auto-aprobación instantánea.
+- Devoluciones > 100 € (o marcadas por el Evaluador) → requiere revisión humana.
+
+Este patrón es estándar en producción (Amazon, Zalando): reduce costes operativos sin perder control sobre operaciones de alto valor.
+
+### Diagrama de secuencia
+
+```
+Cliente ──msg──► Chat API ──invoke──► Grafo LangGraph
+                                         │
+                              ┌──────────┼──────────┐
+                              │ Triaje → Evaluador → Resolución
+                              │                        │
+                              │              refund > 100€?
+                              │                 │ SÍ
+                              │    ┌────────────▼────────────┐
+                              │    │ 1. Crear return_request │
+                              │    │    (status=pending_approval, │
+                              │    │     thread_id=UUID sesión)   │
+                              │    │ 2. interrupt()               │
+                              │    └────────────┬────────────┘
+                              │                 │
+                              │    ◄── grafo PAUSADO ──►
+                              │
+Admin Panel ◄── GET /pending ── consulta BD (pending_approval)
+     │                              devuelve thread_id
+     │
+     ├── POST /admin/{thread_id}/approve
+     │         │
+     │         ▼
+     │   graph.ainvoke(Command(resume={"approved": true}))
+     │         │
+     │         ▼
+     │   Resolución continúa:
+     │     • Genera etiqueta
+     │     • Actualiza BD → status=approved
+     │     • Notifica al cliente
+     │
+     └── POST /admin/{thread_id}/reject
+               │
+               ▼
+         Actualiza BD → status=rejected
+         Mensaje empático de rechazo al cliente
+```
+
+### Retos técnicos resueltos
+
+| Reto | Problema | Solución |
+|------|----------|----------|
+| **Vinculación grafo↔BD** | El panel admin necesita saber qué grafo reanudar | Se persiste `thread_id` (UUID de sesión LangGraph) en `return_requests` |
+| **Re-ejecución del nodo** | LangGraph re-ejecuta el nodo completo al hacer `resume` → el guard de duplicados bloquea el INSERT | Try/except: si el registro ya existe, se reutiliza (patrón *create-or-reuse* idempotente) |
+| **Errores silenciosos MCP** | Las tools MCP devolvían errores como datos (lista) en vez de excepciones → `TypeError` difícil de diagnosticar | `call_tool` detecta respuestas de error y lanza `RuntimeError` explícito |
+
+### Por qué `interrupt()` y no polling
+
+| Alternativa | Inconveniente |
+|-------------|---------------|
+| Polling (el nodo espera en un bucle) | Consume recursos, no escala, bloquea el worker |
+| Webhook externo | Complejidad extra, hay que gestionar estado fuera de LangGraph |
+| **`interrupt()` nativo** ✅ | Persistencia automática via checkpointer, cero recursos consumidos mientras espera |
+
+### Idempotencia del nodo de Resolución
+
+El nodo debe funcionar correctamente tanto en la primera ejecución (antes del interrupt) como en la re-ejecución (tras el resume). Se garantiza con:
+
+```python
+try:
+    record = await create_return_record(...)  # Primera vez
+except (RuntimeError, ValueError):
+    # Re-ejecución: registro ya existe, buscarlo en BD
+    record_id = await buscar_registro_existente(order_id)
+```
+
+Esto sigue el principio de **diseño para fallos** (*design for failure*): el nodo no asume que es la primera vez que se ejecuta.

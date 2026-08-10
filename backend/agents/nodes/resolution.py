@@ -27,6 +27,7 @@ from backend.agents.infra.mcp_client import (
     send_customer_notification,
     update_return_status,
 )
+from backend.db.supabase_client import get_supabase_client
 from backend.models import OrderItem
 
 logger = logging.getLogger(__name__)
@@ -102,12 +103,43 @@ async def resolution_agent(
     #    motivo sensible o cliente frecuente, aunque el importe sea bajo) ──
     needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > HITL_REFUND_THRESHOLD
     if needs_admin_approval:
+        # Crear registro o reutilizar existente (re-ejecución tras resume).
+        thread_id = state.get("thread_id", "")
+        try:
+            hitl_record = await create_return_record(
+                order_id=order_id,
+                customer_id=customer_id,
+                reason=reason,
+                reason_category=reason_category,
+                refund_amount=refund_amount,
+                items=items_to_return,
+                notes="Pendiente de aprobación manual (HITL).",
+                thread_id=thread_id,
+            )
+            existing_return_id = hitl_record["return_request"]["id"]
+            await update_return_status(
+                return_id=existing_return_id,
+                status="pending_approval",
+                resolution="",
+                notes=f"Reembolso de {refund_amount:.2f}€ supera umbral o requiere revisión.",
+            )
+        except (RuntimeError, ValueError) as exc:
+            # Guard de duplicados: el registro ya existe (resume tras interrupt)
+            logger.info("HITL record ya existe, reutilizando: %s", exc)
+            # Buscar el ID del registro existente via BD
+            client = await get_supabase_client()
+            resp = await client.table("return_requests").select("id").eq(
+                "order_id", order_id
+            ).in_("status", ["pending_approval", "pending"]).limit(1).execute()
+            existing_return_id = resp.data[0]["id"] if resp.data else ""
+
         admin_response = interrupt({
             "type": "admin_approval_required",
             "refund_amount": refund_amount,
             "order_id": order_id,
             "customer_id": customer_id,
             "reason": reason,
+            "return_request_id": existing_return_id,
             "message": (
                 f"Se requiere aprobación manual: reembolso de {refund_amount:.2f}€ "
                 f"(umbral: {HITL_REFUND_THRESHOLD:.2f}€)."
@@ -115,6 +147,13 @@ async def resolution_agent(
         })
 
         if not admin_response.get("approved", False):
+            # Admin rechazó: actualizar BD y comunicar al cliente
+            await update_return_status(
+                return_id=existing_return_id,
+                status="rejected",
+                resolution="rejected_by_admin",
+                notes=admin_response.get("reason", "Rechazado por administrador."),
+            )
             rejection_msg = await llm.ainvoke([
                 SystemMessage(
                     content=REJECTION_SYSTEM_PROMPT.format(
@@ -127,10 +166,13 @@ async def resolution_agent(
                     "messages": [rejection_msg],
                     "admin_decision": "rejected",
                     "resolution": "rejected_by_admin",
+                    "return_request_id": existing_return_id,
                     "current_agent": "resolver",
                 },
                 goto="__end__",
             )
+
+        # Admin aprobó: continuar con etiqueta + notificación (el registro ya existe)
 
     # ── Generar etiqueta de transporte ─────────────────────────────────
     label_items = []
@@ -154,23 +196,33 @@ async def resolution_agent(
     )
 
     # ── Registrar devolución en Supabase ───────────────────────────────
-    return_record = await create_return_record(
-        order_id=order_id,
-        customer_id=customer_id,
-        reason=reason,
-        reason_category=reason_category,
-        refund_amount=refund_amount,
-        items=items_to_return,
-        notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
-    )
-
-    # ── Marcar como aprobada (auto-aprobación ≤ umbral) ────────────────
-    await update_return_status(
-        return_id=return_record["return_request"]["id"],
-        status="approved",
-        resolution="auto_approved",
-        notes=f"Aprobado automáticamente. Tracking: {label_result['tracking_number']}",
-    )
+    # Si viene de HITL aprobado, el registro ya existe.
+    if needs_admin_approval:
+        await update_return_status(
+            return_id=existing_return_id,
+            status="approved",
+            resolution="approved_by_admin",
+            notes=f"Aprobado por administrador. Tracking: {label_result['tracking_number']}",
+        )
+        return_request_id = existing_return_id
+    else:
+        return_record = await create_return_record(
+            order_id=order_id,
+            customer_id=customer_id,
+            reason=reason,
+            reason_category=reason_category,
+            refund_amount=refund_amount,
+            items=items_to_return,
+            notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
+            thread_id=state.get("thread_id", ""),
+        )
+        # ── Marcar como aprobada (auto-aprobación ≤ umbral) ────────────────
+        await update_return_status(
+            return_id=return_record["return_request"]["id"],
+            status="approved",
+            resolution="auto_approved",
+            notes=f"Aprobado automáticamente. Tracking: {label_result['tracking_number']}",
+        )
 
     # ── Notificar al cliente ───────────────────────────────────────────
     await send_customer_notification(
@@ -204,7 +256,7 @@ async def resolution_agent(
             "messages": [final_response],
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
-            "return_request_id": return_record["return_request"]["id"],
+            "return_request_id": return_request_id if needs_admin_approval else return_record["return_request"]["id"],
             "admin_decision": "auto_approved" if refund_amount <= HITL_REFUND_THRESHOLD else "approved",
             "resolution": "approved",
             "current_agent": "resolver",
