@@ -53,6 +53,9 @@ class ReturnState(TypedDict, total=False):
     return_request_id: str | None
     resolution: str | None
 
+    # ── Identificador de sesión LangGraph ─────────────────────────────
+    thread_id: str | None
+
     # ── Control de flujo ───────────────────────────────────────────────
     current_agent: str | None
     error: str | None

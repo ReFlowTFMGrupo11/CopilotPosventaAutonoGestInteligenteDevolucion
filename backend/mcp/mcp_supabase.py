@@ -104,6 +104,7 @@ async def create_return_record(
     refund_amount: float,
     items: list[ReturnItem],
     notes: str = "",
+    thread_id: str = "",
 ) -> dict:
     """
     Inserta una solicitud de devolución en la tabla devoluciones de Supabase.
@@ -128,6 +129,7 @@ async def create_return_record(
         refund_amount=refund_amount,
         items=[item.model_dump() for item in items],
         notes=notes,
+        thread_id=thread_id,
     )
 
 
