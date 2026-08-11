@@ -226,16 +226,45 @@ async def resolution_agent(
         )
         return_request_id = existing_return_id
     else:
-        return_record = await create_return_record(
-            order_id=order_id,
-            customer_id=customer_id,
-            reason=reason,
-            reason_category=reason_category,
-            refund_amount=refund_amount,
-            items=items_to_return,
-            notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
-            thread_id=state.get("thread_id", ""),
-        )
+        try:
+            return_record = await create_return_record(
+                order_id=order_id,
+                customer_id=customer_id,
+                reason=reason,
+                reason_category=reason_category,
+                refund_amount=refund_amount,
+                items=items_to_return,
+                notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
+                thread_id=state.get("thread_id", ""),
+            )
+        except (RuntimeError, ValueError) as exc:
+            # Guard de duplicados: ya existe una devolución para este pedido/artículo
+            # (p. ej. reintento del cliente o re-ejecución de un caso de QA).
+            logger.info("Return record ya existe, informando al cliente: %s", exc)
+            client = await get_supabase_client()
+            resp = await client.table("return_requests").select("id, status").eq(
+                "order_id", order_id
+            ).order("created_at", desc=True).limit(1).execute()
+            existing = resp.data[0] if resp.data else {}
+            duplicate_msg = await llm.ainvoke([
+                SystemMessage(
+                    content=(
+                        "Eres el Agente de Resolución de ReFlow. Informa al cliente, de forma "
+                        "clara y empática, de que ya existe una solicitud de devolución en curso "
+                        f"para este pedido (estado actual: {existing.get('status', 'en proceso')}). "
+                        "No hace falta crear una nueva; nuestro equipo ya la está gestionando."
+                    )
+                ),
+            ])
+            return Command(
+                update={
+                    "messages": [duplicate_msg],
+                    "resolution": "duplicate",
+                    "return_request_id": existing.get("id", ""),
+                    "current_agent": "resolver",
+                },
+                goto="__end__",
+            )
         # ── Marcar como aprobada (auto-aprobación ≤ umbral) ────────────────
         await update_return_status(
             return_id=return_record["return_request"]["id"],
@@ -243,6 +272,7 @@ async def resolution_agent(
             resolution="auto_approved",
             notes=f"Aprobado automáticamente. Tracking: {label_result['tracking_number']}",
         )
+        return_request_id = return_record["return_request"]["id"]
 
     # ── Notificar al cliente ───────────────────────────────────────────
     await send_customer_notification(
@@ -276,7 +306,7 @@ async def resolution_agent(
             "messages": [final_response],
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
-            "return_request_id": return_request_id if needs_admin_approval else return_record["return_request"]["id"],
+            "return_request_id": return_request_id,
             "admin_decision": "auto_approved" if refund_amount <= HITL_REFUND_THRESHOLD else "approved",
             "resolution": "approved",
             "current_agent": "resolver",
