@@ -12,6 +12,22 @@ from backend.services.supabase_service import (
 )
 
 
+def _make_sync_supabase_client():
+    """Cliente fake con builder sync y execute async, como supabase real."""
+    client = MagicMock()
+    query = MagicMock()
+    query.select.return_value = query
+    query.eq.return_value = query
+    query.order.return_value = query
+    query.limit.return_value = query
+    query.single.return_value = query
+    query.in_.return_value = query
+    query.insert.return_value = query
+    query.update.return_value = query
+    client.table.return_value = query
+    return client, query
+
+
 # ---------------------------------------------------------------------------
 # calculate_days_since_delivery
 # ---------------------------------------------------------------------------
@@ -67,20 +83,19 @@ class TestGetOrderDetails:
 
     @pytest.mark.asyncio
     async def test_returns_order_and_items(self):
-        mock_client = AsyncMock()
+        mock_client, query = _make_sync_supabase_client()
 
         # Mock para order query
-        order_chain = AsyncMock()
+        order_chain = MagicMock()
         order_chain.data = {"id": "ord-1", "customer": {"id": "c1"}}
 
-        items_chain = AsyncMock()
+        items_chain = MagicMock()
         items_chain.data = [{"id": "oi-1", "product": {"name": "Item"}}]
 
         # Configurar la cadena de llamadas
-        mock_client.table.return_value.select.return_value.eq.return_value.single.return_value.execute = AsyncMock(return_value=order_chain)
-        mock_client.table.return_value.select.return_value.eq.return_value.execute = AsyncMock(return_value=items_chain)
+        query.execute = AsyncMock(side_effect=[order_chain, items_chain])
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await get_order_details("ord-1")
 
         assert "order" in result
@@ -97,18 +112,18 @@ class TestGetCustomerReturnHistory:
 
     @pytest.mark.asyncio
     async def test_counts_approved_and_rejected(self):
-        mock_client = AsyncMock()
+        mock_client, query = _make_sync_supabase_client()
 
-        resp_mock = AsyncMock()
+        resp_mock = MagicMock()
         resp_mock.data = [
             {"status": "approved"},
             {"status": "approved"},
             {"status": "rejected"},
         ]
 
-        mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=resp_mock)
+        query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await get_customer_return_history("cust-1")
 
         assert result["total_returns"] == 3
@@ -117,14 +132,14 @@ class TestGetCustomerReturnHistory:
 
     @pytest.mark.asyncio
     async def test_empty_history(self):
-        mock_client = AsyncMock()
+        mock_client, query = _make_sync_supabase_client()
 
-        resp_mock = AsyncMock()
+        resp_mock = MagicMock()
         resp_mock.data = []
 
-        mock_client.table.return_value.select.return_value.eq.return_value.order.return_value.execute = AsyncMock(return_value=resp_mock)
+        query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await get_customer_return_history("cust-1")
 
         assert result["total_returns"] == 0
@@ -142,19 +157,20 @@ class TestCreateReturnRecord:
 
     @pytest.mark.asyncio
     async def test_creates_return_and_items(self):
-        mock_client = AsyncMock()
+        mock_client, query = _make_sync_supabase_client()
 
-        return_resp = AsyncMock()
+        existing_resp = MagicMock()
+        existing_resp.data = []
+
+        return_resp = MagicMock()
         return_resp.data = [{"id": "ret-1", "status": "pending"}]
 
-        items_resp = AsyncMock()
+        items_resp = MagicMock()
         items_resp.data = []
 
-        mock_client.table.return_value.insert.return_value.execute = AsyncMock(
-            side_effect=[return_resp, items_resp]
-        )
+        query.execute = AsyncMock(side_effect=[existing_resp, return_resp, items_resp])
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await create_return_record(
                 order_id="ord-1",
                 customer_id="cust-1",
@@ -167,6 +183,32 @@ class TestCreateReturnRecord:
         assert result["return_request"]["id"] == "ret-1"
         assert result["items_created"] == 1
 
+    @pytest.mark.asyncio
+    async def test_rejects_duplicate_order_item_already_returned(self):
+        mock_client, query = _make_sync_supabase_client()
+
+        existing_resp = MagicMock()
+        existing_resp.data = [
+            {
+                "id": "ret-prev-1",
+                "status": "approved",
+                "return_items": [{"order_item_id": "oi-1"}],
+            }
+        ]
+
+        query.execute = AsyncMock(return_value=existing_resp)
+
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
+            with pytest.raises(ValueError, match="devolución previa"):
+                await create_return_record(
+                    order_id="ord-1",
+                    customer_id="cust-1",
+                    reason="Producto defectuoso",
+                    reason_category="defective",
+                    refund_amount=79.99,
+                    items=[{"order_item_id": "oi-1", "quantity": 1, "condition": "defective"}],
+                )
+
 
 # ---------------------------------------------------------------------------
 # update_return_status
@@ -178,28 +220,28 @@ class TestUpdateReturnStatus:
 
     @pytest.mark.asyncio
     async def test_updates_status(self):
-        mock_client = AsyncMock()
+        mock_client, query = _make_sync_supabase_client()
 
-        resp_mock = AsyncMock()
+        resp_mock = MagicMock()
         resp_mock.data = [{"id": "ret-1", "status": "approved"}]
 
-        mock_client.table.return_value.update.return_value.eq.return_value.execute = AsyncMock(return_value=resp_mock)
+        query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await update_return_status("ret-1", "approved", resolution="full_refund")
 
         assert result["updated_return"]["status"] == "approved"
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self):
-        mock_client = AsyncMock()
+        mock_client, query = _make_sync_supabase_client()
 
-        resp_mock = AsyncMock()
+        resp_mock = MagicMock()
         resp_mock.data = []
 
-        mock_client.table.return_value.update.return_value.eq.return_value.execute = AsyncMock(return_value=resp_mock)
+        query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service._get_client", return_value=mock_client):
+        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
             result = await update_return_status("ret-nonexistent", "approved")
 
         assert result["updated_return"] is None

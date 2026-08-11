@@ -33,12 +33,20 @@ def new_chat() -> str:
     return r.json()["thread_id"]
 
 
-def stream_chat(thread_id: str, message: str) -> Iterator[dict]:
+def stream_chat(
+    thread_id: str,
+    message: str,
+    selected_item_ids: list[str] | None = None,
+) -> Iterator[dict]:
     """Envía un mensaje y cede (yield) cada evento SSE tal como llega."""
     with httpx.stream(
         "POST",
         f"{API_BASE}/api/chat/stream",
-        json={"thread_id": thread_id, "message": message},
+        json={
+            "thread_id": thread_id,
+            "message": message,
+            "selected_item_ids": selected_item_ids,
+        },
         timeout=120,
     ) as response:
         response.raise_for_status()
@@ -89,5 +97,11 @@ def reject(thread_id: str, reason: str = "") -> dict:
 
 def get_order(order_id: str) -> dict:
     r = httpx.get(f"{API_BASE}/api/orders/{order_id}", timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+
+def chat_state(thread_id: str) -> dict:
+    r = httpx.get(f"{API_BASE}/api/chat/{thread_id}/state", timeout=10)
     r.raise_for_status()
     return r.json()

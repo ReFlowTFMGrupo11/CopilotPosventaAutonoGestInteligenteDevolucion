@@ -34,6 +34,7 @@ class ReturnState(TypedDict, total=False):
     reason: str | None
     reason_category: str | None
     items_to_return: list[dict[str, Any]]
+    selected_item_ids: list[str] | None
 
     # ── Datos del pedido (rellenados tras consultar Supabase) ──────────
     order_details: dict[str, Any] | None

@@ -44,7 +44,11 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
     """
     try:
         result = await graph.ainvoke(
-            {"messages": [HumanMessage(content=request.message)], "thread_id": request.thread_id},
+            {
+                "messages": [HumanMessage(content=request.message)],
+                "thread_id": request.thread_id,
+                "selected_item_ids": request.selected_item_ids,
+            },
             config={"configurable": {"thread_id": request.thread_id}},
         )
     except Exception as exc:
@@ -66,7 +70,7 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
 
 
 async def _stream_chat_events(
-    graph, message: str, thread_id: str
+    graph, message: str, thread_id: str, selected_item_ids: list[str] | None = None
 ) -> AsyncIterator[ChatStreamEvent]:
     """Genera eventos SSE conforme cada nodo del grafo termina."""
     config = {"configurable": {"thread_id": thread_id}}
@@ -84,7 +88,11 @@ async def _stream_chat_events(
             )
             return
 
-        input_state = {"messages": [HumanMessage(content=message)], "thread_id": thread_id}
+        input_state = {
+            "messages": [HumanMessage(content=message)],
+            "thread_id": thread_id,
+            "selected_item_ids": selected_item_ids,
+        }
 
         # stream_mode="updates": emite un chunk por cada nodo que termina
         async for chunk in graph.astream(input_state, config=config, stream_mode="updates"):
@@ -154,7 +162,12 @@ async def chat_stream(
     El frontend ve el progreso de cada agente conforme termina
     (cada 2-5s), en vez de esperar 10-20s por la respuesta completa.
     """
-    events = _stream_chat_events(graph, request.message, request.thread_id)
+    events = _stream_chat_events(
+        graph,
+        request.message,
+        request.thread_id,
+        request.selected_item_ids,
+    )
     return StreamingResponse(_to_sse(events), media_type="text/event-stream")
 
 
@@ -170,6 +183,17 @@ async def get_chat_state(thread_id: str, graph=Depends(get_graph)):
         raise HTTPException(status_code=404, detail=f"Sesión no encontrada: {exc}")
 
     values = state.values if state else {}
+    raw_items = (values.get("order_details") or {}).get("items", [])
+    items_to_return = values.get("items_to_return") or []
+    order_items = [
+        {
+            "id": item.get("id"),
+            "name": (item.get("product") or {}).get("name", "Artículo"),
+            "quantity": item.get("quantity", 1),
+            "unit_price": item.get("unit_price"),
+        }
+        for item in raw_items
+    ]
     return {
         "thread_id": thread_id,
         "current_agent": values.get("current_agent"),
@@ -178,4 +202,6 @@ async def get_chat_state(thread_id: str, graph=Depends(get_graph)):
         "is_eligible": values.get("is_eligible"),
         "resolution": values.get("resolution"),
         "refund_amount": values.get("refund_amount"),
+        "order_items": order_items,
+        "selection_required": bool(order_items) and not bool(items_to_return),
     }
