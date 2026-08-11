@@ -260,6 +260,52 @@ def _build_items_prompt(order_number: str, items: list[dict]) -> AIMessage:
     )
 
 
+def _auto_select_single_item(
+    order_number: str,
+    items: list[dict],
+    reason_category: str,
+) -> dict[str, Any] | None:
+    """Si hay 1 artículo y el reason_category es conocido, auto-selecciona con condición.
+
+    Returns dict con 'items_to_return' y 'messages' listo para mezclar en updates,
+    o None si no se puede auto-seleccionar (varios artículos o categoría desconocida).
+    """
+    _CONDITION_MAP = {
+        "defective": "defective",
+        "wrong_item": "wrong_item",
+        "not_as_described": "defective",
+        "no_longer_needed": "unopened",
+        "arrived_late": "unopened",
+    }
+    _CONDITION_LABELS = {
+        "defective": "defectuoso",
+        "wrong_item": "artículo incorrecto",
+        "unopened": "sin abrir",
+    }
+
+    if len(items) != 1:
+        return None
+    condition = _CONDITION_MAP.get(reason_category, "")
+    if not condition:
+        return None
+
+    single = items[0]
+    product_name = (single.get("product") or {}).get("name", "Artículo")
+    label = _CONDITION_LABELS.get(condition, condition)
+    return {
+        "items_to_return": [{"order_item_id": single["id"], "quantity": 1, "condition": condition}],
+        "messages": [
+            AIMessage(
+                content=(
+                    f"Entendido. Voy a gestionar la devolución de **{product_name}** "
+                    f"(estado: {label}) del pedido {order_number}. "
+                    f"¿Confirmas que esto es correcto?"
+                )
+            )
+        ],
+    }
+
+
 async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
     """Nodo auxiliar que consulta los detalles del pedido en Supabase.
 
@@ -302,7 +348,13 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
         # Primera vez que vemos este pedido: preguntar artículo y motivo.
         if not state.get("items_to_return"):
             items = order_details.get("items", [])
-            updates["messages"] = [_build_items_prompt(order_number, items)]
+            auto = _auto_select_single_item(
+                order_number, items, state.get("reason_category") or ""
+            )
+            if auto:
+                updates.update(auto)
+            else:
+                updates["messages"] = [_build_items_prompt(order_number, items)]
 
         return updates
     except Exception as exc:
