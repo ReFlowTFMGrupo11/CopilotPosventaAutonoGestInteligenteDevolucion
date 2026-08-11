@@ -8,53 +8,86 @@ from backend.agents.graph import route_after_triage, route_after_fetch, route_af
 class TestRouteAfterTriage:
     """Tests para la decisión de routing post-triaje."""
 
-    def test_advances_when_order_id_and_items_present(self):
+    def test_advances_when_order_number_and_items_present(self):
         state = {
-            "order_id": "ord-001",
+            "order_number": "ORD-2026-00001",
+            "order_details": {"items": [{"id": "oi-1"}]},
             "items_to_return": [{"order_item_id": "oi-1", "quantity": 1}],
         }
         assert route_after_triage(state) == "fetch_order_data"
 
-    def test_loops_back_when_no_order_id(self):
+    def test_ends_when_no_order_number(self):
         state = {
-            "order_id": None,
+            "order_number": None,
             "items_to_return": [{"order_item_id": "oi-1", "quantity": 1}],
         }
-        assert route_after_triage(state) == "triage"
+        assert route_after_triage(state) == "__end__"
 
-    def test_loops_back_when_no_items(self):
+    def test_advances_when_order_details_missing(self):
         state = {
-            "order_id": "ord-001",
+            "order_number": "ORD-2026-00001",
+            "order_details": None,
             "items_to_return": [],
         }
-        assert route_after_triage(state) == "triage"
+        assert route_after_triage(state) == "fetch_order_data"
 
-    def test_loops_back_when_both_missing(self):
-        state = {}
-        assert route_after_triage(state) == "triage"
-
-    def test_loops_back_when_order_id_empty_string(self):
+    def test_ends_when_order_present_but_no_items_selected_yet(self):
         state = {
-            "order_id": "",
+            "order_number": "ORD-2026-00001",
+            "order_details": {"items": [{"id": "oi-1"}]},
+            "items_to_return": [],
+        }
+        assert route_after_triage(state) == "__end__"
+
+    def test_ends_when_both_missing(self):
+        state = {}
+        assert route_after_triage(state) == "__end__"
+
+    def test_ends_when_order_number_empty_string(self):
+        state = {
+            "order_number": "",
             "items_to_return": [{"order_item_id": "oi-1", "quantity": 1}],
         }
-        assert route_after_triage(state) == "triage"
+        assert route_after_triage(state) == "__end__"
 
 
 class TestRouteAfterFetch:
     """Tests para la decisión de routing post-fetch."""
 
-    def test_advances_to_evaluator_when_no_error(self):
+    def test_advances_to_evaluator_when_no_error_and_items_present(self):
+        state = {
+            "error": None,
+            "items_to_return": [{"order_item_id": "oi-1", "condition": "defective"}],
+            "reason": "Llegó roto",
+            "reason_category": "defective",
+        }
+        assert route_after_fetch(state) == "evaluator"
+
+    def test_ends_when_no_error_but_items_missing(self):
         state = {"error": None}
-        assert route_after_fetch(state) == "evaluator"
+        assert route_after_fetch(state) == "__end__"
 
-    def test_advances_to_evaluator_when_no_error_key(self):
-        state = {}
-        assert route_after_fetch(state) == "evaluator"
+    def test_ends_when_condition_is_unknown(self):
+        state = {
+            "error": None,
+            "items_to_return": [{"order_item_id": "oi-1", "condition": "unknown"}],
+            "reason": "No lo necesito",
+            "reason_category": "no_longer_needed",
+        }
+        assert route_after_fetch(state) == "__end__"
 
-    def test_returns_to_triage_on_error(self):
+    def test_ends_when_reason_data_missing(self):
+        state = {
+            "error": None,
+            "items_to_return": [{"order_item_id": "oi-1", "condition": "unopened"}],
+            "reason": "",
+            "reason_category": "",
+        }
+        assert route_after_fetch(state) == "__end__"
+
+    def test_ends_on_error(self):
         state = {"error": "Pedido no encontrado"}
-        assert route_after_fetch(state) == "triage"
+        assert route_after_fetch(state) == "__end__"
 
 
 class TestRouteAfterEvaluator:

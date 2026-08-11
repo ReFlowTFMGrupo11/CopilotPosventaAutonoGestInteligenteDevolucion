@@ -4,6 +4,32 @@ Grafo de devoluciones – Orquestación LangGraph.
 Define el ``StateGraph`` que conecta los tres agentes:
   Triaje → Fetch datos → Evaluador → Resolución/Rechazo
 con soporte HITL para reembolsos > 100 €.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ FRONTERA  DETERMINISTA  vs  LLM  en este módulo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ TODO el enrutamiento del grafo es 100% DETERMINISTA.
+ El LLM nunca decide qué nodo se ejecuta a continuación.
+
+ Guards deterministas (funciones route_*):
+
+   route_after_triage:
+     → fetch_order_data  si hay order_number (pedido identificado).
+     → __end__           si falta order_number (esperar al cliente).
+
+   route_after_fetch  (Guard B principal del flujo):
+     → evaluator   si y solo si:
+                     - No hay error de pedido.
+                     - items_to_return tiene al menos 1 ítem con condition válida
+                       (no vacía, no "unknown")  ← _has_valid_items_to_return
+                     - Hay reason + reason_category informados.
+                       ← _has_reason_data
+     → __end__     en cualquier otro caso (pedir más datos al cliente).
+
+   route_after_evaluator:
+     → resolver    si is_eligible=True o needs_admin_approval=True.
+     → reject      si la política lo rechaza claramente.
 """
 
 from __future__ import annotations
@@ -40,6 +66,26 @@ logger = logging.getLogger(__name__)
 # ── Funciones de enrutamiento (aristas condicionales) ──────────────────────
 
 
+def _has_valid_items_to_return(state: ReturnState) -> bool:
+    """True si hay al menos un item y todos tienen condition válida."""
+    items_to_return = state.get("items_to_return") or []
+    if not items_to_return:
+        return False
+
+    for item in items_to_return:
+        condition = (item.get("condition") or "").strip().lower()
+        if not condition or condition == "unknown":
+            return False
+    return True
+
+
+def _has_reason_data(state: ReturnState) -> bool:
+    """True si hay motivo y categoría de motivo informados."""
+    reason = (state.get("reason") or "").strip()
+    reason_category = (state.get("reason_category") or "").strip()
+    return bool(reason and reason_category)
+
+
 def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "__end__"]:
     """Decide si avanzar a consultar datos o terminar el turno.
 
@@ -65,7 +111,11 @@ def route_after_fetch(state: ReturnState) -> Literal["evaluator", "__end__"]:
     no sabemos qué artículo quiere devolver el cliente (fetch_order_data ya
     ha dejado el mensaje preguntándolo).
     """
-    if state.get("error") or not state.get("items_to_return"):
+    if state.get("error"):
+        return "__end__"
+    if not _has_valid_items_to_return(state):
+        return "__end__"
+    if not _has_reason_data(state):
         return "__end__"
     return "evaluator"
 
