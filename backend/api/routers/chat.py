@@ -203,5 +203,5 @@ async def get_chat_state(thread_id: str, graph=Depends(get_graph)):
         "resolution": values.get("resolution"),
         "refund_amount": values.get("refund_amount"),
         "order_items": order_items,
-        "selection_required": bool(order_items) and not bool(items_to_return),
+        "selection_required": len(order_items) > 1 and not bool(items_to_return),
     }
