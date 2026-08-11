@@ -62,7 +62,7 @@ else:
     for row in pending:
         thread_id = row.get("thread_id") or row.get("id")
         c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 2, 1.3, 3, 2.2, 1, 1])
-        c1.write(row.get("order_id", "—"))
+        c1.write(row.get("order_number") or row.get("order_id", "—"))
         c2.write(row.get("customer_id", "—"))
         c3.write(money(row.get("refund_amount")))
         c4.write(row.get("reason", "—"))
@@ -94,7 +94,7 @@ if not rows:
 else:
     table = [
         {
-            "Pedido": r.get("order_id", "—"),
+            "Pedido": r.get("order_number") or r.get("order_id", "—"),
             "Cliente": r.get("customer_id", "—"),
             "Importe": money(r.get("refund_amount")),
             "Motivo": r.get("reason", "—"),
