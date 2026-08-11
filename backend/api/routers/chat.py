@@ -204,4 +204,13 @@ async def get_chat_state(thread_id: str, graph=Depends(get_graph)):
         "refund_amount": values.get("refund_amount"),
         "order_items": order_items,
         "selection_required": len(order_items) > 1 and not bool(items_to_return),
+        # No pedimos el motivo hasta saber qué artículo(s) se devuelven: en pedidos
+        # con 1 solo artículo no hace falta selección explícita (bool(order_items)
+        # basta), en pedidos con varios hay que esperar a que el cliente elija.
+        "reason_pending": (
+            bool(order_items)
+            and not (len(order_items) > 1 and not bool(items_to_return))
+            and not bool(values.get("reason"))
+        ),
+        "tracking_number": values.get("tracking_number"),
     }
