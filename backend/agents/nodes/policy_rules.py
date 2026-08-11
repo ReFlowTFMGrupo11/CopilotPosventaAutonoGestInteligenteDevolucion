@@ -40,6 +40,9 @@ MERCADIA_FAULT_REASONS = {
 FREQUENT_RETURNER_THRESHOLD = 5
 """Número de devoluciones aprobadas a partir del cual se sospecha abuso."""
 
+NO_RETURN_BY_CHOICE_REASONS = {"no_longer_needed", "arrived_late", "other"}
+"""Motivos de 'cambio de opinión' que no aplican a categorías con exclusión legal."""
+
 
 # ── Modelos de datos ───────────────────────────────────────────────────────
 
@@ -83,12 +86,21 @@ def rule_deadline(ctx: PolicyContext) -> RuleResult:
 
 
 def rule_hygiene(ctx: PolicyContext) -> RuleResult:
-    """Rechaza productos de higiene abiertos/usados (exclusión legal)."""
-    if (
-        ctx.category in HYGIENE_CATEGORIES
-        and ctx.condition in {"opened_tested", "opened_unused", "used"}
-        and ctx.reason_category not in MERCADIA_FAULT_REASONS
-    ):
+    """Rechaza productos de higiene abiertos/usados (exclusión legal) o por cambio de opinión."""
+    if ctx.category not in HYGIENE_CATEGORIES:
+        return RuleResult("valid")
+    if ctx.reason_category in MERCADIA_FAULT_REASONS:
+        return RuleResult("valid")
+    # Cambio de opinión en categoría con exclusión legal → siempre inválido
+    if ctx.reason_category in NO_RETURN_BY_CHOICE_REASONS:
+        return RuleResult(
+            "invalid",
+            f"Categoría '{ctx.category}' no admite devolución por cambio de opinión "
+            f"('{ctx.reason_category}'). Solo se aceptan devoluciones por defecto, "
+            f"artículo incorrecto o daño imputable a Mercadia.",
+        )
+    # Producto abierto/usado en categoría de higiene → exclusión legal
+    if ctx.condition in {"opened_tested", "opened_unused", "used"}:
         return RuleResult(
             "invalid",
             f"Precinto/uso roto ('{ctx.condition}') en categoría con exclusión "
