@@ -157,12 +157,24 @@ async def resolution_agent(
             "type": "admin_approval_required",
             "refund_amount": refund_amount,
             "order_id": order_id,
+            "order_number": order_number,
             "customer_id": customer_id,
+            "customer_name": customer_name,
             "reason": reason,
             "return_request_id": existing_return_id,
+            "items": [
+                {
+                    "order_item_id": item.get("order_item_id"),
+                    "quantity": item.get("quantity", 1),
+                    "condition": item.get("condition"),
+                }
+                for item in items_to_return
+            ],
             "message": (
-                f"Se requiere aprobación manual: reembolso de {refund_amount:.2f}€ "
-                f"(umbral: {HITL_REFUND_THRESHOLD:.2f}€)."
+                f"Pedido {order_number} · Cliente: {customer_name} · "
+                f"Artículos: {len(items_to_return)} · "
+                f"Reembolso: {refund_amount:.2f}€ (umbral: {HITL_REFUND_THRESHOLD:.2f}€) · "
+                f"Motivo: {reason_category} — {reason}"
             ),
         })
 
