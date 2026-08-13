@@ -68,6 +68,13 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
 
 # ── Endpoint streaming (SSE) ─────────────────────────────────────────────
 
+_HITL_CUSTOMER_MSG = (
+    "Tu solicitud de devolución está siendo revisada por nuestro equipo. "
+    "Dado el importe del reembolso, necesitamos una validación manual antes de procesarla. "
+    "Te notificaremos en un plazo de 24-48 horas con la resolución. "
+    "¡Gracias por tu paciencia!"
+)
+
 
 async def _stream_chat_events(
     graph, message: str, thread_id: str, selected_item_ids: list[str] | None = None
@@ -81,12 +88,7 @@ async def _stream_chat_events(
         if existing_state and existing_state.next:
             yield ChatStreamEvent(
                 type="awaiting_admin",
-                content=(
-                    "Tu solicitud de devolución está siendo revisada por nuestro equipo. "
-                    "Dado el importe del reembolso, necesitamos una validación manual antes de procesarla. "
-                    "Te notificaremos en un plazo de 24-48 horas con la resolución. "
-                    "¡Gracias por tu paciencia!"
-                ),
+                content=_HITL_CUSTOMER_MSG,
             )
             return
 
@@ -120,12 +122,7 @@ async def _stream_chat_events(
                     break
             yield ChatStreamEvent(
                 type="awaiting_admin",
-                content=(
-                    "Tu solicitud de devolución está siendo revisada por nuestro equipo. "
-                    "Dado el importe del reembolso, necesitamos una validación manual antes de procesarla. "
-                    "Te notificaremos en un plazo de 24-48 horas con la resolución. "
-                    "¡Gracias por tu paciencia!"
-                ),
+                content=_HITL_CUSTOMER_MSG,
                 order_id=interrupt_payload.get("order_id"),
             )
             return
