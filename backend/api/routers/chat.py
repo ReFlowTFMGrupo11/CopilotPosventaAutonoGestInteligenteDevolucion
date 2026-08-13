@@ -82,8 +82,10 @@ async def _stream_chat_events(
             yield ChatStreamEvent(
                 type="awaiting_admin",
                 content=(
-                    "Tu solicitud sigue pendiente de revisión por nuestro equipo. "
-                    "Te avisaremos en cuanto se resuelva."
+                    "Tu solicitud de devolución está siendo revisada por nuestro equipo. "
+                    "Dado el importe del reembolso, necesitamos una validación manual antes de procesarla. "
+                    "Te notificaremos en un plazo de 24-48 horas con la resolución. "
+                    "¡Gracias por tu paciencia!"
                 ),
             )
             return
@@ -118,10 +120,11 @@ async def _stream_chat_events(
                     break
             yield ChatStreamEvent(
                 type="awaiting_admin",
-                content=interrupt_payload.get(
-                    "message",
-                    "Tu solicitud requiere aprobación de un administrador. "
-                    "Te avisaremos en cuanto se resuelva.",
+                content=(
+                    "Tu solicitud de devolución está siendo revisada por nuestro equipo. "
+                    "Dado el importe del reembolso, necesitamos una validación manual antes de procesarla. "
+                    "Te notificaremos en un plazo de 24-48 horas con la resolución. "
+                    "¡Gracias por tu paciencia!"
                 ),
                 order_id=interrupt_payload.get("order_id"),
             )
