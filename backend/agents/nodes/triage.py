@@ -158,6 +158,9 @@ def _apply_deterministic_selection(
 ) -> None:
     """Sobreescribe `items_to_return` con la selección explícita del usuario.
 
+    Solo se permite devolver 1 artículo por solicitud. Si se reciben varios
+    `selected_item_ids`, se usa únicamente el primero y se registra un warning.
+
     Si el cliente marcó checkboxes (`selected_item_ids`), se usa esa lista
     en vez de la inferencia del LLM. Si la condición aún no es conocida,
     pide al usuario que la indique.
@@ -166,6 +169,14 @@ def _apply_deterministic_selection(
     order_items = (state.get("order_details") or {}).get("items", [])
     if not selected_item_ids or not order_items:
         return
+
+    # Guard: solo 1 ítem por solicitud de devolución.
+    if len(selected_item_ids) > 1:
+        logger.warning(
+            "Se recibieron %d selected_item_ids; solo se procesará el primero.",
+            len(selected_item_ids),
+        )
+        selected_item_ids = selected_item_ids[:1]
 
     valid_items_by_id = {
         item.get("id"): item for item in order_items if item.get("id")
