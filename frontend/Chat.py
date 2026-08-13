@@ -58,25 +58,32 @@ def render_bubble(kind: str, text: str) -> None:
 def _render_item_selection(
     items: list[dict],
 ) -> tuple[list[str], list[str], bool]:
-    """Renderiza checkboxes de selección de ítems.
+    """Renderiza selección de UN artículo a devolver (radio-button style).
+
+    Solo se puede seleccionar 1 ítem por solicitud de devolución.
 
     Returns:
         selected_ids, selected_names, submitted
     """
     st.markdown("### Selección de artículo")
-    st.caption("Marca el/los artículo(s) a devolver para selección determinista.")
-    selected_ids: list[str] = []
-    selected_names: list[str] = []
-    for item in items:
-        item_id = item.get("id")
-        label = f"{item.get('name','Artículo')} · cant: {item.get('quantity',1)} · precio: {item.get('unit_price')}€"
-        if item_id and st.checkbox(label, key=f"item_select_{item_id}"):
-            selected_ids.append(item_id)
-            selected_names.append(item.get("name", "Artículo"))
-    st.caption(f"Seleccionados: {len(selected_ids)}")
+    st.caption("Selecciona el artículo que quieres devolver.")
+    options = {
+        item.get("id"): f"{item.get('name','Artículo')} · cant: {item.get('quantity',1)} · precio: {item.get('unit_price')}€"
+        for item in items
+        if item.get("id")
+    }
+    selected_id = st.radio(
+        "Artículo a devolver",
+        options=list(options.keys()),
+        format_func=lambda x: options[x],
+        index=None,
+        label_visibility="collapsed",
+    )
+    selected_ids = [selected_id] if selected_id else []
+    selected_names = [items[[i.get("id") for i in items].index(selected_id)].get("name", "Artículo")] if selected_id else []
     submitted = st.button(
         "Confirmar selección y continuar",
-        disabled=not selected_ids,
+        disabled=not selected_id,
         use_container_width=True,
     )
     return selected_ids, selected_names, submitted
