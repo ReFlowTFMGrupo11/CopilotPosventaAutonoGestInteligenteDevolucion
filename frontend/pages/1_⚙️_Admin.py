@@ -10,7 +10,7 @@ import streamlit as st
 
 from lib import api, styles
 
-st.set_page_config(page_title="Panel de administración — ReFlow", page_icon="🛠️", layout="wide")
+st.set_page_config(page_title="Panel de administración — ReFlow", page_icon="⚙️", layout="wide")
 styles.inject_css()
 styles.render_header()
 styles.render_backend_banner(api.health())
@@ -56,13 +56,14 @@ if not pending:
     st.caption("No hay devoluciones pendientes.")
 else:
     header = st.columns([2, 2, 1.3, 3, 2.2, 1, 1])
-    for col, label in zip(header, ["Pedido", "Cliente", "Importe", "Motivo", "Motivo decisión", "", ""]):
-        col.markdown(f"**{label}**")
+    for col, label in zip(header, ["Pedido", "Cliente", "Importe", "Motivo", "", "", ""]):
+        if label:
+            col.markdown(f"**{label}**")
 
     for row in pending:
         thread_id = row.get("thread_id") or row.get("id")
         c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 2, 1.3, 3, 2.2, 1, 1])
-        c1.write(row.get("order_id", "—"))
+        c1.write(row.get("order_number") or row.get("order_id", "—"))
         c2.write(row.get("customer_id", "—"))
         c3.write(money(row.get("refund_amount")))
         c4.write(row.get("reason", "—"))
@@ -78,7 +79,7 @@ else:
 
 # ── Todas las devoluciones ───────────────────────────────────────────────
 
-st.markdown("### Todas las devoluciones")
+st.markdown("### Devoluciones")
 
 status_options = {"Todas": "", "Aprobadas": "approved", "Rechazadas": "rejected", "Pendientes": "pending_approval"}
 status_label = st.selectbox("Filtrar por estado", options=list(status_options.keys()), label_visibility="collapsed")
@@ -94,7 +95,7 @@ if not rows:
 else:
     table = [
         {
-            "Pedido": r.get("order_id", "—"),
+            "Pedido": r.get("order_number") or r.get("order_id", "—"),
             "Cliente": r.get("customer_id", "—"),
             "Importe": money(r.get("refund_amount")),
             "Motivo": r.get("reason", "—"),
