@@ -115,13 +115,14 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
     reason_category = state.get("reason_category", "")
     items_to_return = state.get("items_to_return", [])
 
-    # ── Obtener la categoría del primer artículo para buscar la política ──
+    # ── Obtener la categoría del artículo que se devuelve (no el primero del pedido) ──
     product_category = ""
     order_items = order_details.get("items", [])
     if order_items and items_to_return:
+        requested_ids = {item.get("order_item_id") for item in items_to_return}
         for raw_item in order_items:
             oi = OrderItem.model_validate(raw_item)
-            if oi.product and oi.product.category:
+            if oi.id in requested_ids and oi.product and oi.product.category:
                 product_category = oi.product.category
                 break
 
