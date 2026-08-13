@@ -311,27 +311,39 @@ async def update_return_status(
 # ---------------------------------------------------------------------------
 
 
+def _flatten_order_number(row: dict) -> dict:
+    """Extrae `orders.order_number` del embed de PostgREST a un campo plano.
+
+    El cliente de Supabase devuelve el join como `row["orders"]["order_number"]`;
+    el frontend quiere un `order_number` de primer nivel, junto al `order_id`
+    (UUID interno), para poder mostrarlo y usarlo en el buscador de pedidos.
+    """
+    order = row.pop("orders", None) or {}
+    row["order_number"] = order.get("order_number")
+    return row
+
+
 async def list_pending_approvals() -> list[dict]:
     """Devuelve devoluciones con status pending_approval (HITL)."""
     client = await get_supabase_client()
     resp = await client.table("return_requests").select(
-        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, created_at"
+        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, created_at, orders(order_number)"
     ).eq("status", "pending_approval").order("created_at", desc=True).execute()
-    return resp.data or []
+    return [_flatten_order_number(row) for row in (resp.data or [])]
 
 
 async def list_returns(status: str | None = None, limit: int = 50) -> list[dict]:
     """Lista devoluciones con filtro opcional por estado."""
     client = await get_supabase_client()
     query = client.table("return_requests").select(
-        "id, order_id, customer_id, status, reason, reason_category, refund_amount, created_at, resolved_at"
+        "id, order_id, customer_id, status, reason, reason_category, refund_amount, created_at, resolved_at, orders(order_number)"
     ).order("created_at", desc=True).limit(limit)
 
     if status:
         query = query.eq("status", status)
 
     resp = await query.execute()
-    return resp.data or []
+    return [_flatten_order_number(row) for row in (resp.data or [])]
 
 
 async def get_return_detail(return_id: str) -> dict | None:
