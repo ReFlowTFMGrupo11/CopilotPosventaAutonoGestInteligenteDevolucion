@@ -10,16 +10,8 @@ import streamlit as st
 
 from lib import api, styles
 
-st.set_page_config(page_title="Chat de devoluciones — ReFlow", page_icon="💬", layout="centered")
+st.set_page_config(page_title="Chat de devoluciones — ReFlow", page_icon="💬", layout="wide")
 styles.inject_css()
-
-# Contenedor fijo (sticky) arriba de la página: logo + indicador de pasos.
-# Se reutiliza más abajo (tras calcular current_step) para que ambos queden
-# dentro del mismo bloque y se fijen juntos al hacer scroll.
-sticky_top = st.container(key="reflow-sticky-top")
-with sticky_top:
-    styles.render_header()
-    styles.render_backend_banner(api.health())
 
 if "messages" not in st.session_state:
     st.session_state.messages = []  # cada item: {"kind": "user"|"agent"|"awaiting"|"error", "text": str}
@@ -66,8 +58,6 @@ if current_order_id:
         current_step = 4
 else:
     current_step = 0
-with sticky_top:
-    styles.render_step_tracker(current_step)
 
 
 BOT_AVATAR = "📦"
@@ -137,84 +127,95 @@ def _render_quick_replies() -> str | None:
     return None
 
 
-chat_scroll = st.container(height=420, key="reflow-chat-scroll")
-with chat_scroll:
-    if not st.session_state.messages:
-        st.markdown(
-            '<div style="text-align:center;margin-top:2.5rem;color:var(--muted);">'
-            '<p style="font-size:1.1rem;font-weight:600;color:inherit;">¿Necesitas devolver un pedido?</p>'
-            "<p>Cuéntame tu número de pedido y el motivo, y me encargo del resto.</p>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
+# ── Distribución: chat a la izquierda, resumen del pedido a la derecha ─────
+col_chat, col_order = st.columns([2, 1])
 
-    for message in st.session_state.messages:
-        render_bubble(message["kind"], message["text"])
+with col_chat:
+    sticky_top = st.container(key="reflow-sticky-top")
+    with sticky_top:
+        styles.render_header()
+        styles.render_backend_banner(api.health())
+        styles.render_step_tracker(current_step)
 
-if order_items:
-    st.markdown("#### Tu pedido")
-    for item in order_items:
-        styles.render_item_card(
-            item.get("name", "Artículo"), item.get("quantity", 1), item.get("unit_price")
-        )
-
-selected_item_ids: list[str] = []
-selected_item_names: list[str] = []
-selection_submitted = False
-if order_items and selection_required:
-    selected_item_ids, selected_item_names, selection_submitted = _render_item_selection(order_items)
-
-quick_reply_text: str | None = None
-if reason_pending and not selection_required:
-    quick_reply_text = _render_quick_replies()
-
-prompt = st.chat_input("Escribe tu mensaje..." if thread_id else "Conectando...", disabled=not thread_id)
-
-user_text: str | None = None
-if selection_submitted:
-    user_text = "Quiero devolver: " + ", ".join(selected_item_names)
-elif quick_reply_text:
-    user_text = quick_reply_text
-elif prompt:
-    user_text = prompt
-
-if user_text:
-    st.session_state.messages.append({"kind": "user", "text": user_text})
-
+    chat_scroll = st.container(height=420, key="reflow-chat-scroll")
     with chat_scroll:
-        render_bubble("user", user_text)
+        if not st.session_state.messages:
+            st.markdown(
+                '<div style="text-align:center;margin-top:2.5rem;color:var(--muted);">'
+                '<p style="font-size:1.1rem;font-weight:600;color:inherit;">¿Necesitas devolver un pedido?</p>'
+                "<p>Cuéntame tu número de pedido y el motivo, y me encargo del resto.</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
 
-        with st.chat_message("assistant", avatar=BOT_AVATAR):
-            status = st.empty()
-            status.caption("Estamos trabajando en tramitar tu petición...")
-            body = st.empty()
-            kind, text = "agent", "(sin contenido)"
-            try:
-                for event in api.stream_chat(
-                    thread_id,
-                    user_text,
-                    selected_item_ids=selected_item_ids or None,
-                ):
-                    etype = event.get("type")
-                    content = event.get("content") or ""
-                    if etype == "agent_step":
-                        status.caption(f"Agente {event.get('agent', 'desconocido')} procesando...")
-                    elif etype == "final":
-                        kind, text = "agent", content or "(sin contenido)"
-                    elif etype == "awaiting_admin":
-                        kind, text = "awaiting", content or "Tu solicitud está pendiente de revisión"
-                    elif etype == "error":
-                        kind, text = "error", content or "Se ha producido un error."
-            except httpx.HTTPError as exc:
-                kind, text = "error", f"No se pudo contactar con el backend: {exc}"
+        for message in st.session_state.messages:
+            render_bubble(message["kind"], message["text"])
 
-            status.empty()
-            if kind == "agent":
-                body.write(text)
-            elif kind == "awaiting":
-                body.markdown(f'<div class="reflow-awaiting">{text}</div>', unsafe_allow_html=True)
-            else:
-                body.error(text)
+    selected_item_ids: list[str] = []
+    selected_item_names: list[str] = []
+    selection_submitted = False
+    if order_items and selection_required:
+        selected_item_ids, selected_item_names, selection_submitted = _render_item_selection(order_items)
 
-    st.session_state.messages.append({"kind": kind, "text": text})
-    st.rerun()
+    quick_reply_text: str | None = None
+    if reason_pending and not selection_required:
+        quick_reply_text = _render_quick_replies()
+
+    prompt = st.chat_input("Escribe tu mensaje..." if thread_id else "Conectando...", disabled=not thread_id)
+
+    user_text: str | None = None
+    if selection_submitted:
+        user_text = "Quiero devolver: " + ", ".join(selected_item_names)
+    elif quick_reply_text:
+        user_text = quick_reply_text
+    elif prompt:
+        user_text = prompt
+
+    if user_text:
+        st.session_state.messages.append({"kind": "user", "text": user_text})
+
+        with chat_scroll:
+            render_bubble("user", user_text)
+
+            with st.chat_message("assistant", avatar=BOT_AVATAR):
+                status = st.empty()
+                status.caption("Estamos trabajando en tramitar tu petición...")
+                body = st.empty()
+                kind, text = "agent", "(sin contenido)"
+                try:
+                    for event in api.stream_chat(
+                        thread_id,
+                        user_text,
+                        selected_item_ids=selected_item_ids or None,
+                    ):
+                        etype = event.get("type")
+                        content = event.get("content") or ""
+                        if etype == "agent_step":
+                            status.caption(f"Agente {event.get('agent', 'desconocido')} procesando...")
+                        elif etype == "final":
+                            kind, text = "agent", content or "(sin contenido)"
+                        elif etype == "awaiting_admin":
+                            kind, text = "awaiting", content or "Tu solicitud está pendiente de revisión"
+                        elif etype == "error":
+                            kind, text = "error", content or "Se ha producido un error."
+                except httpx.HTTPError as exc:
+                    kind, text = "error", f"No se pudo contactar con el backend: {exc}"
+
+                status.empty()
+                if kind == "agent":
+                    body.write(text)
+                elif kind == "awaiting":
+                    body.markdown(f'<div class="reflow-awaiting">{text}</div>', unsafe_allow_html=True)
+                else:
+                    body.error(text)
+
+        st.session_state.messages.append({"kind": kind, "text": text})
+        st.rerun()
+
+with col_order:
+    if order_items:
+        st.markdown("#### Tu pedido")
+        for item in order_items:
+            styles.render_item_card(
+                item.get("name", "Artículo"), item.get("quantity", 1), item.get("unit_price")
+            )
