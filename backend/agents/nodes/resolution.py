@@ -92,7 +92,7 @@ Sé comprensivo, ofrece alternativas cuando sea posible y cierra de forma positi
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de resolución."""
     return ChatOpenAI(
-        model="gpt-5-nano",
+        model="gpt-5-mini",
         temperature=0.4,
         max_tokens=4096,
     )

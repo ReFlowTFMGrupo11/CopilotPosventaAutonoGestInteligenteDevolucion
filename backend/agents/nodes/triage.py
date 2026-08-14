@@ -91,7 +91,7 @@ from backend.models import TriageOutput
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de triaje con salida estructurada."""
     return ChatOpenAI(
-        model="gpt-5-nano",
+        model="gpt-5-mini",
         temperature=0,
         max_tokens=4096,
     )
