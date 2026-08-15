@@ -323,27 +323,53 @@ def _flatten_order_number(row: dict) -> dict:
     return row
 
 
+def _flatten_product_names(row: dict) -> dict:
+    """Extrae los nombres de producto del embed anidado return_items→order_items→products.
+
+    Un return puede incluir varios artículos (pedidos mixtos, ver
+    qa_manual_testing_seed_pedidos_mixtos.sql); se unen los nombres con ", "
+    en un único campo `product_names` de primer nivel para la tabla del panel
+    admin.
+    """
+    items = row.pop("return_items", None) or []
+    names = [
+        product.get("name")
+        for item in items
+        for product in [(item.get("order_items") or {}).get("product") or {}]
+        if product.get("name")
+    ]
+    row["product_names"] = ", ".join(names) if names else None
+    return row
+
+
+def _flatten_admin_row(row: dict) -> dict:
+    return _flatten_product_names(_flatten_order_number(row))
+
+
 async def list_pending_approvals() -> list[dict]:
     """Devuelve devoluciones con status pending_approval (HITL)."""
     client = await get_supabase_client()
     resp = await client.table("return_requests").select(
-        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, created_at, orders(order_number)"
+        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, "
+        "created_at, orders(order_number), return_items(order_items(product:products(name)))"
     ).eq("status", "pending_approval").order("created_at", desc=True).execute()
-    return [_flatten_order_number(row) for row in (resp.data or [])]
+    return [_flatten_admin_row(row) for row in (resp.data or [])]
 
 
 async def list_returns(status: str | None = None, limit: int = 50) -> list[dict]:
     """Lista devoluciones con filtro opcional por estado."""
     client = await get_supabase_client()
     query = client.table("return_requests").select(
-        "id, order_id, customer_id, status, reason, reason_category, refund_amount, created_at, resolved_at, orders(order_number)"
+        "id, order_id, customer_id, status, reason, reason_category, refund_amount, "
+        "created_at, resolved_at, orders(order_number), "
+        "return_items(order_items(product:products(name)))"
     ).order("created_at", desc=True).limit(limit)
 
     if status:
         query = query.eq("status", status)
 
     resp = await query.execute()
-    return [_flatten_order_number(row) for row in (resp.data or [])]
+    return [_flatten_admin_row(row) for row in (resp.data or [])]
 
 
 async def get_return_detail(return_id: str) -> dict | None:
