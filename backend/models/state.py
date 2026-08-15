@@ -39,10 +39,13 @@ class ReturnState(TypedDict, total=False):
     return_history: dict[str, Any] | None
 
     # ── Resultado del Agente Evaluador ─────────────────────────────────
-    is_eligible: bool | None
-    eligibility_reason: str | None
+    # Evaluación independiente por artículo (ver ItemEligibility). Un mismo
+    # pedido puede tener artículos elegibles y no elegibles a la vez.
+    items_eligibility: list[dict[str, Any]]
+    any_eligible: bool | None  # True si AL MENOS UN artículo es elegible (usado para el routing)
+    eligibility_reason: str | None  # Resumen agregado, usado por rejection_agent cuando NINGÚN artículo es elegible
     policy_info: dict[str, Any] | None
-    refund_amount: float
+    refund_amount: float  # Suma de refund_amount de los artículos elegibles únicamente
 
     # ── Resultado del Agente de Resolución ─────────────────────────────
     needs_admin_approval: bool

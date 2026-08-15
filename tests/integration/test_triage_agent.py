@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from backend.agents.triage_agent import triage_agent, fetch_order_data
+from backend.agents.nodes.triage import triage_agent, fetch_order_data
 
 
 class TestTriageAgent:
@@ -25,7 +25,7 @@ class TestTriageAgent:
             "messages": [HumanMessage(content="Quiero devolver un producto")],
         }
 
-        with patch("backend.agents.triage_agent._build_llm", return_value=mock_llm):
+        with patch("backend.agents.nodes.triage._build_llm", return_value=mock_llm):
             result = await triage_agent(state)
 
         assert "messages" in result
@@ -53,7 +53,7 @@ class TestTriageAgent:
             "messages": [HumanMessage(content="Mi pedido es ord-123, el artículo está roto")],
         }
 
-        with patch("backend.agents.triage_agent._build_llm", return_value=mock_llm):
+        with patch("backend.agents.nodes.triage._build_llm", return_value=mock_llm):
             result = await triage_agent(state)
 
         assert result["order_id"] == "ord-123"
@@ -69,11 +69,11 @@ class TestFetchOrderData:
     async def test_fetches_order_and_history(self, mock_order_details, mock_return_history_clean):
         """Carga correctamente los datos del pedido y el historial."""
         with patch(
-            "backend.agents.triage_agent.get_order_details",
+            "backend.agents.nodes.triage.get_order_details",
             new_callable=AsyncMock,
             return_value=mock_order_details,
         ), patch(
-            "backend.agents.triage_agent.get_customer_return_history",
+            "backend.agents.nodes.triage.get_customer_return_history",
             new_callable=AsyncMock,
             return_value=mock_return_history_clean,
         ):
@@ -97,7 +97,7 @@ class TestFetchOrderData:
     async def test_returns_error_on_exception(self):
         """Devuelve error si la consulta falla."""
         with patch(
-            "backend.agents.triage_agent.get_order_details",
+            "backend.agents.nodes.triage.get_order_details",
             new_callable=AsyncMock,
             side_effect=Exception("DB connection failed"),
         ):
