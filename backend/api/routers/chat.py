@@ -5,8 +5,10 @@ Dos modos de consumo:
 - POST /api/chat/stream  → Server-Sent Events con progreso en tiempo real.
 """
 
+import asyncio
 import logging
 import uuid
+from collections import defaultdict
 from typing import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -24,6 +26,14 @@ from backend.api.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+# Un lock por thread_id: si dos peticiones para el MISMO hilo llegan
+# solapadas (doble clic, doble envío del frontend, reintento de red...),
+# la segunda espera a que la primera termine en vez de invocar el grafo
+# dos veces en paralelo sobre el mismo checkpoint. Sin esto, la segunda
+# podía toparse con un estado a medias y devolver el mensaje generico de
+# "sigue pendiente de revisión" sin haber creado ningún registro en BD.
+_thread_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
 
 @router.post("/new", response_model=NewChatResponse)
@@ -74,76 +84,93 @@ async def _stream_chat_events(
 ) -> AsyncIterator[ChatStreamEvent]:
     """Genera eventos SSE conforme cada nodo del grafo termina."""
     config = {"configurable": {"thread_id": thread_id}}
+    lock = _thread_locks[thread_id]
 
-    try:
-        # Guard: si el thread ya está pausado por HITL, no re-invocar el grafo
-        existing_state = await graph.aget_state(config)
-        if existing_state and existing_state.next:
-            yield ChatStreamEvent(
-                type="awaiting_admin",
-                content=(
-                    "Tu solicitud sigue pendiente de revisión por nuestro equipo. "
-                    "Te avisaremos en cuanto se resuelva."
-                ),
-            )
-            return
-
-        input_state = {
-            "messages": [HumanMessage(content=message)],
-            "thread_id": thread_id,
-            "selected_item_ids": selected_item_ids,
-        }
-
-        # stream_mode="updates": emite un chunk por cada nodo que termina
-        async for chunk in graph.astream(input_state, config=config, stream_mode="updates"):
-            for node_name in chunk:
-                if node_name == "__interrupt__":
-                    continue
-                yield ChatStreamEvent(
-                    type="agent_step",
-                    agent=node_name,
-                    content=f"Agente «{node_name}» ha completado su turno.",
-                )
-
-        # Tras el streaming, leer estado final para saber si quedó pausado
-        state = await graph.aget_state(config)
-        values = state.values or {}
-
-        if state.next:
-            # El grafo se pausó en un interrupt() → HITL
-            interrupt_payload: dict = {}
-            for task in state.tasks:
-                if task.interrupts:
-                    interrupt_payload = task.interrupts[0].value
-                    break
-            yield ChatStreamEvent(
-                type="awaiting_admin",
-                content=interrupt_payload.get(
-                    "message",
-                    "Tu solicitud requiere aprobación de un administrador. "
-                    "Te avisaremos en cuanto se resuelva.",
-                ),
-                order_id=interrupt_payload.get("order_id"),
-            )
-            return
-
-        # Respuesta final
-        last_message = (values.get("messages") or [None])[-1]
-        content = last_message.content if last_message else "No he podido generar una respuesta."
-
-        yield ChatStreamEvent(
-            type="final",
-            content=content,
-            agent=values.get("current_agent"),
-            order_id=values.get("order_id"),
-            is_eligible=values.get("is_eligible"),
-            tracking_number=values.get("tracking_number"),
-            label_path=values.get("label_path"),
-            resolution=values.get("resolution"),
+    if lock.locked():
+        logger.warning(
+            "Peticion para thread_id=%s solapada con otra en curso; se rechaza "
+            "en vez de invocar el grafo dos veces en paralelo.",
+            thread_id,
         )
-    except Exception as exc:
-        logger.exception("Error en streaming (thread_id=%s)", thread_id)
-        yield ChatStreamEvent(type="error", content=f"Error procesando tu solicitud: {exc}")
+        yield ChatStreamEvent(
+            type="awaiting_admin",
+            content=(
+                "Ya estamos procesando tu mensaje anterior. Espera a que termine "
+                "antes de enviar otro."
+            ),
+        )
+        return
+
+    async with lock:
+        try:
+            # Guard: si el thread ya está pausado por HITL, no re-invocar el grafo
+            existing_state = await graph.aget_state(config)
+            if existing_state and existing_state.next:
+                yield ChatStreamEvent(
+                    type="awaiting_admin",
+                    content=(
+                        "Tu solicitud sigue pendiente de revisión por nuestro equipo. "
+                        "Te avisaremos en cuanto se resuelva."
+                    ),
+                )
+                return
+
+            input_state = {
+                "messages": [HumanMessage(content=message)],
+                "thread_id": thread_id,
+                "selected_item_ids": selected_item_ids,
+            }
+
+            # stream_mode="updates": emite un chunk por cada nodo que termina
+            async for chunk in graph.astream(input_state, config=config, stream_mode="updates"):
+                for node_name in chunk:
+                    if node_name == "__interrupt__":
+                        continue
+                    yield ChatStreamEvent(
+                        type="agent_step",
+                        agent=node_name,
+                        content=f"Agente «{node_name}» ha completado su turno.",
+                    )
+
+            # Tras el streaming, leer estado final para saber si quedó pausado
+            state = await graph.aget_state(config)
+            values = state.values or {}
+
+            if state.next:
+                # El grafo se pausó en un interrupt() → HITL
+                interrupt_payload: dict = {}
+                for task in state.tasks:
+                    if task.interrupts:
+                        interrupt_payload = task.interrupts[0].value
+                        break
+                yield ChatStreamEvent(
+                    type="awaiting_admin",
+                    content=interrupt_payload.get(
+                        "message",
+                        "Tu solicitud requiere aprobación de un administrador. "
+                        "Te avisaremos en cuanto se resuelva.",
+                    ),
+                    order_id=interrupt_payload.get("order_id"),
+                )
+                return
+
+            # Respuesta final
+            last_message = (values.get("messages") or [None])[-1]
+            content = last_message.content if last_message else "No he podido generar una respuesta."
+
+            yield ChatStreamEvent(
+                type="final",
+                content=content,
+                agent=values.get("current_agent"),
+                order_id=values.get("order_id"),
+                is_eligible=values.get("is_eligible"),
+                tracking_number=values.get("tracking_number"),
+                label_path=values.get("label_path"),
+                resolution=values.get("resolution"),
+            )
+        except Exception as exc:
+            logger.exception("Error en streaming (thread_id=%s)", thread_id)
+            yield ChatStreamEvent(type="error", content=f"Error procesando tu solicitud: {exc}")
 
 
 async def _to_sse(events: AsyncIterator[ChatStreamEvent]) -> AsyncIterator[bytes]:
