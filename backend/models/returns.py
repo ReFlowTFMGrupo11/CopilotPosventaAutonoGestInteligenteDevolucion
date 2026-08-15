@@ -47,7 +47,13 @@ class ReturnItem(BaseModel):
     un JSON Schema fijo) como por el structured output del agente de triaje.
     """
 
-    order_item_id: str = Field(description="UUID del order_item a devolver.")
+    order_item_id: str = Field(
+        description=(
+            "UUID del order_item a devolver. Se identifica por el nombre del producto "
+            "que menciona el cliente, cruzándolo con los artículos del pedido ya "
+            "consultado; no se le pide este UUID al cliente."
+        )
+    )
     quantity: int = Field(default=1, description="Unidades a devolver.")
     condition: str = Field(
         default="unknown",
@@ -105,9 +111,12 @@ class TriageOutput(BaseModel):
     response_to_customer: str = Field(
         description="Respuesta empática a mostrar al cliente en este turno."
     )
-    order_id: Optional[str] = Field(
+    order_number: Optional[str] = Field(
         default=None,
-        description="UUID del pedido. None si el cliente aún no lo ha proporcionado.",
+        description=(
+            "Número de pedido tal como lo tiene el cliente en su email de confirmación "
+            "(ej. 'ORD-2026-00177'). None si el cliente aún no lo ha proporcionado."
+        ),
     )
     reason: Optional[str] = Field(
         default=None,

@@ -26,13 +26,15 @@ class ReturnState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
 
     # ── Datos extraídos por el Agente de Triaje ────────────────────────
-    order_id: str | None
+    order_number: str | None  # número de pedido tal cual lo da el cliente (ej. "ORD-2026-00177")
+    order_id: str | None  # UUID interno, resuelto en fetch_order_data a partir de order_number
     customer_id: str | None
     customer_name: str | None
     customer_email: str | None
     reason: str | None
     reason_category: str | None
     items_to_return: list[dict[str, Any]]
+    selected_item_ids: list[str] | None
 
     # ── Datos del pedido (rellenados tras consultar Supabase) ──────────
     order_details: dict[str, Any] | None
@@ -54,6 +56,9 @@ class ReturnState(TypedDict, total=False):
     label_path: str | None
     return_request_id: str | None
     resolution: str | None
+
+    # ── Identificador de sesión LangGraph ─────────────────────────────
+    thread_id: str | None
 
     # ── Control de flujo ───────────────────────────────────────────────
     current_agent: str | None
