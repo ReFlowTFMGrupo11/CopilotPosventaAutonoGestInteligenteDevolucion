@@ -97,7 +97,7 @@ from backend.agents.nodes.policy_rules import (
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el evaluador de políticas."""
     return ChatOpenAI(
-        model="gpt-5-nano",
+        model="gpt-5-mini",
         temperature=0.0,  # Determinista para auditoría
         max_tokens=4096,
     )
