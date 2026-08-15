@@ -55,24 +55,25 @@ st.markdown("### Pendientes de aprobación")
 if not pending:
     st.caption("No hay devoluciones pendientes.")
 else:
-    header = st.columns([2, 2, 1.3, 3, 2.2, 1, 1])
-    for col, label in zip(header, ["Pedido", "Cliente", "Importe", "Motivo", "Motivo decisión", "", ""]):
+    header = st.columns([2, 2, 2.2, 1.3, 3, 2.2, 1, 1])
+    for col, label in zip(header, ["Pedido", "Cliente", "Producto", "Importe", "Motivo", "Motivo decisión", "", ""]):
         col.markdown(f"**{label}**")
 
     for row in pending:
         thread_id = row.get("thread_id") or row.get("id")
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([2, 2, 1.3, 3, 2.2, 1, 1])
+        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2, 2.2, 1.3, 3, 2.2, 1, 1])
         c1.write(row.get("order_number") or row.get("order_id", "—"))
         c2.write(row.get("customer_id", "—"))
-        c3.write(money(row.get("refund_amount")))
-        c4.write(row.get("reason", "—"))
-        reason = c5.text_input(
+        c3.write(row.get("product_names") or "—")
+        c4.write(money(row.get("refund_amount")))
+        c5.write(row.get("reason", "—"))
+        reason = c6.text_input(
             "Motivo", key=f"reason_{thread_id}", placeholder="Motivo (opcional)", label_visibility="collapsed"
         )
-        if c6.button("Aprobar", key=f"approve_{thread_id}", type="primary"):
+        if c7.button("Aprobar", key=f"approve_{thread_id}", type="primary"):
             api.approve(thread_id, reason)
             st.rerun()
-        if c7.button("Rechazar", key=f"reject_{thread_id}"):
+        if c8.button("Rechazar", key=f"reject_{thread_id}"):
             api.reject(thread_id, reason)
             st.rerun()
 
@@ -96,6 +97,7 @@ else:
         {
             "Pedido": r.get("order_number") or r.get("order_id", "—"),
             "Cliente": r.get("customer_id", "—"),
+            "Producto": r.get("product_names") or "—",
             "Importe": money(r.get("refund_amount")),
             "Motivo": r.get("reason", "—"),
             "Estado": styles.STATUS_LABEL.get(r.get("status"), r.get("status") or "—"),
