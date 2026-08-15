@@ -9,6 +9,26 @@ Si la devolución es elegible:
 
 Si no es elegible:
 - Redacta un mensaje empático de rechazo.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ FRONTERA  DETERMINISTA  vs  LLM  en este módulo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ DETERMINISTA  (resolution_agent)
+  - Umbral HITL: refund_amount > 100€ → pausa obligatoria (interrupt).
+  - Creación del registro en BD (create_return_record).
+  - Generación de la etiqueta de transporte (generate_shipping_label).
+  - Actualización de estado en BD (update_return_status).
+  - Envío de notificación al cliente (send_customer_notification).
+  - Decisión de HITL: si admin aprueba/rechaza → actualiza BD y continúa.
+
+ LLM  (resolution_agent + rejection_agent)
+  - Redacción del mensaje final al cliente (aprobación, rechazo, HITL pendiente).
+  - Tono empático y explicación clara de los pasos siguientes.
+
+ REGLA GENERAL:
+  - Todas las acciones sobre BD y servicios externos son deterministas.
+  - El LLM solo redacta los mensajes que ve el cliente.
 """
 
 from __future__ import annotations
@@ -25,7 +45,9 @@ from backend.agents.infra.mcp_client import (
     create_return_record,
     generate_shipping_label,
     send_customer_notification,
+    update_return_status,
 )
+from backend.db.supabase_client import get_supabase_client
 from backend.models import OrderItem
 
 logger = logging.getLogger(__name__)
@@ -72,7 +94,7 @@ Sé comprensivo, ofrece alternativas cuando sea posible y cierra de forma positi
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de resolución."""
     return ChatOpenAI(
-        model="gpt-5-nano",
+        model="gpt-5-mini",
         temperature=0.4,
         max_tokens=4096,
     )
@@ -93,6 +115,7 @@ async def resolution_agent(
 
     refund_amount = state.get("refund_amount", 0.0)
     order_id = state.get("order_id", "")
+    order_number = state.get("order_number", "")
     customer_id = state.get("customer_id", "")
     customer_name = state.get("customer_name", "")
     customer_email = state.get("customer_email", "")
@@ -108,21 +131,74 @@ async def resolution_agent(
         item for item in items_to_return if item.get("order_item_id") in eligible_ids
     ]
 
-    # ── HITL: pausar si el reembolso supera el umbral ──────────────────
-    if refund_amount > HITL_REFUND_THRESHOLD:
+    # ── HITL: pausar si el importe supera el umbral o si el Evaluador
+    #    marcó el caso como "needs_admin_approval" (zona frontera de plazo,
+    #    motivo sensible o cliente frecuente, aunque el importe sea bajo) ──
+    needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > HITL_REFUND_THRESHOLD
+    if needs_admin_approval:
+        # Crear registro o reutilizar existente (re-ejecución tras resume).
+        thread_id = state.get("thread_id", "")
+        try:
+            hitl_record = await create_return_record(
+                order_id=order_id,
+                customer_id=customer_id,
+                reason=reason,
+                reason_category=reason_category,
+                refund_amount=refund_amount,
+                items=items_to_return,
+                notes="Pendiente de aprobación manual (HITL).",
+                thread_id=thread_id,
+            )
+            existing_return_id = hitl_record["return_request"]["id"]
+            await update_return_status(
+                return_id=existing_return_id,
+                status="pending_approval",
+                resolution="",
+                notes=f"Reembolso de {refund_amount:.2f}€ supera umbral o requiere revisión.",
+            )
+        except (RuntimeError, ValueError) as exc:
+            # Guard de duplicados: el registro ya existe (resume tras interrupt)
+            logger.info("HITL record ya existe, reutilizando: %s", exc)
+            # Buscar el ID del registro existente via BD
+            client = await get_supabase_client()
+            resp = await client.table("return_requests").select("id").eq(
+                "order_id", order_id
+            ).in_("status", ["pending_approval", "pending"]).limit(1).execute()
+            existing_return_id = resp.data[0]["id"] if resp.data else ""
+
         admin_response = interrupt({
             "type": "admin_approval_required",
             "refund_amount": refund_amount,
             "order_id": order_id,
+            "order_number": order_number,
             "customer_id": customer_id,
+            "customer_name": customer_name,
             "reason": reason,
+            "return_request_id": existing_return_id,
+            "items": [
+                {
+                    "order_item_id": item.get("order_item_id"),
+                    "quantity": item.get("quantity", 1),
+                    "condition": item.get("condition"),
+                }
+                for item in items_to_return
+            ],
             "message": (
-                f"Se requiere aprobación manual: reembolso de {refund_amount:.2f}€ "
-                f"(umbral: {HITL_REFUND_THRESHOLD:.2f}€)."
+                f"Pedido {order_number} · Cliente: {customer_name} · "
+                f"Artículos: {len(items_to_return)} · "
+                f"Reembolso: {refund_amount:.2f}€ (umbral: {HITL_REFUND_THRESHOLD:.2f}€) · "
+                f"Motivo: {reason_category} — {reason}"
             ),
         })
 
         if not admin_response.get("approved", False):
+            # Admin rechazó: actualizar BD y comunicar al cliente
+            await update_return_status(
+                return_id=existing_return_id,
+                status="rejected",
+                resolution="rejected_by_admin",
+                notes=admin_response.get("reason", "Rechazado por administrador."),
+            )
             rejection_msg = await llm.ainvoke([
                 SystemMessage(
                     content=REJECTION_SYSTEM_PROMPT.format(
@@ -135,11 +211,13 @@ async def resolution_agent(
                     "messages": [rejection_msg],
                     "admin_decision": "rejected",
                     "resolution": "rejected_by_admin",
+                    "return_request_id": existing_return_id,
                     "current_agent": "resolver",
                 },
                 goto="__end__",
             )
 
+    # Admin aprobó (o no hacía falta HITL): continuar con etiqueta + notificación.
     # ── Mapeo order_item_id -> nombre, para etiquetas y mensajes ────────
     order_items = state.get("order_details", {}).get("items", [])
     item_names: dict[str, str] = {}
@@ -164,15 +242,64 @@ async def resolution_agent(
     )
 
     # ── Registrar devolución en Supabase (solo artículos elegibles) ─────
-    return_record = await create_return_record(
-        order_id=order_id,
-        customer_id=customer_id,
-        reason=reason,
-        reason_category=reason_category,
-        refund_amount=refund_amount,
-        items=eligible_items_to_return,
-        notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
-    )
+    # Si viene de HITL aprobado, el registro ya existe (se creó antes del
+    # interrupt, ver bloque HITL arriba); solo hay que marcarlo aprobado.
+    if needs_admin_approval:
+        await update_return_status(
+            return_id=existing_return_id,
+            status="approved",
+            resolution="approved_by_admin",
+            notes=f"Aprobado por administrador. Tracking: {label_result['tracking_number']}",
+        )
+        return_request_id = existing_return_id
+    else:
+        try:
+            return_record = await create_return_record(
+                order_id=order_id,
+                customer_id=customer_id,
+                reason=reason,
+                reason_category=reason_category,
+                refund_amount=refund_amount,
+                items=eligible_items_to_return,
+                notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
+                thread_id=state.get("thread_id", ""),
+            )
+        except (RuntimeError, ValueError) as exc:
+            # Guard de duplicados: ya existe una devolución para este pedido/artículo
+            # (p. ej. reintento del cliente o re-ejecución de un caso de QA).
+            logger.info("Return record ya existe, informando al cliente: %s", exc)
+            client = await get_supabase_client()
+            resp = await client.table("return_requests").select("id, status").eq(
+                "order_id", order_id
+            ).order("created_at", desc=True).limit(1).execute()
+            existing = resp.data[0] if resp.data else {}
+            duplicate_msg = await llm.ainvoke([
+                SystemMessage(
+                    content=(
+                        "Eres el Agente de Resolución de ReFlow. Informa al cliente, de forma "
+                        "clara y empática, de que ya existe una solicitud de devolución en curso "
+                        f"para este pedido (estado actual: {existing.get('status', 'en proceso')}). "
+                        "No hace falta crear una nueva; nuestro equipo ya la está gestionando."
+                    )
+                ),
+            ])
+            return Command(
+                update={
+                    "messages": [duplicate_msg],
+                    "resolution": "duplicate",
+                    "return_request_id": existing.get("id", ""),
+                    "current_agent": "resolver",
+                },
+                goto="__end__",
+            )
+        # ── Marcar como aprobada (auto-aprobación ≤ umbral) ────────────────
+        await update_return_status(
+            return_id=return_record["return_request"]["id"],
+            status="approved",
+            resolution="auto_approved",
+            notes=f"Aprobado automáticamente. Tracking: {label_result['tracking_number']}",
+        )
+        return_request_id = return_record["return_request"]["id"]
 
     # ── Notificar al cliente ───────────────────────────────────────────
     approved_names = [item_names.get(item.get("order_item_id"), "Artículo") for item in eligible_items_to_return]
@@ -183,7 +310,7 @@ async def resolution_agent(
 
     email_body = (
         f"Hola {customer_name},\n\n"
-        f"Tu devolución para el pedido {order_id[:8]}... ha sido procesada.\n\n"
+        f"Tu devolución para el pedido {order_number or order_id} ha sido procesada.\n\n"
         f"Artículos aprobados: {', '.join(approved_names)}\n"
         f"Número de seguimiento: {label_result['tracking_number']}\n"
         f"Reembolso estimado: {refund_amount:.2f}€\n"
@@ -231,7 +358,7 @@ async def resolution_agent(
             "messages": [final_response],
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
-            "return_request_id": return_record["return_request"]["id"],
+            "return_request_id": return_request_id,
             "admin_decision": "auto_approved" if refund_amount <= HITL_REFUND_THRESHOLD else "approved",
             "resolution": "partially_approved" if rejected_items else "approved",
             "current_agent": "resolver",

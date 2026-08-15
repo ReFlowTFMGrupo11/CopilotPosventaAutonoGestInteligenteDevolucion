@@ -57,21 +57,24 @@ def calculate_days_since_delivery(order_details: dict) -> int:
 # ---------------------------------------------------------------------------
 
 
-async def get_order_details(order_id: str) -> dict:
+async def get_order_details(order_number: str) -> dict:
     """Consulta en PostgreSQL los detalles del pedido, fechas y productos comprados.
 
+    Se busca por el número de pedido (el dato que tiene el cliente), no por el
+    UUID interno: ese se devuelve dentro de "order"/"id" para uso interno del grafo.
+
     Args:
-        order_id: UUID del pedido a consultar.
+        order_number: Número de pedido tal como lo tiene el cliente (ej. "ORD-2026-00177").
     """
     client = await get_supabase_client()
 
     order_resp = await client.table("orders").select(
         "*, customer:customers(id, email, full_name)"
-    ).eq("id", order_id).single().execute()
+    ).eq("order_number", order_number).single().execute()
 
     items_resp = await client.table("order_items").select(
         "*, product:products(name, sku, category, price, weight_kg)"
-    ).eq("order_id", order_id).execute()
+    ).eq("order_id", order_resp.data["id"]).execute()
 
     return {
         "order": order_resp.data,
@@ -169,6 +172,7 @@ async def create_return_record(
     refund_amount: float,
     items: list[dict],
     notes: str = "",
+    thread_id: str = "",
 ) -> dict:
     """Inserta una solicitud de devolución en la tabla devoluciones de Supabase.
 
@@ -184,6 +188,51 @@ async def create_return_record(
     """
     client = await get_supabase_client()
 
+    # ── Guard: evitar devoluciones duplicadas para el mismo pedido ──────
+    # - Bloquear si ya hay una devolución ACTIVA del pedido.
+    # - Bloquear si alguno de los order_item_id ya fue devuelto antes
+    #   (approved/completed o también activo).
+    active_statuses = {"pending", "pending_approval", "processing"}
+    historical_statuses = active_statuses | {"approved", "completed"}
+
+    existing = await (
+        client.table("return_requests")
+        .select("id, status, return_items(order_item_id)")
+        .eq("order_id", order_id)
+        .in_("status", list(historical_statuses))
+        .execute()
+    )
+
+    active_returns = [
+        row for row in (existing.data or [])
+        if row.get("status") in active_statuses
+    ]
+    if active_returns:
+        raise ValueError(
+            f"Ya existe una devolución activa para el pedido {order_id} "
+            f"(id={active_returns[0]['id']}, status={active_returns[0]['status']})."
+        )
+
+    requested_item_ids = {
+        item.get("order_item_id")
+        for item in items
+        if item.get("order_item_id")
+    }
+    previously_returned_item_ids = {
+        ret_item.get("order_item_id")
+        for row in (existing.data or [])
+        for ret_item in (row.get("return_items") or [])
+        if ret_item.get("order_item_id")
+    }
+
+    duplicated_item_ids = requested_item_ids & previously_returned_item_ids
+    if duplicated_item_ids:
+        duplicated_str = ", ".join(sorted(duplicated_item_ids))
+        raise ValueError(
+            "Ya existe una devolución previa para el/los artículo(s): "
+            f"{duplicated_str}."
+        )
+
     # Toda devolución nueva arranca en estado "pending".
     return_data = {
         "order_id": order_id,
@@ -194,6 +243,8 @@ async def create_return_record(
         "refund_amount": refund_amount,
         "notes": notes,
     }
+    if thread_id:
+        return_data["thread_id"] = thread_id
 
     return_resp = await client.table("return_requests").insert(return_data).execute()
     return_request = return_resp.data[0]
@@ -253,3 +304,72 @@ async def update_return_status(
     ).execute()
 
     return {"updated_return": resp.data[0] if resp.data else None}
+
+
+# ---------------------------------------------------------------------------
+# Consultas admin (panel HITL y dashboard)
+# ---------------------------------------------------------------------------
+
+
+def _flatten_order_number(row: dict) -> dict:
+    """Extrae `orders.order_number` del embed de PostgREST a un campo plano.
+
+    El cliente de Supabase devuelve el join como `row["orders"]["order_number"]`;
+    el frontend quiere un `order_number` de primer nivel, junto al `order_id`
+    (UUID interno), para poder mostrarlo y usarlo en el buscador de pedidos.
+    """
+    order = row.pop("orders", None) or {}
+    row["order_number"] = order.get("order_number")
+    return row
+
+
+async def list_pending_approvals() -> list[dict]:
+    """Devuelve devoluciones con status pending_approval (HITL)."""
+    client = await get_supabase_client()
+    resp = await client.table("return_requests").select(
+        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, created_at, orders(order_number)"
+    ).eq("status", "pending_approval").order("created_at", desc=True).execute()
+    return [_flatten_order_number(row) for row in (resp.data or [])]
+
+
+async def list_returns(status: str | None = None, limit: int = 50) -> list[dict]:
+    """Lista devoluciones con filtro opcional por estado."""
+    client = await get_supabase_client()
+    query = client.table("return_requests").select(
+        "id, order_id, customer_id, status, reason, reason_category, refund_amount, created_at, resolved_at, orders(order_number)"
+    ).order("created_at", desc=True).limit(limit)
+
+    if status:
+        query = query.eq("status", status)
+
+    resp = await query.execute()
+    return [_flatten_order_number(row) for row in (resp.data or [])]
+
+
+async def get_return_detail(return_id: str) -> dict | None:
+    """Detalle de una devolución específica con sus items."""
+    client = await get_supabase_client()
+    resp = await client.table("return_requests").select(
+        "*, return_items(id, order_item_id, quantity, condition)"
+    ).eq("id", return_id).single().execute()
+    return resp.data
+
+
+async def get_return_stats() -> dict:
+    """KPIs generales del sistema de devoluciones."""
+    client = await get_supabase_client()
+    resp = await client.table("return_requests").select("status").execute()
+    returns = resp.data or []
+
+    total = len(returns)
+    approved = sum(1 for r in returns if r["status"] == "approved")
+    rejected = sum(1 for r in returns if r["status"] == "rejected")
+    pending = sum(1 for r in returns if r["status"] in ("pending", "pending_approval"))
+
+    return {
+        "total_returns": total,
+        "approved": approved,
+        "rejected": rejected,
+        "pending": pending,
+        "approval_rate": round(approved / total * 100, 1) if total > 0 else 0,
+    }

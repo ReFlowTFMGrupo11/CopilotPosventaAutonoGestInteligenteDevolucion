@@ -180,6 +180,7 @@ class TestResolutionMixedCategories:
         create_return_mock = AsyncMock(
             return_value={"return_request": {"id": "ret-mixed-uuid"}}
         )
+        update_status_mock = AsyncMock(return_value={"updated": True})
         notify_mock = AsyncMock(return_value={"sent": True})
 
         items_eligibility = [
@@ -215,6 +216,7 @@ class TestResolutionMixedCategories:
         with patch("backend.agents.nodes.resolution._build_llm", return_value=mock_llm), \
              patch("backend.agents.nodes.resolution.generate_shipping_label", label_mock), \
              patch("backend.agents.nodes.resolution.create_return_record", create_return_mock), \
+             patch("backend.agents.nodes.resolution.update_return_status", update_status_mock), \
              patch("backend.agents.nodes.resolution.send_customer_notification", notify_mock):
             command = await resolution_agent(state)
 

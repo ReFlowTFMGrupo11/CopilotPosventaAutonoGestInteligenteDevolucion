@@ -14,6 +14,7 @@ Requiere que los MCP servers estén levantados:
 
 from __future__ import annotations
 
+import json
 import os
 import logging
 from typing import Any
@@ -96,6 +97,28 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
         raise ValueError(f"Tool '{tool_name}' no encontrada en server '{server_name}'.")
 
     result = await tool.ainvoke(args)
+
+    # MCP tool responses may come as raw JSON strings or content blocks.
+    # Parse them to return a proper Python dict/list.
+    if isinstance(result, str):
+        # Check for error prefix
+        if result.startswith("Error executing tool"):
+            raise RuntimeError(f"MCP tool '{tool_name}' failed: {result}")
+        try:
+            return json.loads(result)
+        except (json.JSONDecodeError, ValueError):
+            return result
+    if isinstance(result, list) and result:
+        # Content block list — extract text from first block
+        first = result[0]
+        text = first.get("text", first) if isinstance(first, dict) else str(first)
+        # Check for error prefix
+        if isinstance(text, str) and text.startswith("Error executing tool"):
+            raise RuntimeError(f"MCP tool '{tool_name}' failed: {text}")
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return result
     return result
 
 
@@ -104,9 +127,9 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 
 
-async def get_order_details(order_id: str) -> dict:
+async def get_order_details(order_number: str) -> dict:
     """Consulta detalles del pedido via MCP."""
-    return await call_tool("get_order_details", {"order_id": order_id})
+    return await call_tool("get_order_details", {"order_number": order_number})
 
 
 async def get_customer_return_history(customer_id: str) -> dict:
@@ -127,6 +150,7 @@ async def create_return_record(
     refund_amount: float,
     items: list[dict],
     notes: str = "",
+    thread_id: str = "",
 ) -> dict:
     """Crea registro de devolución via MCP."""
     return await call_tool("create_return_record", {
@@ -137,6 +161,7 @@ async def create_return_record(
         "refund_amount": refund_amount,
         "items": items,
         "notes": notes,
+        "thread_id": thread_id,
     })
 
 

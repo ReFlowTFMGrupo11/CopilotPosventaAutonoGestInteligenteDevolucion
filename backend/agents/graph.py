@@ -4,18 +4,52 @@ Grafo de devoluciones – Orquestación LangGraph.
 Define el ``StateGraph`` que conecta los tres agentes:
   Triaje → Fetch datos → Evaluador → Resolución/Rechazo
 con soporte HITL para reembolsos > 100 €.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ FRONTERA  DETERMINISTA  vs  LLM  en este módulo
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ TODO el enrutamiento del grafo es 100% DETERMINISTA.
+ El LLM nunca decide qué nodo se ejecuta a continuación.
+
+ Guards deterministas (funciones route_*):
+
+   route_after_triage:
+     → fetch_order_data  si hay order_number (pedido identificado).
+     → __end__           si falta order_number (esperar al cliente).
+
+   route_after_fetch  (Guard B principal del flujo):
+     → evaluator   si y solo si:
+                     - No hay error de pedido.
+                     - items_to_return tiene al menos 1 ítem con condition válida
+                       (no vacía, no "unknown")  ← _has_valid_items_to_return
+                     - Hay reason + reason_category informados.
+                       ← _has_reason_data
+     → __end__     en cualquier otro caso (pedir más datos al cliente).
+
+   route_after_evaluator:
+     → resolver    si is_eligible=True o needs_admin_approval=True.
+     → reject      si la política lo rechaza claramente.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import sys
 from typing import Literal
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg_pool import AsyncConnectionPool
+
+if sys.platform == "win32":
+    # psycopg en modo async no soporta el ProactorEventLoop (el por defecto en
+    # asyncio en Windows desde Python 3.8); necesita SelectorEventLoop. Sin esto,
+    # AsyncConnectionPool falla al conectar aunque las credenciales sean correctas.
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from backend.agents.nodes.policy import policy_evaluator_agent
 from backend.agents.nodes.resolution import (
@@ -32,31 +66,56 @@ logger = logging.getLogger(__name__)
 # ── Funciones de enrutamiento (aristas condicionales) ──────────────────────
 
 
+def _has_valid_items_to_return(state: ReturnState) -> bool:
+    """True si hay al menos un item y todos tienen condition válida."""
+    items_to_return = state.get("items_to_return") or []
+    if not items_to_return:
+        return False
+
+    for item in items_to_return:
+        condition = (item.get("condition") or "").strip().lower()
+        if not condition or condition == "unknown":
+            return False
+    return True
+
+
+def _has_reason_data(state: ReturnState) -> bool:
+    """True si hay motivo y categoría de motivo informados."""
+    reason = (state.get("reason") or "").strip()
+    reason_category = (state.get("reason_category") or "").strip()
+    return bool(reason and reason_category)
+
+
 def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "__end__"]:
     """Decide si avanzar a consultar datos o terminar el turno.
 
-    Avanza cuando tenemos ``order_id`` y al menos un artículo a devolver.
-    Si falta información, el turno termina (END) y el caller re-invoca
-    el grafo con el siguiente mensaje del usuario. El checkpointer
-    preserva el estado entre turnos.
+    Avanza en cuanto tenemos ``order_number``: primero para mostrarle al
+    cliente los artículos del pedido (``order_details`` aún vacío), y de
+    nuevo una vez que ya sabe qué artículo devolver (``items_to_return``
+    relleno) para evaluar la devolución. Si solo tenemos el pedido pero
+    todavía no el artículo, el turno termina (END) a la espera de que el
+    cliente responda; el checkpointer preserva el estado entre turnos.
     """
-    order_id = state.get("order_id")
-    items = state.get("items_to_return", [])
-
-    if order_id and items:
+    order_number = state.get("order_number")
+    if not order_number:
+        return "__end__"
+    if not state.get("order_details") or state.get("items_to_return"):
         return "fetch_order_data"
-
-    # Falta información → terminar turno; el usuario responderá
     return "__end__"
 
 
 def route_after_fetch(state: ReturnState) -> Literal["evaluator", "__end__"]:
-    """Decide si avanzar al evaluador o terminar turno (si hubo error).
+    """Decide si avanzar al evaluador o terminar turno.
 
-    Si el pedido no se encontró, el agente de triaje ya dejó un mensaje
-    pidiendo corrección. Terminamos el turno para que el usuario responda.
+    Termina el turno si hubo un error (pedido no encontrado) o si todavía
+    no sabemos qué artículo quiere devolver el cliente (fetch_order_data ya
+    ha dejado el mensaje preguntándolo).
     """
     if state.get("error"):
+        return "__end__"
+    if not _has_valid_items_to_return(state):
+        return "__end__"
+    if not _has_reason_data(state):
         return "__end__"
     return "evaluator"
 
@@ -66,10 +125,13 @@ def route_after_evaluator(state: ReturnState) -> Literal["resolver", "reject"]:
 
     Un pedido con elegibilidad mixta (algunos artículos sí, otros no) avanza
     a ``resolver``, que se encarga de procesar solo los elegibles y explicar
-    al cliente por qué los demás no proceden. Solo se rechaza el turno
-    completo cuando NINGÚN artículo es elegible.
+    al cliente por qué los demás no proceden. También avanza si el Evaluador
+    marcó ``needs_admin_approval`` (reservado para una futura comprobación
+    determinista adicional; hoy ``policy_evaluator_agent`` no lo fija, así
+    que se comporta como ``False``). Solo se rechaza el turno completo
+    cuando NINGÚN artículo es elegible.
     """
-    if state.get("any_eligible"):
+    if state.get("any_eligible") or state.get("needs_admin_approval"):
         return "resolver"
     return "reject"
 
@@ -92,17 +154,27 @@ async def build_return_graph(checkpointer=None):
         db_url = os.getenv("SUPABASE_DB_URL")
         if db_url:
             try:
-                # Crear pool async con open=False para evitar deprecation warning
-                pool = AsyncConnectionPool(db_url, min_size=1, max_size=3, open=False)
+                # autocommit=True y prepare_threshold=0: mismo patrón que usa
+                # AsyncPostgresSaver.from_conn_string() internamente. Sin autocommit,
+                # checkpointer.setup() falla porque ejecuta CREATE INDEX CONCURRENTLY,
+                # que Postgres no permite dentro de un bloque de transacción.
+                pool = AsyncConnectionPool(
+                    db_url,
+                    min_size=1,
+                    max_size=3,
+                    open=False,
+                    kwargs={"autocommit": True, "prepare_threshold": 0},
+                )
                 # Abrir explícitamente (establece las conexiones al DB)
                 await pool.open()
                 checkpointer = AsyncPostgresSaver(pool)
+                await checkpointer.setup()
                 logger.info("Checkpointer: AsyncPostgresSaver (persistente).")
             except Exception as exc:
                 logger.warning(
                     "No se pudo conectar a PostgreSQL (%s). Usando InMemorySaver.", exc
                 )
-                #checkpointer = InMemorySaver()
+                checkpointer = InMemorySaver()
         else:
             logger.warning("SUPABASE_DB_URL no configurada. Usando InMemorySaver (no persistente).")
             checkpointer = InMemorySaver()

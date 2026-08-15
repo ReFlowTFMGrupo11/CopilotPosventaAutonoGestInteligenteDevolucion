@@ -52,3 +52,6 @@ gemini-code-*.json
 # Claude Code: settings.json (compartido) sí se versiona; settings.local.json
 # es la config/permisos personal de cada desarrollador, no se comparte
 .claude/settings.local.json
+node_modules/
+frontend/node_modules/
+.reflow_pids

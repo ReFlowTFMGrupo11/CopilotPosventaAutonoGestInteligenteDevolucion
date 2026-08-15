@@ -3,12 +3,12 @@ Agente Evaluador de Políticas.
 
 Actúa como auditor. Consulta:
 1. El historial del pedido (datos ya cargados en el estado).
-2. La base vectorial de normas (RAG via ``search_return_policy``).
+2. La base vectorial de normas (RAG via ``search_return_policy``), una vez
+   por cada categoría distinta presente en ``items_to_return``.
 
-Verifica de forma estricta si la devolución es elegible basándose en:
-- Plazos de devolución según categoría.
-- Estado del producto.
-- Historial de devoluciones del cliente (detección de abuso).
+Evalúa CADA artículo de la solicitud de forma independiente, con una única
+llamada al LLM de salida estructurada (``PolicyEvaluationOutput``): un mismo
+pedido puede terminar con unos artículos elegibles y otros no.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ artículo recibido en "Artículos a evaluar", identificada por su `order_item_id
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el evaluador de políticas."""
     return ChatOpenAI(
-        model="gpt-5-nano",
+        model="gpt-5-mini",
         temperature=0.0,  # Determinista para auditoría
         max_tokens=4096,
     )
@@ -89,7 +89,6 @@ def _category_by_item_id(order_details: dict[str, Any]) -> dict[str, str]:
         if oi.id and oi.product and oi.product.category:
             categories[oi.id] = oi.product.category
     return categories
-
 
 
 async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
