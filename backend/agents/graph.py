@@ -62,8 +62,14 @@ def route_after_fetch(state: ReturnState) -> Literal["evaluator", "__end__"]:
 
 
 def route_after_evaluator(state: ReturnState) -> Literal["resolver", "reject"]:
-    """Decide si la devolución es elegible o debe rechazarse."""
-    if state.get("is_eligible"):
+    """Decide si al menos un artículo es elegible o si hay que rechazar todo.
+
+    Un pedido con elegibilidad mixta (algunos artículos sí, otros no) avanza
+    a ``resolver``, que se encarga de procesar solo los elegibles y explicar
+    al cliente por qué los demás no proceden. Solo se rechaza el turno
+    completo cuando NINGÚN artículo es elegible.
+    """
+    if state.get("any_eligible"):
         return "resolver"
     return "reject"
 
