@@ -86,6 +86,16 @@ def _has_reason_data(state: ReturnState) -> bool:
     return bool(reason and reason_category)
 
 
+def _items_confirmed(state: ReturnState) -> bool:
+    """True si el cliente ya confirmó explícitamente el estado inferido.
+
+    Red de seguridad frente a la interpretación semántica (no basada en
+    keywords) de ``condition`` en triage.py: no se avanza al Evaluador con
+    una condición que el LLM dedujo pero el cliente no ha ratificado.
+    """
+    return bool(state.get("items_confirmed"))
+
+
 def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "__end__"]:
     """Decide si avanzar a consultar datos o terminar el turno.
 
@@ -116,6 +126,8 @@ def route_after_fetch(state: ReturnState) -> Literal["evaluator", "__end__"]:
     if not _has_valid_items_to_return(state):
         return "__end__"
     if not _has_reason_data(state):
+        return "__end__"
+    if not _items_confirmed(state):
         return "__end__"
     return "evaluator"
 

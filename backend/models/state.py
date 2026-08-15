@@ -35,6 +35,10 @@ class ReturnState(TypedDict, total=False):
     reason_category: str | None
     items_to_return: list[dict[str, Any]]
     selected_item_ids: list[str] | None
+    # True solo cuando el cliente ha confirmado explícitamente el resumen de
+    # artículos + motivo + estado que el agente le mostró. Se resetea a False
+    # en cuanto items_to_return cambia de contenido (ver triage.py::_items_key).
+    items_confirmed: bool
 
     # ── Datos del pedido (rellenados tras consultar Supabase) ──────────
     order_details: dict[str, Any] | None
