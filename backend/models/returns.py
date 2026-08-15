@@ -130,3 +130,14 @@ class TriageOutput(BaseModel):
         default=None,
         description="Lista de artículos a devolver. None si aún no se conocen.",
     )
+    items_confirmed: Optional[bool] = Field(
+        default=None,
+        description=(
+            "True SOLO si el último mensaje del cliente confirma explícitamente "
+            "(ej. 'sí', 'correcto', 'exacto', 'así es') el resumen de artículos, "
+            "motivo y estado que le mostraste en tu turno anterior. En cualquier "
+            "otro caso (incluida la primera vez que infieres el estado) déjalo "
+            "en None/False: la confirmación nunca se da en el mismo turno en que "
+            "se infiere el estado."
+        ),
+    )
