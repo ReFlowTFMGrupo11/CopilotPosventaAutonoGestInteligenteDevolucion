@@ -95,3 +95,45 @@ pytest tests/ -q
 
 - No se tocaron los bugs preexistentes no relacionados (mocks rotos de `supabase_service`, `test_routing.py::TestRouteAfterTriage`, tests de `triage_agent`/`test_graph_flow.py` con rutas de `patch()` incorrectas, tests MCP sin marcar como async). Están fuera del alcance de "elegibilidad por artículo" y se documentaron por separado en `CoberturaDevoluvionMixta.md`.
 - No se migró ningún criterio a un motor determinista en Python (Opción C). Sigue siendo el LLM quien decide, con salida estructurada — auditable, pero no 100% determinista. Queda anotado en `CoberturaDevoluvionMixta.md` como posible evolución futura.
+
+## Merge con `origin/main` (2026-08-15)
+
+La rama se creó a partir de un `main` local que estaba 40 commits por detrás de `origin/main` (FastAPI backend nuevo, frontend Streamlit nuevo, `policy_rules.py`, triage con `order_number`/selección por checkboxes, `start_all.sh`, docs, etc.). Se hizo `git fetch origin` + `git merge origin/main` sobre esta rama para traer esos archivos. Detalle completo de la comparación previa al merge en el "Registro de cambios" de `CoberturaDevoluvionMixta.md`.
+
+### Hallazgo antes de mergear
+`origin/main` había añadido de forma independiente `backend/agents/nodes/policy_rules.py` (motor de reglas deterministas, "Chain of Rules") como capa de refuerzo sobre el LLM en `policy.py`. Pero **seguía sin corregir el bug de este documento**: su `policy_evaluator_agent` seguía tomando `product_category` del primer artículo del pedido y `condition = items_to_return[0]...` — exactamente la misma limitación de "una sola categoría/decisión por pedido", solo que con un backstop determinista encima.
+
+### Conflictos y cómo se resolvieron
+El merge produjo conflictos en 4 archivos (los demás — `start_al.sh`, `frontend/`, `backend/api/`, `policy_rules.py`, `docs/`, etc. — se incorporaron limpios sin conflicto):
+
+| Archivo | Resolución | Por qué |
+|---|---|---|
+| `backend/agents/nodes/policy.py` | Se prioriza ENTERO el fix de este documento (evaluación per-artículo, salida estructurada); se descarta la integración con `policy_rules.py` | El motor determinista de origin/main no arregla el bug de la categoría única; adoptarlo habría requerido reescribirlo para operar por artículo, que es justo el trabajo que ya hace este fix de otra forma. Se conservó la mejora suelta y no conflictiva del modelo `gpt-5-mini`. |
+| `backend/agents/nodes/resolution.py` | Combinación real de ambos lados: se mantiene el filtrado por `items_eligibility`/artículo elegible (este fix) **y** se conservan las mejoras de origin/main que son ortogonales — guard de duplicados al crear el registro de devolución, creación del registro *antes* del `interrupt` de HITL (evita condiciones de carrera en el resume), `thread_id` y `order_number` en el mensaje al cliente | Estas mejoras de origin/main no compiten con "elegibilidad por artículo", son correcciones de robustez distintas; descartarlas habría reintroducido bugs ya arreglados por el equipo. Solo se adaptó el argumento `items=` de `create_return_record` para que use `eligible_items_to_return` en vez de `items_to_return` completo. |
+| `backend/agents/graph.py` | Se mantiene `route_after_evaluator` basado en `any_eligible`, con un `or state.get("needs_admin_approval")` añadido por compatibilidad — hoy siempre `False` porque `policy.py` no lo fija | `route_after_triage` y `route_after_fetch` (reescritos por origin/main con guards de `order_number` y validación de `condition`/`reason`) no tocaban nada de mi fix y se incorporaron sin conflicto. |
+| `tests/integration/test_triage_agent.py` | Un solo import añadido por origin/main (`from backend.models import TriageOutput`) | El resto del archivo ya venía reescrito por origin/main sin conflicto, porque mi único cambio previo ahí era un import-fix ya superado. |
+
+### Efecto en `backend/models/state.py` y `backend/models/returns.py`
+Estos dos merged **sin conflicto**: git combinó automáticamente mis campos (`items_eligibility`, `any_eligible`, `ItemEligibility`, `PolicyEvaluationOutput`) con los nuevos de origin/main (`order_number`, `selected_item_ids`, `needs_admin_approval`, `thread_id`), porque tocaban zonas distintas del `TypedDict`/módulo.
+
+### Ajuste de test tras el merge
+`tests/integration/test_mixed_category_order_returns.py::test_only_eligible_item_is_shipped_and_refunded` empezó a fallar por un intento de conexión real a un servidor MCP: el `resolution_agent` fusionado añade una llamada a `update_return_status(...)` (mejora traída de origin/main) que el test no mockeaba. Se añadió `update_status_mock` al `with patch(...)` del test.
+
+### Verificación tras el merge
+```bash
+pytest tests/integration/test_policy_agent.py tests/integration/test_mixed_category_order_returns.py \
+       tests/integration/test_resolution_agent.py tests/unit/test_routing.py -v
+# 27 passed
+
+pytest tests/ -q --ignore=tests/unit/test_api_endpoints.py
+# 53 passed, 5 failed (los 5 son bugs preexistentes de test_graph_flow.py —
+# build_return_graph() sin await, no relacionado con este fix — y los tests
+# MCP sin marcar @pytest.mark.asyncio; confirmado que ya fallaban por lo
+# mismo antes del merge). test_api_endpoints.py se excluyó porque requiere
+# dependencias de FastAPI que no están instaladas en este entorno.
+```
+Antes del merge la suite completa daba 18 failed / 34 passed; tras el merge, los 5 fallos de `test_routing.py::TestRouteAfterTriage` y los 6 de `test_supabase_service.py` que documentaba `CoberturaDevoluvionMixta.md` **se corrigieron solos**, porque venían de que esos tests ya estaban pensados para el `supabase_service.py`/`graph.py` nuevos de origin/main.
+
+### Commits
+- `ea84e41` — fix(policy): evaluar elegibilidad de devolución por artículo, no por pedido completo.
+- `90fabbf` — Merge origin/main into fixed-pedido-varios-items-categorias-distintas-devolver.
