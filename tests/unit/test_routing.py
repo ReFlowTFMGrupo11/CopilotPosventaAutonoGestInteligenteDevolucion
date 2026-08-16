@@ -94,15 +94,26 @@ class TestRouteAfterEvaluator:
     """Tests para la decisión de routing post-evaluador."""
 
     def test_routes_to_resolver_when_eligible(self):
-        state = {"is_eligible": True}
+        state = {"any_eligible": True}
+        assert route_after_evaluator(state) == "resolver"
+
+    def test_routes_to_resolver_when_mixed_eligibility(self):
+        """Basta con que UN artículo sea elegible para avanzar a resolver."""
+        state = {
+            "any_eligible": True,
+            "items_eligibility": [
+                {"order_item_id": "oi-1", "is_eligible": True},
+                {"order_item_id": "oi-2", "is_eligible": False},
+            ],
+        }
         assert route_after_evaluator(state) == "resolver"
 
     def test_routes_to_reject_when_not_eligible(self):
-        state = {"is_eligible": False}
+        state = {"any_eligible": False}
         assert route_after_evaluator(state) == "reject"
 
     def test_routes_to_reject_when_none(self):
-        state = {"is_eligible": None}
+        state = {"any_eligible": None}
         assert route_after_evaluator(state) == "reject"
 
     def test_routes_to_reject_when_missing(self):

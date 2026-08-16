@@ -86,6 +86,16 @@ def _has_reason_data(state: ReturnState) -> bool:
     return bool(reason and reason_category)
 
 
+def _items_confirmed(state: ReturnState) -> bool:
+    """True si el cliente ya confirmó explícitamente el estado inferido.
+
+    Red de seguridad frente a la interpretación semántica (no basada en
+    keywords) de ``condition`` en triage.py: no se avanza al Evaluador con
+    una condición que el LLM dedujo pero el cliente no ha ratificado.
+    """
+    return bool(state.get("items_confirmed"))
+
+
 def route_after_triage(state: ReturnState) -> Literal["fetch_order_data", "__end__"]:
     """Decide si avanzar a consultar datos o terminar el turno.
 
@@ -117,20 +127,23 @@ def route_after_fetch(state: ReturnState) -> Literal["evaluator", "__end__"]:
         return "__end__"
     if not _has_reason_data(state):
         return "__end__"
+    if not _items_confirmed(state):
+        return "__end__"
     return "evaluator"
 
 
 def route_after_evaluator(state: ReturnState) -> Literal["resolver", "reject"]:
-    """Decide si la devolución avanza a resolución o se rechaza directamente.
+    """Decide si al menos un artículo es elegible o si hay que rechazar todo.
 
-    Avanza a "resolver" tanto si el Evaluador la considera elegible como si
-    la marcó ``needs_admin_approval`` (zona frontera de plazo, motivo
-    sensible, cliente frecuente o importe > umbral): en ambos casos la
-    decisión final la confirma un administrador vía HITL (ver
-    ``resolution_agent``). Solo va directa a "reject" un caso claramente
-    inválido según la política.
+    Un pedido con elegibilidad mixta (algunos artículos sí, otros no) avanza
+    a ``resolver``, que se encarga de procesar solo los elegibles y explicar
+    al cliente por qué los demás no proceden. También avanza si el Evaluador
+    marcó ``needs_admin_approval`` (reservado para una futura comprobación
+    determinista adicional; hoy ``policy_evaluator_agent`` no lo fija, así
+    que se comporta como ``False``). Solo se rechaza el turno completo
+    cuando NINGÚN artículo es elegible.
     """
-    if state.get("is_eligible") or state.get("needs_admin_approval"):
+    if state.get("any_eligible") or state.get("needs_admin_approval"):
         return "resolver"
     return "reject"
 
