@@ -18,6 +18,14 @@ styles.render_backend_banner(api.health())
 if "messages" not in st.session_state:
     st.session_state.messages = []  # cada item: {"kind": "user"|"agent"|"awaiting"|"error", "text": str}
 
+# Mensaje/selección ya aceptados pero aún no enviados al backend, y flag de
+# "hay una petición en curso": evita que un segundo envío (input o checkbox)
+# se solape con el anterior sobre el mismo thread_id mientras se procesa.
+if "processing" not in st.session_state:
+    st.session_state.processing = False
+if "pending_request" not in st.session_state:
+    st.session_state.pending_request = None  # {"text": str, "selected_item_ids": list[str]}
+
 if "thread_id" not in st.session_state:
     try:
         st.session_state.thread_id = api.new_chat()
@@ -56,7 +64,7 @@ def render_bubble(kind: str, text: str) -> None:
 
 
 def _render_item_selection(
-    items: list[dict],
+    items: list[dict], disabled: bool = False
 ) -> tuple[list[str], list[str], bool]:
     """Renderiza checkboxes de selección de ítems.
 
@@ -70,13 +78,13 @@ def _render_item_selection(
     for item in items:
         item_id = item.get("id")
         label = f"{item.get('name','Artículo')} · cant: {item.get('quantity',1)} · precio: {item.get('unit_price')}€"
-        if item_id and st.checkbox(label, key=f"item_select_{item_id}"):
+        if item_id and st.checkbox(label, key=f"item_select_{item_id}", disabled=disabled):
             selected_ids.append(item_id)
             selected_names.append(item.get("name", "Artículo"))
     st.caption(f"Seleccionados: {len(selected_ids)}")
     submitted = st.button(
         "Confirmar selección y continuar",
-        disabled=not selected_ids,
+        disabled=disabled or not selected_ids,
         use_container_width=True,
     )
     return selected_ids, selected_names, submitted
@@ -94,24 +102,47 @@ if not st.session_state.messages:
 for message in st.session_state.messages:
     render_bubble(message["kind"], message["text"])
 
+processing = st.session_state.processing
+
 selected_item_ids: list[str] = []
 selected_item_names: list[str] = []
 selection_submitted = False
 if order_items and selection_required:
-    selected_item_ids, selected_item_names, selection_submitted = _render_item_selection(order_items)
+    selected_item_ids, selected_item_names, selection_submitted = _render_item_selection(
+        order_items, disabled=processing
+    )
 
-prompt = st.chat_input("Escribe tu mensaje..." if thread_id else "Conectando...", disabled=not thread_id)
+prompt = st.chat_input(
+    "Escribe tu mensaje..." if thread_id else "Conectando...",
+    disabled=not thread_id or processing,
+)
 
-user_text: str | None = None
-if selection_submitted:
-    user_text = "Quiero devolver: " + ", ".join(selected_item_names)
-elif prompt:
-    user_text = prompt
+# ── Fase 1: aceptar el mensaje/selección y bloquear el input ───────────────
+# No se llama al backend en esta misma ejecución: solo se pinta la burbuja
+# del usuario, se marca "processing" y se relanza. Así el chat_input queda
+# deshabilitado (línea de arriba) antes de que empiece la llamada de red,
+# evitando que un segundo envío rápido dispare una ejecución del grafo
+# solapada sobre el mismo thread_id (causaba respuestas fantasma de HITL
+# sin ningún registro creado en BD).
+if not processing:
+    user_text: str | None = None
+    if selection_submitted:
+        user_text = "Quiero devolver: " + ", ".join(selected_item_names)
+    elif prompt:
+        user_text = prompt
 
-if user_text:
-    st.session_state.messages.append({"kind": "user", "text": user_text})
-    render_bubble("user", user_text)
+    if user_text:
+        st.session_state.messages.append({"kind": "user", "text": user_text})
+        st.session_state.pending_request = {
+            "text": user_text,
+            "selected_item_ids": selected_item_ids or None,
+        }
+        st.session_state.processing = True
+        st.rerun()
 
+# ── Fase 2: procesar la petición pendiente (si la hay) ──────────────────────
+if processing and st.session_state.pending_request:
+    pending = st.session_state.pending_request
     with st.chat_message("assistant", avatar="🤖"):
         status = st.empty()
         body = st.empty()
@@ -119,8 +150,8 @@ if user_text:
         try:
             for event in api.stream_chat(
                 thread_id,
-                user_text,
-                selected_item_ids=selected_item_ids or None,
+                pending["text"],
+                selected_item_ids=pending["selected_item_ids"],
             ):
                 etype = event.get("type")
                 content = event.get("content") or ""
@@ -144,4 +175,6 @@ if user_text:
             body.error(text)
 
     st.session_state.messages.append({"kind": kind, "text": text})
+    st.session_state.pending_request = None
+    st.session_state.processing = False
     st.rerun()

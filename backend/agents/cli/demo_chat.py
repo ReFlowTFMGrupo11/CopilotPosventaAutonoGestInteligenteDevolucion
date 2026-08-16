@@ -68,7 +68,7 @@ async def main():
             # Registrar mensajes para métricas
             agent = result.get("current_agent", "?")
             order = result.get("order_id", "-")
-            eligible = result.get("is_eligible")
+            eligible = result.get("any_eligible")
             customer_id = result.get("customer_id") or customer_id
 
             try:
