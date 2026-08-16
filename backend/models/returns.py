@@ -71,6 +71,40 @@ class ShippingLabelItem(BaseModel):
     quantity: int = Field(default=1, description="Unidades del producto.")
 
 
+class ItemEligibility(BaseModel):
+    """Resultado de evaluación de elegibilidad para UN artículo del pedido.
+
+    Cada artículo de ``items_to_return`` se evalúa contra la política de SU
+    PROPIA categoría, de forma independiente de los demás artículos del
+    mismo pedido.
+    """
+
+    order_item_id: str = Field(description="UUID del order_item evaluado.")
+    is_eligible: bool = Field(description="Si este artículo concreto es elegible para devolución.")
+    eligibility_reason: str = Field(
+        description="Explicación de la decisión para este artículo (criterio de política aplicado)."
+    )
+    refund_amount: float = Field(
+        default=0.0, description="Importe a reembolsar por este artículo (0 si no es elegible)."
+    )
+    policy_category: str = Field(
+        default="", description="Categoría de política aplicada a este artículo."
+    )
+
+
+class PolicyEvaluationOutput(BaseModel):
+    """Salida estructurada del Agente Evaluador de Políticas.
+
+    Contiene una evaluación independiente por cada artículo en
+    ``items_to_return``, permitiendo que un mismo pedido tenga artículos
+    elegibles y no elegibles simultáneamente.
+    """
+
+    items: list[ItemEligibility] = Field(
+        description="Evaluación de elegibilidad de cada artículo solicitado, uno a uno."
+    )
+
+
 class TriageOutput(BaseModel):
     """Salida estructurada del agente de triaje."""
 
@@ -95,4 +129,15 @@ class TriageOutput(BaseModel):
     items_to_return: Optional[list[ReturnItem]] = Field(
         default=None,
         description="Lista de artículos a devolver. None si aún no se conocen.",
+    )
+    items_confirmed: Optional[bool] = Field(
+        default=None,
+        description=(
+            "True SOLO si el último mensaje del cliente confirma explícitamente "
+            "(ej. 'sí', 'correcto', 'exacto', 'así es') el resumen de artículos, "
+            "motivo y estado que le mostraste en tu turno anterior. En cualquier "
+            "otro caso (incluida la primera vez que infieres el estado) déjalo "
+            "en None/False: la confirmación nunca se da en el mismo turno en que "
+            "se infiere el estado."
+        ),
     )

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 from langchain_core.messages import AIMessage
 
-from backend.agents.resolution_agent import rejection_agent, hitl_admin_node
+from backend.agents.nodes.resolution import rejection_agent, hitl_admin_node
 
 
 class TestRejectionAgent:
@@ -24,7 +24,7 @@ class TestRejectionAgent:
             "eligibility_reason": "El plazo de 30 días ha expirado.",
         }
 
-        with patch("backend.agents.resolution_agent._build_llm", return_value=mock_llm):
+        with patch("backend.agents.nodes.resolution._build_llm", return_value=mock_llm):
             result = await rejection_agent(state)
 
         assert result["resolution"] == "rejected"
