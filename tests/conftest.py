@@ -137,3 +137,105 @@ def sample_items_to_return():
             "condition": "defective",
         }
     ]
+
+
+# ── Escenario: pedido con múltiples categorías y elegibilidad mixta ────────
+#
+# Un mismo pedido con dos artículos de categorías distintas, cada una regida
+# por una política distinta (dataset/policies/01_electronica_informatica.md
+# y dataset/policies/12_cosmetica_perfumeria.md):
+#   - Auriculares (electronica_informatica): defectuosos, entregados hace 10
+#     días, dentro del plazo de 30 días -> SÍ debería ser elegible.
+#   - Perfume (cosmetica_perfumeria): el cliente simplemente cambió de
+#     opinión y ya retiró el precinto de higiene -> NO debería ser elegible
+#     (exclusión legal de higiene, aplica con independencia del plazo).
+
+
+@pytest.fixture
+def mock_order_details_mixed_categories():
+    """Pedido con un artículo elegible (electrónica) y otro no elegible (cosmética)."""
+    return {
+        "order": {
+            "id": "ord-mixed-uuid",
+            "status": "delivered",
+            "delivered_at": "2026-08-05T10:00:00Z",
+            "created_at": "2026-07-30T08:00:00Z",
+            "customer": {
+                "id": "cust-mixed-uuid",
+                "email": "laura.perez@example.com",
+                "full_name": "Laura Pérez",
+            },
+        },
+        "items": [
+            {
+                "id": "oi-electronics-uuid",
+                "order_id": "ord-mixed-uuid",
+                "quantity": 1,
+                "product": {
+                    "name": "Auriculares Bluetooth Pro",
+                    "sku": "AUR-BT-001",
+                    "category": "electronica_informatica",
+                    "price": 79.99,
+                    "weight_kg": 0.3,
+                },
+            },
+            {
+                "id": "oi-cosmetics-uuid",
+                "order_id": "ord-mixed-uuid",
+                "quantity": 1,
+                "product": {
+                    "name": "Perfume Eau de Parfum 100ml",
+                    "sku": "PER-EDP-100",
+                    "category": "cosmetica_perfumeria",
+                    "price": 45.00,
+                    "weight_kg": 0.2,
+                },
+            },
+        ],
+    }
+
+
+@pytest.fixture
+def sample_items_to_return_mixed():
+    """El cliente pide devolver AMBOS artículos del pedido mixto."""
+    return [
+        {"order_item_id": "oi-electronics-uuid", "quantity": 1, "condition": "defective"},
+        {"order_item_id": "oi-cosmetics-uuid", "quantity": 1, "condition": "used"},
+    ]
+
+
+@pytest.fixture
+def mock_policy_results_electronics():
+    """Resultado RAG para electrónica: devolución elegible dentro de plazo."""
+    return {
+        "query": "devolución defective auriculares",
+        "category": "electronica_informatica",
+        "policy_info": {
+            "id": "pol-electronica",
+            "category": "electronica_informatica",
+            "max_return_days": 30,
+            "requires_original_packaging": True,
+            "restocking_fee_percent": 0.0,
+            "allowed_conditions": ["unopened", "opened_tested", "defective", "wrong_item", "damaged_in_transit"],
+            "active": True,
+        },
+    }
+
+
+@pytest.fixture
+def mock_policy_results_cosmetics():
+    """Resultado RAG para cosmética: exclusión de higiene tras retirar el precinto."""
+    return {
+        "query": "devolución cambio de opinión perfume",
+        "category": "cosmetica_perfumeria",
+        "policy_info": {
+            "id": "pol-cosmetica",
+            "category": "cosmetica_perfumeria",
+            "max_return_days": 21,
+            "requires_original_packaging": True,
+            "hygiene_seal_required": True,
+            "restocking_fee_percent": 0.0,
+            "allowed_conditions": ["unopened", "defective", "wrong_item"],
+            "active": True,
+        },
+    }

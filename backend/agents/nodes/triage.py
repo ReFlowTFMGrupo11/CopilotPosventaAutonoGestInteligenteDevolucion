@@ -63,6 +63,40 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
    - **items_to_return**: lista de artículos con formato [{"order_item_id": "...", "quantity": 1, "condition": "..."}].
      Las condiciones posibles son: unopened, defective, damaged, used, wrong_item.
 
+## Interpretación semántica de motivo → condition
+El cliente casi nunca usa las palabras exactas del enum, y puede describir el
+problema de mil formas distintas según la categoría del producto (electrónica,
+calzado, alimentación, mascotas, cosmética, etc.). NO busques coincidencias
+literales de palabras clave: interpreta el SIGNIFICADO real de lo que dice y
+mapéalo tú mismo a unopened / defective / damaged / used / wrong_item. Algunos
+ejemplos orientativos (no es una lista cerrada, hay infinitas variantes):
+   - "estropeado", "no funciona", "no enciende" → defective
+   - "llegó dañado", "abollado", "roto por fuera" → damaged
+   - "sin abrir", "precintado", "no lo he usado" → unopened
+   - "ya lo he usado/probado" → used
+   - "no es el que pedí", "me enviaron otra cosa" → wrong_item
+Si el motivo de un artículo ya deja claro su estado (por significado, aunque no
+use ninguna de estas palabras), infiere `condition` en el mismo turno en el que
+se menciona; pregunta el estado explícitamente solo para los artículos cuya
+condición siga siendo realmente ambigua tras leer todo el historial.
+
+## Confirmación obligatoria antes de dar por buena la condición inferida
+Como la condición se infiere por significado (no por coincidencia exacta), puede
+fallar. Por eso, en el turno en el que completas por primera vez la condición de
+TODOS los artículos, NO la des por confirmada todavía: en `response_to_customer`
+resume lo que has entendido artículo a artículo (p. ej. "Entiendo que quieres
+devolver el Microondas porque está estropeado —lo marco como defectuoso— y el
+Champú porque no te gusta el color —lo marco como sin abrir—. ¿Es correcto?") y
+espera la respuesta del cliente.
+- `items_confirmed` = true SOLO si el mensaje MÁS RECIENTE del cliente confirma
+  explícitamente ese resumen (ej. "sí", "correcto", "exacto", "así es").
+- `items_confirmed` = false/None en cualquier otro caso, incluida la primera vez
+  que infieres el estado (la confirmación nunca puede darse en el mismo turno en
+  que se infiere; necesita un turno de ida y vuelta).
+- Si el cliente corrige algo del resumen ("no, el champú está sin abrir, no
+  estropeado"), actualiza `condition` con el valor correcto y vuelve a resumir
+  y pedir confirmación: no asumas confirmación de lo que no corrigió.
+
 ## Artículos del pedido (order_item_id)
 - El cliente identifica el artículo por su NOMBRE, nunca por un ID técnico.
 - Si el contexto incluye un mensaje "ARTÍCULOS DEL PEDIDO", cruza lo que dice el
@@ -80,6 +114,11 @@ Tu rol es el de **Agente de Triaje y Empatía**: el primer punto de contacto.
 - Si el cliente tiene un problema que NO es una devolución, indícale amablemente
   que solo puedes ayudar con devoluciones.
 - SIEMPRE rellena response_to_customer con tu respuesta empática al cliente.
+- NUNCA confirmes que una devolución ha sido registrada, procesada o aprobada.
+  Tu rol es SOLO recopilar información. La confirmación final la hace otro agente.
+- NUNCA digas frases como "ya registré", "hemos procesado", "tu devolución está lista"
+  o similares. Si el cliente da toda la información, responde únicamente con un
+  resumen de lo recogido y que el sistema lo validará.
 """
 
 
@@ -136,8 +175,25 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
         updates["reason"] = result.reason
     if result.reason_category:
         updates["reason_category"] = result.reason_category
+
+    # ── Red de seguridad determinista para items_confirmed ─────────────
+    # El LLM decide items_confirmed por semántica y puede equivocarse; no nos
+    # fiamos de un "true" si el contenido de items_to_return acaba de cambiar
+    # en este mismo turno (la confirmación real solo puede darse en un turno
+    # posterior, sobre un resumen ya mostrado).
+    old_items = state.get("items_to_return") or []
+    new_items = (
+        [item.model_dump() for item in result.items_to_return]
+        if result.items_to_return
+        else old_items
+    )
     if result.items_to_return:
-        updates["items_to_return"] = [item.model_dump() for item in result.items_to_return]
+        updates["items_to_return"] = new_items
+
+    if _items_key(old_items) != _items_key(new_items):
+        updates["items_confirmed"] = False
+    elif result.items_confirmed:
+        updates["items_confirmed"] = True
 
     _apply_deterministic_selection(state, result, updates)
 
@@ -149,6 +205,14 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _items_key(items: list[dict[str, Any]]) -> frozenset[tuple[str, str]]:
+    """Firma de (order_item_id, condition) para detectar si items_to_return cambió."""
+    return frozenset(
+        (item.get("order_item_id", ""), item.get("condition", ""))
+        for item in items
+    )
 
 
 def _apply_deterministic_selection(
@@ -187,6 +251,7 @@ def _apply_deterministic_selection(
             ((valid_items_by_id.get(i) or {}).get("product") or {}).get("name", "Artículo")
             for i in selected_item_ids
         ]
+        updates["items_confirmed"] = False
         updates["messages"] = [
             AIMessage(
                 content=(
@@ -197,6 +262,10 @@ def _apply_deterministic_selection(
                 )
             )
         ]
+    else:
+        # Selección explícita por checkboxes de UI: ya es una confirmación
+        # determinista del usuario, no hace falta pedir un "sí" adicional.
+        updates["items_confirmed"] = True
 
 
 def _parse_mcp_response(raw: Any) -> dict:
@@ -255,7 +324,9 @@ def _build_items_prompt(order_number: str, items: list[dict]) -> AIMessage:
     return AIMessage(
         content=(
             f"He encontrado tu pedido {order_number}. Estos son los artículos:\n"
-            f"{items_text}\n\n¿Cuál quieres devolver y por qué motivo?"
+            f"{items_text}\n\n¿Cuál quieres devolver, por qué motivo y en qué estado "
+            f"se encuentra cada uno (sin abrir, defectuoso, dañado, usado, artículo "
+            f"incorrecto)?"
         )
     )
 
@@ -316,6 +387,10 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
     order_number = state.get("order_number")
     if not order_number:
         return {"error": "No se proporcionó order_number."}
+
+    # Si ya tenemos los datos del pedido en el estado, no volver a consultarlos.
+    if state.get("order_details") and state.get("items_to_return"):
+        return {}
 
     try:
         order_details = _parse_mcp_response(await get_order_details(order_number))

@@ -59,24 +59,26 @@ HITL_REFUND_THRESHOLD = 100.0  # euros
 
 RESOLUTION_SYSTEM_PROMPT = """\
 Eres el **Agente de Resolución** de ReFlow.
-Tu trabajo es comunicar al cliente el resultado de su solicitud de devolución.
+Tu trabajo es comunicar al cliente el resultado de su solicitud de devolución,
+que puede ser MIXTO: unos artículos aprobados y otros rechazados a la vez.
 
-## Si la devolución es ELEGIBLE:
-- Confirma al cliente que su devolución ha sido aprobada.
+## Para los artículos APROBADOS:
+- Confirma, nombrándolos, que esos artículos han sido aprobados para devolución.
 - Proporciona el número de seguimiento de la etiqueta de devolución.
 - Indica los próximos pasos (imprimir etiqueta, enviar paquete).
 - Menciona el monto del reembolso y el plazo estimado (5-10 días hábiles).
 
-## Si la devolución NO es elegible:
-- Comunica el rechazo de forma empática y comprensiva.
-- Explica claramente el motivo del rechazo.
+## Para los artículos RECHAZADOS (si los hay):
+- Comunica el rechazo de forma empática y comprensiva, nombrando el artículo.
+- Explica claramente el motivo del rechazo de ESE artículo en concreto.
 - Ofrece alternativas si es posible (contacto con soporte, garantía del fabricante, etc.).
 
 ## Si requiere aprobación de un administrador (HITL):
 - Informa al cliente que, dado el importe del reembolso, se requiere una revisión adicional.
 - Asegura que un responsable revisará su caso en un plazo de 24-48 horas.
 
-Responde siempre en español, de forma cálida y profesional.
+Responde siempre en español, de forma cálida y profesional. Si el resultado es
+mixto, deja MUY CLARO qué artículos se devuelven y cuáles no, y por qué.
 """
 
 REJECTION_SYSTEM_PROMPT = """\
@@ -103,8 +105,11 @@ async def resolution_agent(
 ) -> Command[Literal["hitl_admin", "__end__"]]:
     """Nodo del agente de Resolución.
 
-    Si la devolución es elegible, genera la etiqueta, registra la devolución
-    y notifica al cliente. Aplica HITL si el reembolso supera el umbral.
+    Procesa SOLO los artículos que el Evaluador marcó como elegibles
+    (``items_eligibility``): genera etiqueta, registra la devolución y
+    notifica al cliente. Si la solicitud era mixta, el mensaje final también
+    explica qué artículos quedaron fuera y por qué. Aplica HITL si el
+    reembolso de los artículos elegibles supera el umbral.
     """
     llm = _build_llm()
 
@@ -117,6 +122,14 @@ async def resolution_agent(
     reason = state.get("reason", "")
     reason_category = state.get("reason_category", "")
     items_to_return = state.get("items_to_return", [])
+    items_eligibility = state.get("items_eligibility", [])
+
+    # ── Filtrar: solo se procesan los artículos elegibles ───────────────
+    eligible_ids = {e["order_item_id"] for e in items_eligibility if e.get("is_eligible")}
+    rejected_items = [e for e in items_eligibility if not e.get("is_eligible")]
+    eligible_items_to_return = [
+        item for item in items_to_return if item.get("order_item_id") in eligible_ids
+    ]
 
     # ── HITL: pausar si el importe supera el umbral o si el Evaluador
     #    marcó el caso como "needs_admin_approval" (zona frontera de plazo,
@@ -204,22 +217,23 @@ async def resolution_agent(
                 goto="__end__",
             )
 
-        # Admin aprobó: continuar con etiqueta + notificación (el registro ya existe)
-
-    # ── Generar etiqueta de transporte ─────────────────────────────────
-    label_items = []
+    # Admin aprobó (o no hacía falta HITL): continuar con etiqueta + notificación.
+    # ── Mapeo order_item_id -> nombre, para etiquetas y mensajes ────────
     order_items = state.get("order_details", {}).get("items", [])
-    for item in items_to_return:
-        item_name = "Artículo"
-        for raw_oi in order_items:
-            oi = OrderItem.model_validate(raw_oi)
-            if oi.id == item.get("order_item_id"):
-                item_name = oi.product.name if oi.product and oi.product.name else "Artículo"
-                break
-        label_items.append({
-            "name": item_name,
+    item_names: dict[str, str] = {}
+    for raw_oi in order_items:
+        oi = OrderItem.model_validate(raw_oi)
+        if oi.id:
+            item_names[oi.id] = oi.product.name if oi.product and oi.product.name else "Artículo"
+
+    # ── Generar etiqueta de transporte (solo artículos elegibles) ──────
+    label_items = [
+        {
+            "name": item_names.get(item.get("order_item_id"), "Artículo"),
             "quantity": item.get("quantity", 1),
-        })
+        }
+        for item in eligible_items_to_return
+    ]
 
     label_result = await generate_shipping_label(
         order_id=order_id,
@@ -227,8 +241,9 @@ async def resolution_agent(
         customer_name=customer_name,
     )
 
-    # ── Registrar devolución en Supabase ───────────────────────────────
-    # Si viene de HITL aprobado, el registro ya existe.
+    # ── Registrar devolución en Supabase (solo artículos elegibles) ─────
+    # Si viene de HITL aprobado, el registro ya existe (se creó antes del
+    # interrupt, ver bloque HITL arriba); solo hay que marcarlo aprobado.
     if needs_admin_approval:
         await update_return_status(
             return_id=existing_return_id,
@@ -245,7 +260,7 @@ async def resolution_agent(
                 reason=reason,
                 reason_category=reason_category,
                 refund_amount=refund_amount,
-                items=items_to_return,
+                items=eligible_items_to_return,
                 notes=f"Procesado automáticamente. Tracking: {label_result['tracking_number']}",
                 thread_id=state.get("thread_id", ""),
             )
@@ -287,26 +302,51 @@ async def resolution_agent(
         return_request_id = return_record["return_request"]["id"]
 
     # ── Notificar al cliente ───────────────────────────────────────────
+    approved_names = [item_names.get(item.get("order_item_id"), "Artículo") for item in eligible_items_to_return]
+    rejected_lines = "\n".join(
+        f"- {item_names.get(r['order_item_id'], r['order_item_id'])}: {r['eligibility_reason']}"
+        for r in rejected_items
+    )
+
+    email_body = (
+        f"Hola {customer_name},\n\n"
+        f"Tu devolución para el pedido {order_number or order_id} ha sido procesada.\n\n"
+        f"Artículos aprobados: {', '.join(approved_names)}\n"
+        f"Número de seguimiento: {label_result['tracking_number']}\n"
+        f"Reembolso estimado: {refund_amount:.2f}€\n"
+    )
+    if rejected_items:
+        email_body += f"\nArtículos que NO pudieron devolverse:\n{rejected_lines}\n"
+    email_body += (
+        "\nAdjuntamos la etiqueta de envío para los artículos aprobados. "
+        "Imprímela y pégala en el paquete.\n\n¡Gracias por tu paciencia!"
+    )
+
     await send_customer_notification(
         email=customer_email,
-        subject="ReFlow - Tu devolución ha sido aprobada",
-        message=(
-            f"Hola {customer_name},\n\n"
-            f"Tu devolución para el pedido {order_number or order_id} ha sido aprobada.\n"
-            f"Número de seguimiento: {label_result['tracking_number']}\n"
-            f"Reembolso estimado: {refund_amount:.2f}€\n\n"
-            "Adjuntamos la etiqueta de envío. Imprímela y pégala en el paquete.\n\n"
-            "¡Gracias por tu paciencia!"
-        ),
+        subject="ReFlow - Resultado de tu solicitud de devolución",
+        message=email_body,
         attachment_path=label_result.get("label_path", ""),
     )
 
     # ── Generar mensaje final para el usuario ──────────────────────────
     resolution_context = (
-        f"Devolución aprobada. Tracking: {label_result['tracking_number']}. "
-        f"Reembolso: {refund_amount:.2f}€. "
-        f"Etiqueta generada en: {label_result.get('label_path', 'N/A')}."
+        f"Artículos APROBADOS: {', '.join(approved_names)}. "
+        f"Tracking: {label_result['tracking_number']}. "
+        f"Reembolso total: {refund_amount:.2f}€. "
+        f"Etiqueta generada en: {label_result.get('label_path', 'N/A')}. "
     )
+    if rejected_items:
+        resolution_context += (
+            "Artículos RECHAZADOS (no incluidos en la etiqueta ni en el reembolso): "
+            + "; ".join(
+                f"{item_names.get(r['order_item_id'], r['order_item_id'])} ({r['eligibility_reason']})"
+                for r in rejected_items
+            )
+            + "."
+        )
+    else:
+        resolution_context += "No hay artículos rechazados en esta solicitud."
 
     final_response = await llm.ainvoke([
         SystemMessage(content=RESOLUTION_SYSTEM_PROMPT),
@@ -320,7 +360,7 @@ async def resolution_agent(
             "label_path": label_result.get("label_path"),
             "return_request_id": return_request_id,
             "admin_decision": "auto_approved" if refund_amount <= HITL_REFUND_THRESHOLD else "approved",
-            "resolution": "approved",
+            "resolution": "partially_approved" if rejected_items else "approved",
             "current_agent": "resolver",
         },
         goto="__end__",
