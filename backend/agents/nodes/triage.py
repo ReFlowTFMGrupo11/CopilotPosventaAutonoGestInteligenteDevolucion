@@ -114,6 +114,11 @@ espera la respuesta del cliente.
 - Si el cliente tiene un problema que NO es una devolución, indícale amablemente
   que solo puedes ayudar con devoluciones.
 - SIEMPRE rellena response_to_customer con tu respuesta empática al cliente.
+- NUNCA confirmes que una devolución ha sido registrada, procesada o aprobada.
+  Tu rol es SOLO recopilar información. La confirmación final la hace otro agente.
+- NUNCA digas frases como "ya registré", "hemos procesado", "tu devolución está lista"
+  o similares. Si el cliente da toda la información, responde únicamente con un
+  resumen de lo recogido y que el sistema lo validará.
 """
 
 
@@ -382,6 +387,10 @@ async def fetch_order_data(state: ReturnState) -> dict[str, Any]:
     order_number = state.get("order_number")
     if not order_number:
         return {"error": "No se proporcionó order_number."}
+
+    # Si ya tenemos los datos del pedido en el estado, no volver a consultarlos.
+    if state.get("order_details") and state.get("items_to_return"):
+        return {}
 
     try:
         order_details = _parse_mcp_response(await get_order_details(order_number))
