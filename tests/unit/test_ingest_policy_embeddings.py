@@ -1,4 +1,4 @@
-"""Tests unitarios para dataset/ingest_policy_embeddings.py.
+"""Tests unitarios para dataset/rag/ingest_policy_embeddings.py.
 
 Las funciones de chunking son puras (sin red ni BD) y se prueban tal cual.
 Las que hablan con Supabase/OpenAI se prueban con mocks, sin credenciales
@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from dataset.generate_dataset import POLICIES_DIR
-from dataset.ingest_policy_embeddings import (
+from dataset.rag.ingest_policy_embeddings import (
     GENERAL_POLICY_DOC,
     MAX_CHUNK_TOKENS,
     _count_tokens,
@@ -178,20 +178,20 @@ class TestIngestSkipsMissingCategory:
         salta esa categoría (no falla el script entero) y no se le llama a
         embeddings/replace; el marco general sí se procesa (no depende de
         policy_id)."""
-        with patch("dataset.ingest_policy_embeddings.OpenAI", return_value=MagicMock()), \
+        with patch("dataset.rag.ingest_policy_embeddings.OpenAI", return_value=MagicMock()), \
              patch(
-                 "dataset.ingest_policy_embeddings.get_supabase_client",
+                 "dataset.rag.ingest_policy_embeddings.get_supabase_client",
                  new_callable=AsyncMock,
                  return_value=MagicMock(),
              ), \
              patch(
-                 "dataset.ingest_policy_embeddings._get_active_policy_id",
+                 "dataset.rag.ingest_policy_embeddings._get_active_policy_id",
                  new_callable=AsyncMock,
                  return_value=None,
              ), \
-             patch("dataset.ingest_policy_embeddings._embed_texts") as mock_embed, \
+             patch("dataset.rag.ingest_policy_embeddings._embed_texts") as mock_embed, \
              patch(
-                 "dataset.ingest_policy_embeddings._replace_embeddings", new_callable=AsyncMock
+                 "dataset.rag.ingest_policy_embeddings._replace_embeddings", new_callable=AsyncMock
              ) as mock_replace:
             await ingest(only_category="calzado")
 

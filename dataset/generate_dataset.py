@@ -32,10 +32,10 @@ SEED = 20260730
 rng = random.Random(SEED)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-POLICIES_DIR = Path(__file__).resolve().parent / "policies"
+POLICIES_DIR = Path(__file__).resolve().parent / "rag" / "policies"
 OUT_SQL = REPO_ROOT / "supabase" / "seed_synthetic.sql"
-OUT_EVAL_CSV = REPO_ROOT / "dataset" / "eval_cases.csv"
-OUT_STATS = REPO_ROOT / "dataset" / "GENERATION_STATS.md"
+OUT_EVAL_CSV = REPO_ROOT / "dataset" / "qa" / "eval_cases.csv"
+OUT_STATS = REPO_ROOT / "dataset" / "qa" / "GENERATION_STATS.md"
 
 TODAY = datetime(2026, 7, 30, 12, 0, 0)
 
