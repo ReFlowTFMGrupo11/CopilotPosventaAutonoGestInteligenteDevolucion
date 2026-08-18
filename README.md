@@ -20,7 +20,7 @@ como motor de razonamiento.
 | HITL con `interrupt()` para reembolsos >100€ | ✅ |
 | Memoria conversacional persistente (checkpointer PostgreSQL) | ✅ |
 | Modelos Pydantic centralizados — `backend/models/` | ✅ |
-| Dataset sintético + corpus de políticas RAG — `dataset/` | ✅ |
+| Dataset sintético + corpus de políticas RAG — `data/` | ✅ |
 | Tests unitarios e integración — `tests/` | ✅ |
 | Backend FastAPI (endpoints de chat y panel admin/HITL) — `backend/api/` | ✅ |
 | Frontend Streamlit (chat cliente + dashboard admin) — `frontend/` | ✅ |
@@ -56,7 +56,7 @@ backend/
                  #   logistics_service.py — etiquetas PDF, notificaciones
   mcp/           # Servidores MCP: wrappers finos sobre services/ (puertos 8001/8002)
   db/            # Cliente Supabase (singleton cacheado)
-dataset/         # Dataset sintético + corpus de 17 políticas para RAG + eval_cases.csv
+data/         # Dataset sintético + corpus de 17 políticas para RAG + eval_cases.csv
 supabase/        # Migraciones SQL y seed de datos
 tests/
   unit/          # Tests de routing, logistics_service, supabase_service
@@ -261,7 +261,7 @@ pytest tests/integration/
 
 ## Dataset y políticas RAG
 
-El directorio `dataset/` contiene:
+El directorio `data/` contiene:
 - **`policies/`** — 17 documentos Markdown con las políticas de devolución por categoría
   (se vectorizan en `policy_embeddings` de Supabase para el RAG).
 - **`eval_cases.csv`** — Golden dataset etiquetado (valid/invalid/human_review) para
@@ -269,7 +269,7 @@ El directorio `dataset/` contiene:
 - **`generate_dataset.py`** — Script determinista (seed fija) que genera los datos
   sintéticos.
 
-Ver [`dataset/README.md`](dataset/README.md) para más detalle.
+Ver [`data/README.md`](data/README.md) para más detalle.
 
 ## Guía rápida de arranque (todos los servicios)
 
