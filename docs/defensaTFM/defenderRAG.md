@@ -33,7 +33,7 @@
 ## 3. Pipeline de indexación
 
 ```
-dataset/policies/*.md
+data/policies/*.md
         │
         ▼  _split_into_sections()  → divide por encabezados ## (4-6 secciones/doc)
         │
@@ -196,7 +196,7 @@ Cada chunk incluye el encabezado de su sección, por lo que el LLM puede leerlo 
 
 ## 8. Evaluación del RAG
 
-El fichero `dataset/eval_cases.csv` contiene un golden dataset con la decisión esperada para cada caso:
+El fichero `data/eval_cases.csv` contiene un golden dataset con la decisión esperada para cada caso:
 
 ```csv
 case_id, category, reason_category, days_since_delivery, refund_amount, expected_label, rationale

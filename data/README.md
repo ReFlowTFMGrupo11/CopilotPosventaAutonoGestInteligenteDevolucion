@@ -27,7 +27,7 @@ estándar, sin llamadas a APIs).
 ## Qué contiene
 
 ```
-dataset/
+data/
   policies/                       16 políticas de categoría + 1 marco general (markdown)
   generate_dataset.py             Script generador (reproducible, seed fija)
   ingest_policy_embeddings.py     Trocea policies/*.md y genera sus embeddings en policy_embeddings (RAG)
@@ -40,7 +40,7 @@ supabase/
                                    chat_sessions, chat_messages)
 ```
 
-### 1. Documentación de políticas (`dataset/policies/`)
+### 1. Documentación de políticas (`data/policies/`)
 
 17 documentos markdown que constituyen la base de conocimiento a vectorizar
 para el RAG (`policy_embeddings` / `match_policy_embeddings`):
@@ -167,7 +167,7 @@ en contexto de chat.
 ## Cómo regenerar el dataset
 
 ```bash
-python dataset/generate_dataset.py
+python data/generate_dataset.py
 ```
 
 Es determinista (semilla fija `SEED = 20260730` en el propio script): la
@@ -176,8 +176,8 @@ distribución de casos (los UUID sí cambian en cada ejecución, ya que se usan
 como claves primarias y no aportan valor fijarlos). Regenera:
 
 - `supabase/seed_synthetic.sql`
-- `dataset/eval_cases.csv`
-- `dataset/GENERATION_STATS.md`
+- `data/eval_cases.csv`
+- `data/GENERATION_STATS.md`
 
 Para ajustar el volumen o la mezcla de casos, editar las constantes al
 principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
@@ -194,7 +194,7 @@ o de pruebas de RAG dedicado a este dataset grande, se recomienda:
    sin la sección de seed) sobre una base de datos limpia.
 2. Cargar `supabase/seed_synthetic.sql` con `psql` o el SQL Editor de Supabase
    (esto crea, entre otras, las 16 filas de `return_policies`, una por categoría).
-3. Trocear los documentos de `dataset/policies/*.md` y generar sus embeddings
+3. Trocear los documentos de `data/policies/*.md` y generar sus embeddings
    con `text-embedding-3-small` (el mismo modelo que ya usa
    `search_return_policy` en `backend/services/supabase_service.py`) para
    poblar `policy_embeddings`:
@@ -212,7 +212,7 @@ o de pruebas de RAG dedicado a este dataset grande, se recomienda:
    `match_policy_embeddings` busca por similitud de embedding, no por
    `policy_id`. El script trocea por secciones (`## ...`) en chunks de
    ~300-500 tokens sin partir párrafos (ver
-   `dataset/ingest_policy_embeddings.py` para el detalle) y es idempotente:
+   `data/ingest_policy_embeddings.py` para el detalle) y es idempotente:
    volver a ejecutarlo reemplaza los chunks existentes de cada política en
    vez de duplicarlos. `--dry-run` trocea y cuenta sin llamar a OpenAI ni a
    Supabase; `--category <slug>` limita la ingesta a una sola categoría (más

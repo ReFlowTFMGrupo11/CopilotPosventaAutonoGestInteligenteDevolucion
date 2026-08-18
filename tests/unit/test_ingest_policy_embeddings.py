@@ -9,8 +9,8 @@ del alcance de un test unitario (ver dataset/README.md).
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from dataset.generate_dataset import POLICIES_DIR
-from dataset.rag.ingest_policy_embeddings import (
+from data.generate_dataset import POLICIES_DIR
+from data.rag.ingest_policy_embeddings import (
     GENERAL_POLICY_DOC,
     MAX_CHUNK_TOKENS,
     _count_tokens,
@@ -178,20 +178,20 @@ class TestIngestSkipsMissingCategory:
         salta esa categoría (no falla el script entero) y no se le llama a
         embeddings/replace; el marco general sí se procesa (no depende de
         policy_id)."""
-        with patch("dataset.rag.ingest_policy_embeddings.OpenAI", return_value=MagicMock()), \
+        with patch("data.rag.ingest_policy_embeddings.OpenAI", return_value=MagicMock()), \
              patch(
-                 "dataset.rag.ingest_policy_embeddings.get_supabase_client",
+                 "data.rag.ingest_policy_embeddings.get_supabase_client",
                  new_callable=AsyncMock,
                  return_value=MagicMock(),
              ), \
              patch(
-                 "dataset.rag.ingest_policy_embeddings._get_active_policy_id",
+                 "data.rag.ingest_policy_embeddings._get_active_policy_id",
                  new_callable=AsyncMock,
                  return_value=None,
              ), \
-             patch("dataset.rag.ingest_policy_embeddings._embed_texts") as mock_embed, \
+             patch("data.rag.ingest_policy_embeddings._embed_texts") as mock_embed, \
              patch(
-                 "dataset.rag.ingest_policy_embeddings._replace_embeddings", new_callable=AsyncMock
+                 "data.rag.ingest_policy_embeddings._replace_embeddings", new_callable=AsyncMock
              ) as mock_replace:
             await ingest(only_category="calzado")
 
