@@ -184,6 +184,7 @@ async def _replace_embeddings(
     chunks: list[str],
     embeddings: list[list[float]],
     source_doc: str,
+    category: Optional[str] = None,
 ) -> int:
     """Borra los chunks existentes de este ``policy_id`` (o los de
     ``policy_id IS NULL`` para el marco general) y los reemplaza por los
@@ -203,7 +204,15 @@ async def _replace_embeddings(
             "policy_id": policy_id,
             "chunk_text": chunk,
             "embedding": embedding,
-            "metadata": {"source_doc": source_doc, "chunk_index": index},
+            "metadata": {
+                "source_doc": source_doc,
+                "chunk_index": index,
+                # Stored explicitly so match_policy_embeddings can filter by
+                # category without a JOIN — keeps the RPC query self-contained.
+                "category": category or "general",
+                # Version tag: allows invalidating stale chunks if policies change.
+                "policy_version": "2026-08",
+            },
         }
         for index, (chunk, embedding) in enumerate(zip(chunks, embeddings))
     ]
@@ -256,7 +265,9 @@ async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) 
                 continue
 
         embeddings = _embed_texts(openai_client, chunks)
-        inserted = await _replace_embeddings(supabase_client, policy_id, chunks, embeddings, policy_doc)
+        inserted = await _replace_embeddings(
+            supabase_client, policy_id, chunks, embeddings, policy_doc, category
+        )
         total_chunks += inserted
 
     logger.info(
