@@ -44,7 +44,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from backend.db.supabase_client import get_supabase_client
-from dataset.generate_dataset import CATEGORIES, POLICIES_DIR
+from dataset.generate_dataset import CATEGORIES, POLICIES_DIR  # POLICIES_DIR → dataset/rag/policies/
 
 load_dotenv(override=True)
 
