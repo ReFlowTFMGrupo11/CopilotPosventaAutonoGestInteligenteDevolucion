@@ -110,7 +110,8 @@ class TestReplaceEmbeddings:
         mock_client.table.return_value.insert.return_value.execute = AsyncMock()
 
         inserted = await _replace_embeddings(
-            mock_client, "pol-123", ["chunk uno", "chunk dos"], [[0.1, 0.2], [0.3, 0.4]], "01_x.md"
+            mock_client, "pol-123", ["chunk uno", "chunk dos"], [[0.1, 0.2], [0.3, 0.4]],
+            "01_x.md", category="calzado"
         )
 
         assert inserted == 2
@@ -118,12 +119,32 @@ class TestReplaceEmbeddings:
         mock_client.table.return_value.delete.return_value.eq.return_value.execute.assert_awaited_once()
         rows = mock_client.table.return_value.insert.call_args[0][0]
         assert len(rows) == 2
+        # Verificar estructura completa del primer row, incluida la metadata enriquecida
         assert rows[0] == {
             "policy_id": "pol-123",
             "chunk_text": "chunk uno",
             "embedding": [0.1, 0.2],
-            "metadata": {"source_doc": "01_x.md", "chunk_index": 0},
+            "metadata": {
+                "source_doc": "01_x.md",
+                "chunk_index": 0,
+                "category": "calzado",          # ← añadido en feat(rag): filter_category
+                "policy_version": "2026-08",    # ← añadido en feat(rag): filter_category
+            },
         }
+
+    @pytest.mark.asyncio
+    async def test_category_defaults_to_general_when_not_provided(self):
+        """Sin category explícita, metadata['category'] debe ser 'general'
+        (comportamiento del marco general con policy_id=NULL)."""
+        mock_client = MagicMock()
+        mock_client.table.return_value.delete.return_value.is_.return_value.execute = AsyncMock()
+        mock_client.table.return_value.insert.return_value.execute = AsyncMock()
+
+        await _replace_embeddings(mock_client, None, ["c1"], [[0.1]], "00_marco.md")
+
+        rows = mock_client.table.return_value.insert.call_args[0][0]
+        assert rows[0]["metadata"]["category"] == "general"
+        assert rows[0]["metadata"]["policy_version"] == "2026-08"
 
     @pytest.mark.asyncio
     async def test_deletes_by_null_policy_id_for_general_doc(self):
