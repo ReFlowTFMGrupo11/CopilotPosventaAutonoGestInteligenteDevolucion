@@ -55,3 +55,4 @@ gemini-code-*.json
 node_modules/
 frontend/node_modules/
 .reflow_pids
+tests/qa/results/

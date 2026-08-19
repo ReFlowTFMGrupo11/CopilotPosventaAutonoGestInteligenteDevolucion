@@ -4,6 +4,8 @@ Generador de Excel QA para pruebas manuales end-to-end del chatbot
 Basado en qa_manual_testing_seed_v2.sql (24 casos de prueba)
 """
 
+import os
+from pathlib import Path
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -279,7 +281,8 @@ for row_idx, (text, font_name, font_size, bold) in enumerate(legend_content, 1):
 ws_legend.column_dimensions['A'].width = 100
 
 # Guardar workbook
-output_path = r"C:\Users\ccano\workspace\TFMGRUPO11\CopilotPosventaAutonoGestInteligenteDevolucion\usecasetotest\qa_manual_testing_cases_v2.xlsx"
+output_path = Path(__file__).parent.parent / "cases" / "qa_manual_testing_cases_v2.xlsx"
+output_path.parent.mkdir(parents=True, exist_ok=True)
 wb.save(output_path)
 print(f"✓ Archivo creado: {output_path}")
 print(f"  - Pestaña 'Casos de Prueba QA': {len(casos)} casos")
