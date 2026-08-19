@@ -219,7 +219,7 @@ Además de los 24 casos manuales, `cases/eval_cases.csv` contiene **480 casos** 
 | `invalid` | 135 | 28.1% |
 | `human_review` | 214 | 44.6% |
 
-Este fichero se usa para evaluación programática del agente (precisión, recall, F1) y está referenciado desde `dataset/generate_dataset.py`.
+Este fichero se usa para evaluación programática del agente (precisión, recall, F1) y está referenciado desde `data/generate_dataset.py`.
 
 ---
 
@@ -249,7 +249,7 @@ supabase/migrations/     → Esquema de BD (CREATE TABLE) — ejecutar primero, 
 supabase/seed.sql        → Datos base de producción / staging
 supabase/seed_synthetic.sql → 480 casos sintéticos completos (customers, orders, etc.)
 tests/qa/                → Datos y casos de prueba QA (este directorio)
-dataset/policies/        → 17 documentos de política indexados en RAG
+data/policies/        → 17 documentos de política indexados en RAG
 backend/agents/          → Lógica del agente multi-nodo (LangGraph)
 ```
 

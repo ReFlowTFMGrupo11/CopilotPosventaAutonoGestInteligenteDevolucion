@@ -141,6 +141,12 @@ async def search_return_policy(query: str, category: str = "") -> dict:
         "query_embedding": query_embedding,
         "match_threshold": 0.7,
         "match_count": 5,
+        # Pass category as filter so the vector search only returns chunks from
+        # the relevant policy document (+ marco general). Without this, a query
+        # for "alimentacion" could return high-similarity chunks from "mascotas"
+        # or "drogueria_salud" (all hygiene-sensitive categories share similar text).
+        # NULL = search all chunks (backwards-compatible default in the SQL function).
+        "filter_category": category if category else None,
     }
     results = await client.rpc("match_policy_embeddings", rpc_params).execute()
 
