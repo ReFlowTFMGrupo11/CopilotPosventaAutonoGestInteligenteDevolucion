@@ -21,7 +21,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent.parent  # tests/qa/scripts/ → repo root
 
 # ── UUIDs fijos (generados una vez, no se regeneran en cada ejecucion) ─────
 
@@ -137,7 +137,7 @@ IDS = {
     "016": {
         "customer_id": "0d548a0b-862d-4372-b6cb-d8a5016f4f05",
         "order_id": "f37cfbe8-56ec-48fb-88ee-b2efb5cfd71e",
-        "products": ["8dc7b594-807d-4865-8765-cd81d84f2872", "f9eaecdf-8835-4d03-97b7-5b809b29a1b3"],
+        "products": ["8dc7b594-807f-4865-8765-cd81d84f2872", "f9eaecdf-8835-4d03-97b7-5b809b29a1b3"],
         "order_items": ["d451cae7-66e7-471b-b540-2970f7488e51", "e979318c-21c8-4e05-a57e-3a70068dd1af"],
     },
     "017": {
@@ -316,7 +316,7 @@ CASES = [
             ("juguetes", "Puzzle 1000 Piezas Paisaje", "defective", 30, 24.99, True,
              "Defectuoso dentro de plazo (20/30 dias)"),
             ("libros_papeleria", "Agenda 2026 Tapa Dura", "defective", 21, 15.99, True,
-             "Defectuoso dentro de plazo, en el limite (20/21 dias)"),
+             "Defectuosa dentro de plazo, en el limite (20/21 dias)"),
             ("alimentacion", "Lote de Conservas Gourmet", "changed_mind", 14, 18.50, False,
              "Fuera de plazo (20 dias > 14 maximo de la categoria)"),
         ],
@@ -406,7 +406,7 @@ CASES = [
             ("mascotas", "Rascador para Gato XL", "defective", 21, 49.99, True,
              "Defectuoso dentro de plazo (10/21 dias)"),
             ("libros_papeleria", "Cuaderno de Notas A5 (Pack de 3)", "defective", 21, 49.99, True,
-             "Defectuoso dentro de plazo (10/21 dias)"),
+             "Defectuosa dentro de plazo (10/21 dias)"),
         ],
         criterios="Caso EMPAREJADO con QAM-009 para aislar la variable del umbral HITL: 2 articulos "
                   "elegibles de categorias distintas, ambos claramente dentro de plazo, pero la suma "
@@ -690,7 +690,7 @@ CASES = [
                   "rechazados por higiene) pero con importes pequeños: la suma de los 2 elegibles "
                   "(15.99€ + 22.00€ = 37.99€) se queda muy por debajo de 100€. Sin HITL. Comparar ambos "
                   "casos para verificar que el numero de categorias no dispara el HITL por si solo.",
-    ),
+    },
 ]
 
 # Caso 008: pedido inexistente, sin datos reales en BD.
@@ -896,7 +896,7 @@ def generate_sql():
     lines.append("-- por ese script -- EJECUTAR DESPUES de qa_manual_testing_seed.sql (o de")
     lines.append("-- seed_synthetic.sql), no antes.")
     lines.append("--")
-    lines.append("-- Generado por dataset/generate_mixed_qa_kit.py. Guion de pruebas (mensaje a")
+    lines.append("-- Generado por tests/qa/scripts/generate_mixed_qa_kit.py. Guion de pruebas (mensaje a")
     lines.append("-- pegar en el chat por caso) en")
     lines.append("-- dataset/qa_manual_testing_casos_pedidos_mixtos.xlsx.")
     lines.append("--")

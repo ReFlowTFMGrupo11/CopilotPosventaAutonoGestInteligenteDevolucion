@@ -27,9 +27,10 @@ estándar, sin llamadas a APIs).
 ## Qué contiene
 
 ```
-dataset/
+data/
   policies/                       16 políticas de categoría + 1 marco general (markdown)
   generate_dataset.py             Script generador (reproducible, seed fija)
+  ingest_policy_embeddings.py     Trocea policies/*.md y genera sus embeddings en policy_embeddings (RAG)
   eval_cases.csv                  Golden dataset etiquetado para evaluar al Agente Evaluador
   GENERATION_STATS.md             Estadísticas de la última generación (recuento, distribución)
   README.md                       Este documento
@@ -39,7 +40,7 @@ supabase/
                                    chat_sessions, chat_messages)
 ```
 
-### 1. Documentación de políticas (`dataset/policies/`)
+### 1. Documentación de políticas (`data/policies/`)
 
 17 documentos markdown que constituyen la base de conocimiento a vectorizar
 para el RAG (`policy_embeddings` / `match_policy_embeddings`):
@@ -166,7 +167,7 @@ en contexto de chat.
 ## Cómo regenerar el dataset
 
 ```bash
-python dataset/generate_dataset.py
+python data/generate_dataset.py
 ```
 
 Es determinista (semilla fija `SEED = 20260730` en el propio script): la
@@ -175,8 +176,8 @@ distribución de casos (los UUID sí cambian en cada ejecución, ya que se usan
 como claves primarias y no aportan valor fijarlos). Regenera:
 
 - `supabase/seed_synthetic.sql`
-- `dataset/eval_cases.csv`
-- `dataset/GENERATION_STATS.md`
+- `data/eval_cases.csv`
+- `data/GENERATION_STATS.md`
 
 Para ajustar el volumen o la mezcla de casos, editar las constantes al
 principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
@@ -191,13 +192,31 @@ o de pruebas de RAG dedicado a este dataset grande, se recomienda:
 
 1. Aplicar las migraciones (`supabase/migrations/*.sql` o `supabase/run_all.sql`
    sin la sección de seed) sobre una base de datos limpia.
-2. Cargar `supabase/seed_synthetic.sql` con `psql` o el SQL Editor de Supabase.
-3. (Opcional, requiere `OPENAI_API_KEY`) Trocear cada `return_policies.policy_text`
-   y generar sus embeddings con `text-embedding-3-small` para poblar
-   `policy_embeddings`, reutilizando el mismo modelo que ya usa
-   `search_return_policy` en `backend/mcp/mcp_supabase.py`. Este paso de
-   ingesta no se incluye aquí porque requiere credenciales y llamadas de red;
-   el dataset deja el texto fuente listo para ese pipeline.
+2. Cargar `supabase/seed_synthetic.sql` con `psql` o el SQL Editor de Supabase
+   (esto crea, entre otras, las 16 filas de `return_policies`, una por categoría).
+3. Trocear los documentos de `data/policies/*.md` y generar sus embeddings
+   con `text-embedding-3-small` (el mismo modelo que ya usa
+   `search_return_policy` en `backend/services/supabase_service.py`) para
+   poblar `policy_embeddings`:
+
+   ```bash
+   python -m dataset.ingest_policy_embeddings
+   ```
+
+   Requiere `OPENAI_API_KEY` y las credenciales de Supabase en `.env`, y que
+   el paso 2 ya se haya ejecutado (cada documento de categoría se enlaza a su
+   fila de `return_policies` por `category`; si falta, ese documento se salta
+   con un aviso en vez de fallar todo el script). El marco general
+   (`00_marco_general_devoluciones.md`) no está atado a ninguna categoría, se
+   ingesta con `policy_id = NULL` — el RAG lo encuentra igual porque
+   `match_policy_embeddings` busca por similitud de embedding, no por
+   `policy_id`. El script trocea por secciones (`## ...`) en chunks de
+   ~300-500 tokens sin partir párrafos (ver
+   `data/ingest_policy_embeddings.py` para el detalle) y es idempotente:
+   volver a ejecutarlo reemplaza los chunks existentes de cada política en
+   vez de duplicarlos. `--dry-run` trocea y cuenta sin llamar a OpenAI ni a
+   Supabase; `--category <slug>` limita la ingesta a una sola categoría (más
+   el marco general).
 
 Si se carga en la misma base que ya tiene `seed.sql`, no hay colisión de
 claves (los emails, SKUs y `order_number` son distintos), pero sí quedarán

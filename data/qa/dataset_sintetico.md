@@ -11,13 +11,13 @@ explícitamente tres tipos de ejemplo: devoluciones **claramente válidas**,
 
 Este documento resume el dataset construido para cubrir ese encargo y explica
 la lógica que hay detrás de él. El detalle técnico completo (cómo regenerarlo,
-qué contiene cada fichero) está en [`dataset/README.md`](../dataset/README.md);
+qué contiene cada fichero) está en [`data/README.md`](../data/README.md);
 aquí se explica el **razonamiento** — qué se decidió generar, por qué y cómo se
 etiqueta cada caso.
 
 No se usó ningún generador externo de datos sintéticos (no había disponible
 ningún servidor MCP de ese tipo); todo se produce con un script Python propio,
-determinista y sin dependencias (`dataset/generate_dataset.py`), lo que permite
+determinista y sin dependencias (`data/generate_dataset.py`), lo que permite
 regenerarlo, ampliarlo o ajustar su distribución en cualquier momento con un
 solo comando.
 
@@ -55,9 +55,9 @@ propia casuística legal:
 | Libros, Papelería y Oficina | 21 días | Contenido digital canjeado, consumibles abiertos |
 
 Estas 16 políticas están redactadas como documentos markdown extensos
-(~700-1100 palabras cada una) en [`dataset/policies/`](../dataset/policies/),
+(~700-1100 palabras cada una) en [`data/policies/`](../data/policies/),
 más un documento de marco general
-([`00_marco_general_devoluciones.md`](../dataset/policies/00_marco_general_devoluciones.md))
+([`00_marco_general_devoluciones.md`](../data/policies/00_marco_general_devoluciones.md))
 con el fundamento legal común: derecho de desistimiento de 14 días naturales
 (TRLGDCU / Directiva 2011/83/UE), las excepciones legales tasadas del
 artículo 103 (higiene, perecederos, personalización, contenido digital), y las
@@ -86,7 +86,7 @@ idénticos.
 | Conversaciones de chat sintéticas (`chat_sessions`) | 140 (765 mensajes) |
 
 Las cifras exactas de la última ejecución están en
-[`dataset/GENERATION_STATS.md`](../dataset/GENERATION_STATS.md).
+[`data/GENERATION_STATS.md`](../data/GENERATION_STATS.md).
 
 ## 4. La explicación clave: cómo se etiqueta cada devolución
 
@@ -123,7 +123,7 @@ de Políticas**, siguiendo la sección 5 del documento de marco general:
    estado admitido, importe ≤ 100 € y sin motivo sensible.
 
 Esta lógica está implementada en la función `classify_case()` de
-[`dataset/generate_dataset.py`](../dataset/generate_dataset.py) y es la razón
+[`data/generate_dataset.py`](../data/generate_dataset.py) y es la razón
 por la que el dataset es útil como *golden dataset*: cada fila trae ya la
 decisión "correcta" esperada y la justificación en texto (`rationale`), lista
 para comparar contra lo que decida el agente real cuando se implemente.
@@ -145,7 +145,7 @@ demostrar y evaluar.
 
 ## 5. El golden dataset para evaluación (`eval_cases.csv`)
 
-[`dataset/eval_cases.csv`](../dataset/eval_cases.csv) recoge las 480 solicitudes
+[`data/eval_cases.csv`](../data/eval_cases.csv) recoge las 480 solicitudes
 en formato tabular: `order_number`, `category`, `reason_category`,
 `max_return_days`, `days_since_delivery`, `refund_amount`, `expected_label`
 (`valid` / `invalid` / `human_review`) y `rationale`. Sirve para:
@@ -181,7 +181,7 @@ tras descartar el uso de un generador externo (ver más abajo):
   ambigüedad. El detalle completo de qué cubre y qué no (distribución exacta
   por etiqueta, patrones de conversación no modelados) está en la sección
   "Qué queda fuera de este dataset" de
-  [`dataset/README.md`](../dataset/README.md).
+  [`data/README.md`](../data/README.md).
 
 Se intentó primero usar el servidor MCP `awslabs.syntheticdata-mcp-server`
 para esta ampliación, pero no fue posible conectarlo de forma estable en
@@ -197,11 +197,11 @@ implementaron directamente en `generate_dataset.py`.
 
 ```bash
 # Regenerar el dataset (determinista, misma semilla = mismos recuentos)
-python dataset/generate_dataset.py
+python data/generate_dataset.py
 ```
 
 El resultado (`supabase/seed_synthetic.sql`) se carga como **complemento** a
 `supabase/seed.sql` (no lo sustituye) sobre una base de datos ya migrada.
 Detalle completo de carga y validaciones realizadas (integridad de claves
 foráneas, fechas, unicidad, roles de `chat_messages`) en
-[`dataset/README.md`](../dataset/README.md).
+[`data/README.md`](../data/README.md).
