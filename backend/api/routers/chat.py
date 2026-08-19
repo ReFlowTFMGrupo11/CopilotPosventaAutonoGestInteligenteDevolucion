@@ -22,6 +22,7 @@ from backend.api.schemas import (
     ChatStreamEvent,
     NewChatResponse,
 )
+from langfuse_docker.tracing import with_langfuse
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,10 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
                 "thread_id": request.thread_id,
                 "selected_item_ids": request.selected_item_ids,
             },
-            config={"configurable": {"thread_id": request.thread_id}},
+            config=with_langfuse(
+                {"configurable": {"thread_id": request.thread_id}},
+                thread_id=request.thread_id,
+            ),
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error ejecutando el grafo: {exc}")
@@ -90,7 +94,7 @@ async def _stream_chat_events(
     graph, message: str, thread_id: str, selected_item_ids: list[str] | None = None
 ) -> AsyncIterator[ChatStreamEvent]:
     """Genera eventos SSE conforme cada nodo del grafo termina."""
-    config = {"configurable": {"thread_id": thread_id}}
+    config = with_langfuse({"configurable": {"thread_id": thread_id}}, thread_id=thread_id)
     lock = _thread_locks[thread_id]
 
     if lock.locked():

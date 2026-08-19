@@ -9,6 +9,13 @@ mcp[cli]>=1.0.0,<2.0.0
 openai>=1.30.0
 tiktoken>=0.7.0
 
+# Observabilidad (opcional, ver langfuse_docker/README.md)
+# SDK 4.x (OpenTelemetry-only): requiere el stack Langfuse v4 self-hosted
+# (langfuse_docker/docker-compose.yml: Postgres+ClickHouse+Redis+MinIO), no
+# el self-host "v2" simple — ese usaba una API REST que ya no existe en las
+# versiones recientes del SDK ni del servidor.
+langfuse>=4.0.0
+
 # Agents (LangChain / LangGraph)
 langchain>=1.3.0
 langchain-openai>=1.4.0
