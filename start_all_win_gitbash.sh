@@ -85,5 +85,6 @@ cat <<EOF
       - API FastAPI    -> http://localhost:8000 (docs en /docs)
       - Frontend       -> http://localhost:8501
 
-    Cierra cada ventana (o Ctrl+C dentro de ella) para parar ese servicio.
+    Cierra cada ventana (o Ctrl+C dentro de ella) para parar ese servicio,
+    o ejecuta ./stop_all.sh para cerrarlas todas de golpe.
 EOF

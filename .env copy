@@ -1,0 +1,35 @@
+# Copia real de .env.example con las credenciales del proyecto Supabase.
+# NUNCA subir este fichero a git.
+
+SUPABASE_API_URL=https://wrblqhdqbgpdbyihfevc.supabase.co
+
+# secret key (equivalente a service_role): permisos totales, solo para el
+# backend/servidores MCP. NO es la publishable key (sb_publishable_...).
+SUPABASE_SERVICE_KEY=sb_secret_cHhv2GAl90M7ZFYoNlNtzA_6YDM2A-P
+
+OPENAI_API_KEY=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
+
+LABELS_OUTPUT_DIR=./generated_labels
+SUPABASE_URL=your-supabase-url
+
+# Conexión a PostgreSQL vía el pooler de Supabase (Supavisor, puerto 5432,
+# modo sesión) para AsyncPostgresSaver (persistencia de memoria conversacional).
+# La conexión directa (db.xxx.supabase.co) no está disponible en el plan
+# gratuito de Supabase; el pooler en modo sesión sí soporta prepared statements
+# (a diferencia del pooler en modo transacción, puerto 6543).
+# Contraseña: Project Settings → Database → Reset database password si no la
+# recuerdas. NO es la SUPABASE_SERVICE_KEY.
+SUPABASE_DB_URL=postgresql://postgres.wrblqhdqbgpdbyihfevc:HOLA.1000.J@aws-0-eu-north-1.pooler.supabase.com:5432/postgres
+
+# Certificado CA para verificación SSL (httpx/requests). Necesario si Windows
+# no resuelve bien el almacén de certificados del sistema. Apunta al cacert.pem
+# instalado por 'certifi' dentro del .venv del proyecto (pip install -r requirements.txt).
+SSL_CERT_FILE=C:\Users\ccano\workspace\TFMGRUPO11\CopilotPosventaAutonoGestInteligenteDevolucion\.venv\Lib\site-packages\certifi\cacert.pem
+
+# Agente 1 (agente1ConMCP) — opcional, ya tiene este valor por defecto.
+MCP_SUPABASE_URL=http://localhost:8001/mcp
+
+# Agente 3 (agente3ConMCP) — opcional, ya tiene este valor por defecto.
+MCP_LOGISTICS_URL=http://localhost:8002/mcp
+HITL_THRESHOLD_EUR=100
+
