@@ -26,24 +26,42 @@
 | ChromaDB | Simple, open-source | En memoria por defecto, requiere infra separada para persistencia |
 | FAISS | Muy rápido, Facebook Research | Solo local, sin persistencia nativa, no serverless |
 
-**Decisión**: Con ~100-200 chunks de política, pgvector es más que suficiente y evita un servicio externo. Además, permite hacer queries híbridas (semántica + filtro por categoría en la misma query SQL).
+**Decisión**: Con ~102 chunks de política, pgvector es más que suficiente y evita un servicio externo. Mantener embeddings en la misma base de datos que los datos transaccionales permite hacer joins nativos entre chunks recuperados y filas de `return_policies` en una sola query, sin round-trips adicionales.
 
 ---
 
 ## 3. Pipeline de indexación
 
 ```
-dataset/policies/*.md
+data/policies/*.md
         │
-        ▼
-    Chunking (por sección del documento)
+        ▼  _split_into_sections()  → divide por encabezados ## (4-6 secciones/doc)
         │
+        ▼  _chunk_section()        → agrupa párrafos en 200-500 tokens sin partir frases
+        │                             cada chunk incluye el encabezado de su sección
+        │                             → 102 chunks totales (12 marco general + 5-6/categoría)
         ▼
     OpenAI text-embedding-3-small (1536 dimensiones)
+    — una sola llamada API por fichero (batch), no una por chunk —
         │
         ▼
-    INSERT INTO policy_embeddings (chunk_text, embedding, policy_id)
+    INSERT INTO policy_embeddings
+      { policy_id, chunk_text, embedding, metadata }
+
+    metadata = {
+        "source_doc":      "14_alimentacion.md",
+        "chunk_index":     2,
+        "category":        "alimentacion",   ← permite filtrar en el RPC sin JOIN
+        "policy_version":  "2026-08"         ← invalida chunks si la política cambia
+    }
 ```
+
+### Decisión de chunking: por sección vs. tamaño fijo
+
+Dividir por secciones (`## ...`) es superior a chunks de tamaño fijo porque:
+- Cada sección cubre un **tema semántico completo** (plazos, exclusiones legales, HITL, ejemplos)
+- El LLM recibe fragmentos con coherencia temática, no texto cortado a la mitad de una frase
+- El encabezado prefijado en cada chunk le da contexto suficiente para leerlo de forma aislada
 
 ### Modelo de embedding elegido
 
@@ -53,22 +71,55 @@ dataset/policies/*.md
 | `text-embedding-3-large` | 3072 | $0.13/1M tokens | Mejor calidad, 6x más caro |
 | `text-embedding-ada-002` | 1536 | $0.10/1M tokens | Generación anterior, 5x más caro |
 
-**Decisión**: `text-embedding-3-small` ofrece rendimiento comparable a `ada-002` a 1/5 del coste. Para ~200 chunks de políticas de devolución, la diferencia de calidad con `3-large` es negligible.
+**Decisión**: `text-embedding-3-small` ofrece rendimiento comparable a `ada-002` a 1/5 del coste. Crítico: se usa el **mismo modelo** tanto al indexar como al consultar — si difirieran, las distancias coseno carecerían de significado.
 
 ---
 
-## 4. Búsqueda en runtime
+## 4. Búsqueda en runtime: RPC sobre PostgreSQL
+
+La búsqueda semántica se ejecuta como una **función PostgreSQL nativa** (`match_policy_embeddings`) invocada vía RPC sobre la API REST de Supabase. Esto permite que el cálculo de distancia coseno y el índice IVFFlat de pgvector corran dentro del motor de base de datos, sin mover los 1536 vectores al proceso Python.
+
+### ¿RPC o REST?
+
+Son el mismo transporte HTTP, con semántica diferente:
+
+| Tipo | URL | Cuándo usarlo |
+|------|-----|---------------|
+| REST table | `GET /rest/v1/return_policies` | Leer/escribir recursos (CRUD) |
+| **RPC** | `POST /rest/v1/rpc/match_policy_embeddings` | Llamar una función con lógica propia |
+
+`match_policy_embeddings` no encaja en REST porque no devuelve un recurso — ejecuta un cálculo vectorial y devuelve resultados ordenados por similitud. Por eso Supabase lo expone bajo `/rpc/`.
+
+### Función SQL (migration 013)
 
 ```sql
--- Función match_policy_embeddings (supabase/migrations/011_create_functions.sql)
-SELECT *, 1 - (embedding <=> query_embedding) AS similarity
-FROM policy_embeddings
-WHERE 1 - (embedding <=> query_embedding) > match_threshold
-ORDER BY similarity DESC
-LIMIT match_count;
+CREATE OR REPLACE FUNCTION match_policy_embeddings(
+    query_embedding  VECTOR(1536),
+    match_threshold  FLOAT  DEFAULT 0.7,
+    match_count      INT    DEFAULT 5,
+    filter_category  TEXT   DEFAULT NULL   -- ← añadido en v2
+)
+RETURNS TABLE (id UUID, policy_id UUID, chunk_text TEXT, similarity FLOAT)
+AS $$
+    SELECT pe.id, pe.policy_id, pe.chunk_text,
+           1 - (pe.embedding <=> query_embedding) AS similarity
+    FROM policy_embeddings pe
+    WHERE 1 - (pe.embedding <=> query_embedding) > match_threshold
+      AND (
+          filter_category IS NULL
+          OR pe.metadata->>'category' = filter_category
+          OR pe.metadata->>'category' = 'general'  -- marco general: aplica a todas
+      )
+    ORDER BY pe.embedding <=> query_embedding
+    LIMIT match_count;
+$$;
 ```
 
-### Parámetros elegidos
+### Por qué se añadió `filter_category`
+
+Sin este filtro, una query para `alimentacion` podría devolver chunks de `mascotas` o `drogueria_salud` con mayor similitud (las tres son categorías de higiene sensible con texto casi idéntico). El filtro garantiza que el agente solo recibe fragmentos de la política de **su** categoría, más los del marco general que aplica a todas.
+
+### Parámetros de búsqueda
 
 | Parámetro | Valor | Justificación |
 |-----------|-------|---------------|
@@ -76,23 +127,34 @@ LIMIT match_count;
 | `match_count` | 5 | Suficiente contexto sin saturar el prompt del Evaluador |
 | Distancia | Coseno (`<=>`) | Estándar para embeddings de texto, invariante a la magnitud |
 
-### Búsqueda híbrida: semántica + estructurada
+---
+
+## 5. Búsqueda híbrida: semántica + estructurada
 
 ```python
-# 1. Búsqueda semántica: chunks relevantes por significado
-results = await client.rpc("match_policy_embeddings", {...})
+# 1. Búsqueda semántica: chunks relevantes por significado (RPC)
+#    — filtra por categoría para evitar cross-contamination entre políticas —
+rpc_params = {
+    "query_embedding": query_embedding,
+    "match_threshold": 0.7,
+    "match_count": 5,
+    "filter_category": category or None,
+}
+results = await client.rpc("match_policy_embeddings", rpc_params).execute()
 
-# 2. Filtro estructurado: política exacta de la categoría
+# 2. Filtro estructurado: política exacta de la categoría (REST)
 policy_info = await client.table("return_policies")
-    .eq("category", category)  # "electronics", "moda", etc.
+    .eq("category", category)
     .eq("active", True)
 ```
 
-Esto es clave: la búsqueda semántica encuentra los fragmentos relevantes (e.g., "productos defectuosos pueden devolverse en 30 días"), pero el filtro estructurado garantiza que siempre tenemos los datos exactos de la categoría (plazo máximo, restocking fee, condiciones permitidas).
+Los dos se complementan:
+- Los **chunks RAG** aportan contexto narrativo (casos especiales, ejemplos, excepciones legales)
+- La **fila estructurada** garantiza los datos exactos (plazo máximo, `allowed_conditions`, recargo) que las reglas deterministas necesitan para su lógica
 
 ---
 
-## 5. ¿Por qué el LLM decide y no un motor de reglas?
+## 6. ¿Por qué el LLM decide y no solo un motor de reglas?
 
 El Agente Evaluador combina ambos:
 
@@ -101,46 +163,48 @@ El Agente Evaluador combina ambos:
 | ¿Dentro de plazo? | `calculate_days_since_delivery()` vs `max_return_days` | Determinista |
 | ¿Condición permitida? | `condition` vs `allowed_conditions` | Determinista |
 | ¿Historial sospechoso? | `approved > 5` en 6 meses | Determinista |
-| ¿Caso ambiguo? (descripción difusa, producto sin categoría clara) | LLM con contexto RAG | Razonamiento |
+| ¿Importe > 100€? | `refund_amount` vs umbral HITL | Determinista |
+| ¿Caso ambiguo? (descripción difusa, motivo sensible, zona frontera) | LLM con contexto RAG | Razonamiento |
 
 El LLM recibe los datos ya calculados (días desde entrega, historial) y las políticas relevantes (RAG). Su trabajo es **sintetizar** la decisión y generar una explicación auditable, no inventar reglas.
 
 ---
 
-## 6. Corpus de políticas: ¿por qué 17 documentos Markdown?
+## 7. Corpus de políticas: ¿por qué 17 documentos Markdown?
 
 | Decisión | Justificación |
 |----------|---------------|
 | Markdown (no JSON/YAML) | Legible por humanos, fácil de editar, buen chunking por secciones |
 | 1 doc por categoría | Permite actualizaciones granulares sin re-indexar todo |
-| Marco general separado (`00_marco_general`) | Reglas comunes (14 días legales, umbral HITL 100€) aplicables a todas las categorías |
+| Marco general separado (`00_marco_general`) | Reglas comunes (14 días legales, umbral HITL 100€) aplicables a todas las categorías. Se ingesta con `policy_id = NULL` y `category = "general"` — el filtro de categoría siempre lo incluye |
 | 16 categorías específicas | Cubren el catálogo de la tienda ficticia "Mercadia" con reglas diferenciadas |
+| `policy_version` en metadata | Permite detectar chunks obsoletos si las políticas se actualizan |
 
-### Ejemplo de chunking
+### Ejemplo de chunk resultante
 
-```markdown
-## 3. Condiciones de devolución          ← Chunk 1: condiciones
-Los productos electrónicos defectuosos
-pueden devolverse en 30 días...
+```
+## 3. Casuística específica
 
-## 4. Restocking fee                     ← Chunk 2: fees
-No se aplica cargo por restock en
-productos defectuosos...
+- **Alimentación no perecedera sellada**: se acepta devolución por cambio de
+  opinión únicamente si el envase original está intacto, sin abrir, y con al
+  menos 2 meses de vigencia hasta su fecha de consumo preferente...
 ```
 
-Cada sección se vectoriza como un chunk independiente, permitiendo que la búsqueda semántica encuentre exactamente el fragmento relevante.
+Cada chunk incluye el encabezado de su sección, por lo que el LLM puede leerlo en aislamiento total y entender de qué trata sin necesitar el resto del documento.
 
 ---
 
-## 7. Evaluación del RAG
+## 8. Evaluación del RAG
 
-El fichero `dataset/eval_cases.csv` contiene un golden dataset con la decisión esperada para cada caso:
+El fichero `data/eval_cases.csv` contiene un golden dataset con la decisión esperada para cada caso:
 
 ```csv
-case_id, category, reason_category, days_since_delivery, expected_label, rationale
-...,     electronics, defective,    5,                    valid,          "Dentro de plazo..."
-...,     juguetes,    quality_issue, 1,                   invalid,        "Condición no permitida..."
-...,     electrodomesticos, defective, 16,                human_review,   "Importe >100€..."
+case_id, category, reason_category, days_since_delivery, refund_amount, expected_label, rationale
+...,     alimentacion, defective,   5,                   29.99,          valid,          "Dentro de plazo..."
+...,     juguetes,     quality_issue, 1,                 55.98,          invalid,        "Condición no admitida..."
+...,     electrodomesticos, defective, 16,               289.99,         human_review,   "Importe >100€..."
 ```
 
-Esto permite medir **precisión del sistema completo** (RAG + Evaluador) de forma automática, sin depender de evaluación humana subjetiva.
+**480 casos** con distribución: 27% válido · 28% inválido · 45% revisión humana.
+
+Esto permite medir **precisión del sistema completo** (RAG + reglas deterministas + LLM Evaluador) de forma automática, sin depender de evaluación humana subjetiva.
