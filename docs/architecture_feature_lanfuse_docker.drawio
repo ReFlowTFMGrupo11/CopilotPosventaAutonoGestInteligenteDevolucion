@@ -1,0 +1,107 @@
+<mxfile host="65bd71144e">
+    <diagram id="reflow-architecture" name="Arquitectura ReFlow">
+        <mxGraphModel dx="1930" dy="551" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1000" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="user" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Usuario (navegador)" vertex="1">
+                    <mxGeometry height="50" width="180" x="430" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="streamlit" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Frontend Streamlit — :8501&#xa;frontend/Chat.py&#xa;frontend/pages/1_Admin.py" vertex="1">
+                    <mxGeometry height="70" width="260" x="390" y="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="fastapi" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Backend FastAPI — :8000&#xa;backend/api/main.py&#xa;routers: chat · admin · orders" vertex="1">
+                    <mxGeometry height="70" width="610" x="215" y="240" as="geometry"/>
+                </mxCell>
+                <mxCell id="langgraph" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;dashed=0;" value="LangGraph — backend/agents/graph.py&#xa;triage → fetch_order_data → evaluator → resolver/reject → hitl_admin&#xa;(routing 100% determinista, checkpointer por thread_id)" vertex="1">
+                    <mxGeometry height="80" width="640" x="200" y="340" as="geometry"/>
+                </mxCell>
+                <mxCell id="mcpsupabase" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1" value="MCP Supabase — :8001&#xa;backend/mcp/mcp_supabase.py&#xa;get_order_details · get_customer_return_history&#xa;search_return_policy (RAG) · create_return_record&#xa;update_return_status" vertex="1">
+                    <mxGeometry height="160" width="350" x="200" y="530" as="geometry"/>
+                </mxCell>
+                <mxCell id="mcplogistics" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="MCP Logistics — :8002&#xa;backend/mcp/mcp_logistics.py&#xa;generate_shipping_label&#xa;send_customer_notification" vertex="1">
+                    <mxGeometry height="100" width="580" x="640" y="570" as="geometry"/>
+                </mxCell>
+                <mxCell id="supabasedb" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Supabase&#xa;Postgres + pgvector&#xa;pedidos · devoluciones · checkpoints de conversación&#xa;policy_embeddings (RAG)" vertex="1">
+                    <mxGeometry height="100" width="360" x="170" y="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="openai" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" value="OpenAI API&#xa;LLM (nodos del grafo) · Embeddings (RAG)" vertex="1">
+                    <mxGeometry height="60" width="270" x="610" y="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="raging" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;" value="data/rag/ingest_policy_embeddings.py&#xa;(script offline, ejecución manual)" vertex="1">
+                    <mxGeometry height="70" width="220" x="-30" y="585" as="geometry"/>
+                </mxCell>
+                <mxCell id="langfuse" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Langfuse (Docker, self-hosted)&#xa;observabilidad / tracing de LLM&#xa;langfuse-web + langfuse-worker&#xa;+ Postgres + ClickHouse + Redis + MinIO" vertex="1">
+                    <mxGeometry height="90" width="320" x="960" y="340" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" edge="1" parent="1" source="user" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="streamlit">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" edge="1" parent="1" source="streamlit" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="fastapi" value="REST /api/chat · /api/admin · /api/orders">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" edge="1" parent="1" source="fastapi" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="langgraph" value="invoca grafo por turno">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" edge="1" parent="1" source="mcpclient" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="mcpsupabase" value="MCP / HTTP">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" edge="1" parent="1" source="mcpclient" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="mcplogistics" value="MCP / HTTP">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="650.06" y="520.06"/>
+                            <mxPoint x="930.06" y="520.06"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e7" edge="1" parent="1" source="mcpsupabase" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="supabasedb" value="SQL + pgvector">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" edge="1" parent="1" source="mcpsupabase" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.999;exitY=0.7;exitDx=0;exitDy=0;exitPerimeter=0;" target="openai" value="embeddings búsqueda RAG">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" edge="1" parent="1" source="langgraph" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" target="openai" value="chat completions">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="650.06" y="590.06"/>
+                            <mxPoint x="745" y="590.06"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e10" edge="1" parent="1" source="langgraph" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#FF6666;strokeWidth=3;" target="supabasedb" value="checkpointer (AsyncPostgresSaver)">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="340.06" y="510.06"/>
+                            <mxPoint x="-129.94" y="510.06"/>
+                            <mxPoint x="-129.94" y="740.06"/>
+                            <mxPoint x="350.06" y="740.06"/>
+                        </Array>
+                        <mxPoint x="539.9988235294122" y="420" as="sourcePoint"/>
+                        <mxPoint x="239.99882352941216" y="740" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e11" edge="1" parent="1" source="raging" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#00CC00;strokeWidth=2;" target="supabasedb" value="ingesta offline">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="80.06" y="710.06"/>
+                            <mxPoint x="350.06" y="710.06"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e12" edge="1" parent="1" source="raging" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#FF8000;" target="openai" value="genera embeddings">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="830.06" y="605"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="e13" edge="1" parent="1" source="langgraph" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#d79b00;fontColor=#d79b00;" target="langfuse" value="callbacks (tracing OTel)&#xa;with_langfuse() en chat.py">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="mcpclient" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" value="MCP Client — backend/agents/infra/mcp_client.py&#xa;(mapea cada tool al server MCP correspondiente)" vertex="1">
+                    <mxGeometry height="60" width="470" x="490" y="450" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
