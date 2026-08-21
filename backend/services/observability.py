@@ -85,6 +85,26 @@ def get_langfuse_callback() -> Optional[Any]:
     return _callback_instance
 
 
+def with_langfuse(config: dict[str, Any], *, thread_id: str | None = None) -> dict[str, Any]:
+    """Añade callback+metadata de LangFuse a config de LangGraph si aplica.
+
+    - Si LangFuse no está configurado, devuelve `config` sin cambios.
+    - Si hay `thread_id`, lo añade como `langfuse_session_id` para agrupar
+      toda la conversación en una misma sesión de LangFuse.
+    """
+    callback = get_langfuse_callback()
+    if callback is None:
+        return config
+
+    merged = dict(config)
+    merged["callbacks"] = [*merged.get("callbacks", []), callback]
+    if thread_id:
+        metadata = dict(merged.get("metadata", {}))
+        metadata["langfuse_session_id"] = thread_id
+        merged["metadata"] = metadata
+    return merged
+
+
 def flush() -> None:
     """Fuerza el envío de eventos pendientes a LangFuse (útil al cerrar la app)."""
     lf = get_langfuse()
