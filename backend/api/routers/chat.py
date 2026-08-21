@@ -22,6 +22,7 @@ from backend.api.schemas import (
     ChatStreamEvent,
     NewChatResponse,
 )
+from backend.services.observability import get_langfuse_callback
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,8 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
 
     Útil para pruebas con curl o clientes que no soportan SSE.
     """
+    cb = get_langfuse_callback()
+    callbacks = [cb] if cb else []
     try:
         result = await graph.ainvoke(
             {
@@ -59,7 +62,10 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
                 "thread_id": request.thread_id,
                 "selected_item_ids": request.selected_item_ids,
             },
-            config={"configurable": {"thread_id": request.thread_id}},
+            config={
+                "configurable": {"thread_id": request.thread_id},
+                "callbacks": callbacks,
+            },
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error ejecutando el grafo: {exc}")
@@ -90,7 +96,11 @@ async def _stream_chat_events(
     graph, message: str, thread_id: str, selected_item_ids: list[str] | None = None
 ) -> AsyncIterator[ChatStreamEvent]:
     """Genera eventos SSE conforme cada nodo del grafo termina."""
-    config = {"configurable": {"thread_id": thread_id}}
+    cb = get_langfuse_callback()
+    config = {
+        "configurable": {"thread_id": thread_id},
+        "callbacks": [cb] if cb else [],
+    }
     lock = _thread_locks[thread_id]
 
     if lock.locked():
