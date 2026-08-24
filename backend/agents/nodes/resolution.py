@@ -381,10 +381,39 @@ async def resolution_agent(
 
 
 async def rejection_agent(state: ReturnState) -> dict[str, Any]:
-    """Nodo que comunica un rechazo empático cuando la devolución no es elegible."""
+    """Nodo que comunica un rechazo empático cuando la devolución no es elegible.
+
+    Registra el rechazo en Supabase (status="rejected") para que quede
+    visible en el panel de Admin; antes de este fix, un rechazo total por
+    política nunca se persistía y desaparecía sin dejar rastro.
+    """
     llm = _build_llm()
 
     eligibility_reason = state.get("eligibility_reason", "No se cumple la política de devoluciones.")
+
+    return_request_id = ""
+    try:
+        return_record = await create_return_record(
+            order_id=state.get("order_id", ""),
+            customer_id=state.get("customer_id", ""),
+            reason=state.get("reason", ""),
+            reason_category=state.get("reason_category", ""),
+            refund_amount=0.0,
+            items=state.get("items_to_return", []),
+            notes=f"Rechazado automáticamente por política: {eligibility_reason}",
+            thread_id=state.get("thread_id", ""),
+        )
+        return_request_id = return_record["return_request"]["id"]
+        await update_return_status(
+            return_id=return_request_id,
+            status="rejected",
+            resolution="rejected_by_policy",
+            notes=eligibility_reason,
+        )
+    except (RuntimeError, ValueError) as exc:
+        # Guard de duplicados: ya existe una devolución (activa o histórica)
+        # para este pedido/artículo; no hace falta crear otra.
+        logger.info("Return record ya existe al rechazar, no se duplica: %s", exc)
 
     response = await llm.ainvoke([
         SystemMessage(
@@ -395,6 +424,7 @@ async def rejection_agent(state: ReturnState) -> dict[str, Any]:
     return {
         "messages": [response],
         "resolution": "rejected",
+        "return_request_id": return_request_id,
         "current_agent": "resolver",
     }
 
