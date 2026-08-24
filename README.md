@@ -24,6 +24,7 @@ como motor de razonamiento.
 | Tests unitarios e integración — `tests/` | ✅ |
 | Backend FastAPI (endpoints de chat y panel admin/HITL) — `backend/api/` | ✅ |
 | Frontend Streamlit (chat cliente + dashboard admin) — `frontend/` | ✅ |
+| Observabilidad LLM (Langfuse self-hosted vía Docker) — `langfuse_docker/` | ✅ (opcional) |
 
 ## Estructura del repositorio
 
@@ -58,6 +59,7 @@ backend/
   db/            # Cliente Supabase (singleton cacheado)
 data/         # Dataset sintético + corpus de 17 políticas para RAG + eval_cases.csv
 supabase/        # Migraciones SQL y seed de datos
+langfuse_docker/ # Observabilidad LLM (Langfuse self-hosted, opcional) — ver su README
 tests/
   unit/          # Tests de routing, logistics_service, supabase_service
   integration/   # Tests del grafo completo, triage, policy y resolution agents
@@ -271,6 +273,21 @@ El directorio `data/` contiene:
 
 Ver [`data/README.md`](data/README.md) para más detalle.
 
+## Observabilidad LLM (Langfuse, opcional)
+
+[Langfuse](https://langfuse.com) traza cada llamada al LLM dentro del grafo
+de agentes (prompts, respuestas, tokens, latencia, coste) para poder
+depurar conversaciones desde un panel web. Es **opcional**: sin configurar,
+la app funciona exactamente igual, sin trazas.
+
+Todo lo relacionado vive en [`langfuse_docker/`](langfuse_docker/README.md)
+(stack self-hosted vía Docker: Postgres + ClickHouse + Redis + MinIO +
+langfuse-web/worker, más el pequeño adaptador Python que engancha el
+`CallbackHandler` en `backend/api/routers/chat.py`). Sigue el
+[README de esa carpeta](langfuse_docker/README.md) para levantarlo la
+primera vez; una vez configurado, `start_all.sh`/`stop_all.sh` ya lo
+arrancan y paran junto con el resto de servicios automáticamente.
+
 ## Guía rápida de arranque (todos los servicios)
 
 Resumen de todos los pasos, en orden, para levantar la app completa desde cero.
@@ -298,8 +315,12 @@ backend en `http://localhost:8000` (Swagger en `/docs`).
 [`start_all.sh`](start_all.sh) (Git Bash) automatiza los 8 pasos anteriores:
 crea el `.venv` si no existe, instala dependencias, genera `.env` desde
 `.env.example` si falta, y abre los 4 procesos en ventanas de Git Bash
-separadas, en el orden correcto.
+separadas, en el orden correcto. Si ya tienes Langfuse configurado (ver
+sección anterior), también lo levanta; si no, lo salta sin bloquear el
+resto.
 
 ```bash
 ./start_all.sh
 ```
+
+Para pararlo todo (incluido Langfuse, si está corriendo): `./stop_all.sh`.

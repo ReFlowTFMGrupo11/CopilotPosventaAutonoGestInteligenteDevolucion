@@ -164,10 +164,41 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
             "current_agent": "triage",
         }
 
+    # ── Pedido bloqueado (p. ej. ya tiene una devolución activa) ────────
+    # fetch_order_data deja `error` marcado en el estado, pero ese campo
+    # nunca se limpia solo: sin este corte, la conversación seguía
+    # recogiendo motivo/estado/confirmación turno tras turno como si todo
+    # avanzara con normalidad, mientras route_after_fetch (graph.py) la
+    # descartaba en silencio cada vez por el `error` ya persistido —
+    # un bucle de confirmaciones que nunca llega a ningún sitio. Si el
+    # cliente da un order_number DISTINTO, se le deja intentar con ese
+    # otro pedido en vez de quedar bloqueado para siempre.
+    blocking_error = state.get("error")
+    switching_order = bool(result.order_number) and result.order_number != state.get("order_number")
+    if blocking_error and not switching_order:
+        return {
+            "messages": [AIMessage(content=(
+                f"{blocking_error} Si quieres devolver un artículo de OTRO pedido, "
+                "dime su número."
+            ))],
+            "current_agent": "triage",
+        }
+
     updates: dict[str, Any] = {
         "messages": [AIMessage(content=result.response_to_customer)],
         "current_agent": "triage",
     }
+
+    if switching_order:
+        # Nuevo pedido: cualquier bloqueo/artículos/motivo del pedido
+        # anterior ya no aplican, para no arrastrar datos de un pedido
+        # a otro.
+        updates["error"] = None
+        updates["order_details"] = None
+        updates["items_to_return"] = None
+        updates["items_confirmed"] = None
+        updates["reason"] = None
+        updates["reason_category"] = None
 
     if result.order_number:
         updates["order_number"] = result.order_number
