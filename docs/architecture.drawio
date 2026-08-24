@@ -168,13 +168,13 @@
                 <mxCell id="langfuse_worker" value="⚙️ langfuse-worker&#xa;(ingesta async)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
                     <mxGeometry x="590" y="525" width="190" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="langfuse_infra_label" value="+ Postgres · ClickHouse · Redis · MinIO (langfuse_docker/docker-compose.yml)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;" vertex="1" parent="1">
+                <mxCell id="langfuse_infra_label" value="+ Postgres · ClickHouse · Redis · MinIO (langfuse_infra/docker-compose.yml)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;" vertex="1" parent="1">
                     <mxGeometry x="380" y="590" width="400" height="30" as="geometry"/>
                 </mxCell>
                 <mxCell id="c13" value="callbacks (tracing OTel)&#xa;with_langfuse() en chat.py" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="graph_group" target="langfuse_group">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="langfuse_note" value="&lt;i&gt;Opcional: si LANGFUSE_PUBLIC_KEY/SECRET_KEY&#xa;no están en .env, with_langfuse() devuelve&#xa;el config tal cual — la app funciona igual&#xa;sin trazas (ver langfuse_docker/README.md).&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
+                <mxCell id="langfuse_note" value="&lt;i&gt;Opcional: si LANGFUSE_PUBLIC_KEY/SECRET_KEY&#xa;no están en .env, with_langfuse() devuelve&#xa;el config tal cual — la app funciona igual&#xa;sin trazas (ver langfuse_infra/README.md).&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
                     <mxGeometry x="360" y="650" width="250" height="70" as="geometry"/>
                 </mxCell>
             </root>

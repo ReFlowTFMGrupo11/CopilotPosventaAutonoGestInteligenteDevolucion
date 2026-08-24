@@ -29,7 +29,7 @@ local con ficheros JSON/MD" (`evaluate_rag.py`) a "evaluación en Langfuse"
 
 ### Requisitos previos
 
-- Langfuse corriendo en local (`langfuse_docker/`, ver su README) y accesible
+- Langfuse corriendo en local (`langfuse_infra/`, ver su README) y accesible
   en `localhost:3000`.
 - `.env` de la raíz del repo con `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`,
   `LANGFUSE_HOST` ya rellenos (los usa `backend/services/observability.py`

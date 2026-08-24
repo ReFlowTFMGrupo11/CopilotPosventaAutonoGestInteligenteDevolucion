@@ -17,10 +17,10 @@ Variables de entorno necesarias (ver .env):
     LANGFUSE_SECRET_KEY   sk-lf-...
     LANGFUSE_BASE_URL     https://cloud.langfuse.com  (default; usar
                           http://localhost:3000 si usas el stack self-hosted
-                          de langfuse_docker/, ver su README)
+                          de langfuse_infra/, ver su README)
     LANGFUSE_HOST         alias antiguo de LANGFUSE_BASE_URL, se lee como
                           fallback por compatibilidad con el resto de la
-                          documentación del repo (langfuse_docker/README.md,
+                          documentación del repo (langfuse_infra/README.md,
                           tests/qa/scripts/README.md)
 """
 
@@ -45,7 +45,7 @@ def _is_configured() -> bool:
 def _host() -> str:
     """Resuelve el host de LangFuse: LANGFUSE_BASE_URL (nombre actual del SDK)
     con fallback a LANGFUSE_HOST (nombre usado en el resto de la docs del
-    repo, p.ej. langfuse_docker/README.md), y por último LangFuse Cloud."""
+    repo, p.ej. langfuse_infra/README.md), y por último LangFuse Cloud."""
     return (
         os.getenv("LANGFUSE_BASE_URL")
         or os.getenv("LANGFUSE_HOST")

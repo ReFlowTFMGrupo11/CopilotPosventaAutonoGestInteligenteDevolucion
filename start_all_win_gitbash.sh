@@ -56,16 +56,16 @@ if [ ! -f "$REPO_ROOT/.env" ]; then
 fi
 
 # 3.5. Langfuse (opcional): solo se intenta si ya lo configuraste alguna vez
-# (existe langfuse_docker/.env). Es observabilidad, no un requisito para que
+# (existe langfuse_infra/.env). Es observabilidad, no un requisito para que
 # la app funcione, así que si Docker no está disponible o no arranca, se
 # avisa y se continúa sin bloquear el resto de servicios.
-if [ -f "$REPO_ROOT/langfuse_docker/.env" ]; then
+if [ -f "$REPO_ROOT/langfuse_infra/.env" ]; then
     echo "==> Langfuse configurado, intentando levantarlo..."
-    if ! "$REPO_ROOT/langfuse_docker/start_langfuse.sh"; then
+    if ! "$REPO_ROOT/langfuse_infra/start_langfuse.sh"; then
         echo "    AVISO: no se pudo levantar Langfuse (¿Docker Desktop cerrado?). Continuando sin tracing."
     fi
 else
-    echo "==> Langfuse no configurado (opcional, ver langfuse_docker/README.md). Saltando."
+    echo "==> Langfuse no configurado (opcional, ver langfuse_infra/README.md). Saltando."
 fi
 
 # 4. Lanzar cada servicio en su propia ventana de Git Bash
