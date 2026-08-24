@@ -208,3 +208,30 @@ case_id, category, reason_category, days_since_delivery, refund_amount, expected
 **480 casos** con distribución: 27% válido · 28% inválido · 45% revisión humana.
 
 Esto permite medir **precisión del sistema completo** (RAG + reglas deterministas + LLM Evaluador) de forma automática, sin depender de evaluación humana subjetiva.
+
+---
+
+## 9. Librerías LLM/RAG: qué se usa y qué no, y por qué
+
+Pregunta habitual en la defensa: *"¿por qué no usáis LangChain para todo, incluido el RAG?"*. Esta sección lo deja explícito.
+
+### Qué se usa y para qué
+
+| Librería | Se usa en | Para qué |
+|----------|-----------|----------|
+| `langgraph` | `backend/agents/graph.py` | Orquesta el grafo de agentes (`StateGraph`, aristas condicionales, checkpointer sobre Postgres) |
+| `langchain` / `langchain-core` | `backend/agents/nodes/*.py` | Abstracción de mensajes (`HumanMessage`, `AIMessage`) y tool-calling que consume LangGraph |
+| `langchain-openai` | `triage.py`, `policy.py`, `resolution.py` | `ChatOpenAI` para las llamadas al LLM de los tres agentes |
+| `langchain-mcp-adapters` | `backend/agents/infra/mcp_client.py` | Traduce las tools de los servers MCP (Supabase, Logística) al formato de tool-calling que entiende LangGraph |
+| `openai` (SDK oficial, sin envoltorio LangChain) | `data/rag/ingest_policy_embeddings.py` y `search_return_policy()` en `supabase_service.py` | Genera los embeddings, tanto al indexar las políticas como al resolver cada consulta |
+
+### Qué NO se usa y por qué
+
+| Librería | Por qué se descarta |
+|----------|----------------------|
+| `langchain-community` | Es una colección de *wrappers* (vector stores, document loaders, retrievers de terceros) pensada para no escribir tú la llamada a la API. Aquí la llamada a embeddings es una única línea (`client.embeddings.create(...)`, ver §3) y la búsqueda ya es una función SQL nativa (`match_policy_embeddings`, ver §4) — envolver eso en un `VectorStore` de LangChain añadiría una capa de indirección sobre dos líneas de código, a cambio de un paquete grande con dependencias de decenas de integradores que no se usan en este proyecto. |
+| `faiss-cpu` | Ya descartado frente a pgvector en la tabla de la §2, pero el motivo de fondo es de arquitectura de procesos: ReFlow corre **tres procesos Python separados** (API FastAPI, MCP Supabase, MCP Logística — ver `start_all.sh`) que pueden necesitar los embeddings. FAISS construye un índice en memoria/disco **local a un único proceso**; usarlo obligaría a cargarlo por duplicado en cada proceso y a sincronizarlo a mano cada vez que cambian las políticas. pgvector vive dentro de Supabase, así que los tres procesos consultan la **misma** tabla por SQL/RPC sin ningún paso de sincronización adicional. |
+
+### Decisión
+
+Se usa LangChain/LangGraph donde aporta valor real — orquestación con estado, checkpointing, tool-calling entre agentes y servers MCP —, pero no como capa universal para todo lo que toca a un LLM. Para el RAG en concreto, ir directo a `openai` + una función SQL en Postgres es menos código, menos dependencias que mantener actualizadas, y aprovecha que Supabase ya es la única fuente de datos compartida entre los tres servicios, sin necesidad de un vector store adicional que sincronizar.

@@ -15,7 +15,13 @@ el sistema arranca sin errores aunque LangFuse no esté configurado.
 Variables de entorno necesarias (ver .env):
     LANGFUSE_PUBLIC_KEY   pk-lf-...
     LANGFUSE_SECRET_KEY   sk-lf-...
-    LANGFUSE_BASE_URL     https://cloud.langfuse.com  (default)
+    LANGFUSE_BASE_URL     https://cloud.langfuse.com  (default; usar
+                          http://localhost:3000 si usas el stack self-hosted
+                          de langfuse_docker/, ver su README)
+    LANGFUSE_HOST         alias antiguo de LANGFUSE_BASE_URL, se lee como
+                          fallback por compatibilidad con el resto de la
+                          documentación del repo (langfuse_docker/README.md,
+                          tests/qa/scripts/README.md)
 """
 
 from __future__ import annotations
@@ -36,6 +42,17 @@ def _is_configured() -> bool:
     return bool(os.getenv("LANGFUSE_SECRET_KEY") and os.getenv("LANGFUSE_PUBLIC_KEY"))
 
 
+def _host() -> str:
+    """Resuelve el host de LangFuse: LANGFUSE_BASE_URL (nombre actual del SDK)
+    con fallback a LANGFUSE_HOST (nombre usado en el resto de la docs del
+    repo, p.ej. langfuse_docker/README.md), y por último LangFuse Cloud."""
+    return (
+        os.getenv("LANGFUSE_BASE_URL")
+        or os.getenv("LANGFUSE_HOST")
+        or "https://cloud.langfuse.com"
+    )
+
+
 def get_langfuse() -> Optional[Any]:
     """Devuelve el cliente Langfuse singleton, o None si no está configurado."""
     global _langfuse_instance
@@ -47,9 +64,9 @@ def get_langfuse() -> Optional[Any]:
             _langfuse_instance = Langfuse(
                 public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
                 secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-                host=os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"),
+                host=_host(),
             )
-            logger.info("LangFuse inicializado → %s", os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"))
+            logger.info("LangFuse inicializado → %s", _host())
         except Exception as exc:
             logger.warning("LangFuse no disponible: %s", exc)
             return None
@@ -76,7 +93,7 @@ def get_langfuse_callback() -> Optional[Any]:
             _callback_instance = CallbackHandler(
                 public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
                 secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-                host=os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com"),
+                host=_host(),
             )
             logger.info("LangFuse CallbackHandler listo.")
         except Exception as exc:
