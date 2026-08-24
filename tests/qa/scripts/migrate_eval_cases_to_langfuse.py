@@ -22,7 +22,7 @@ Uso:
 Requisitos:
     LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_HOST en .env
     (ya están si el tracing de backend/services/observability.py funciona;
-    ver langfuse_docker/README.md para levantar Langfuse en local)
+    ver langfuse_infra/README.md para levantar Langfuse en local)
 """
 
 from __future__ import annotations

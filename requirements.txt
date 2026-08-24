@@ -11,7 +11,7 @@ tiktoken>=0.7.0
 
 # Observabilidad (opcional, ver backend/services/observability.py).
 # SDK 4.x (OpenTelemetry-only): funciona out-of-the-box contra LangFuse Cloud
-# (default) o contra un servidor Langfuse v4 self-hosted (langfuse_docker/,
+# (default) o contra un servidor Langfuse v4 self-hosted (langfuse_infra/,
 # ver su README) — no vale el self-host "v2" simple, que usaba una API REST
 # que ya no existe en las versiones recientes del SDK ni del servidor.
 langfuse>=4.14.0

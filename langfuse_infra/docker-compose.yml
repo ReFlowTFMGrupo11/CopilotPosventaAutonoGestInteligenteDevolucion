@@ -32,27 +32,27 @@ services:
       - 127.0.0.1:3030:3030
     environment: &langfuse-worker-env
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en langfuse_docker/.env}@postgres:5432/postgres
-      SALT: ${SALT:?falta SALT en langfuse_docker/.env}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?falta ENCRYPTION_KEY en langfuse_docker/.env (openssl rand -hex 32)}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en langfuse_infra/.env}@postgres:5432/postgres
+      SALT: ${SALT:?falta SALT en langfuse_infra/.env}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?falta ENCRYPTION_KEY en langfuse_infra/.env (openssl rand -hex 32)}
       TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
       LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
       CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
       CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?falta CLICKHOUSE_PASSWORD en langfuse_docker/.env}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?falta CLICKHOUSE_PASSWORD en langfuse_infra/.env}
       CLICKHOUSE_CLUSTER_ENABLED: "false"
       LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
       LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
       LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_docker/.env}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_infra/.env}
       LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
       LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
       LANGFUSE_S3_MEDIA_UPLOAD_REGION: auto
       LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_docker/.env}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_infra/.env}
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://minio:9000
       LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
       LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: media/
@@ -63,11 +63,11 @@ services:
       LANGFUSE_S3_BATCH_EXPORT_ENDPOINT: http://minio:9000
       LANGFUSE_S3_BATCH_EXPORT_EXTERNAL_ENDPOINT: http://localhost:9090
       LANGFUSE_S3_BATCH_EXPORT_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minio}
-      LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_docker/.env}
+      LANGFUSE_S3_BATCH_EXPORT_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_infra/.env}
       LANGFUSE_S3_BATCH_EXPORT_FORCE_PATH_STYLE: "true"
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_AUTH: ${REDIS_AUTH:?falta REDIS_AUTH en langfuse_docker/.env}
+      REDIS_AUTH: ${REDIS_AUTH:?falta REDIS_AUTH en langfuse_infra/.env}
       REDIS_TLS_ENABLED: "false"
 
   langfuse-web:
@@ -78,7 +78,7 @@ services:
       - 3000:3000
     environment:
       <<: *langfuse-worker-env
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?falta NEXTAUTH_SECRET en langfuse_docker/.env}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?falta NEXTAUTH_SECRET en langfuse_infra/.env}
       LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: http://localhost:9090
       # Bootstrap automático: si se rellenan, Langfuse crea la organización,
       # el proyecto, el usuario admin y registra el par de API keys ya
@@ -100,7 +100,7 @@ services:
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?falta CLICKHOUSE_PASSWORD en langfuse_docker/.env}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?falta CLICKHOUSE_PASSWORD en langfuse_infra/.env}
     volumes:
       - langfuse_clickhouse_data:/var/lib/clickhouse
       - langfuse_clickhouse_logs:/var/log/clickhouse-server
@@ -121,7 +121,7 @@ services:
     command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_docker/.env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?falta MINIO_ROOT_PASSWORD en langfuse_infra/.env}
     ports:
       - 9090:9000
       - 127.0.0.1:9091:9001
@@ -160,7 +160,7 @@ services:
       retries: 10
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en langfuse_docker/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en langfuse_infra/.env}
       POSTGRES_DB: postgres
       TZ: UTC
       PGTZ: UTC

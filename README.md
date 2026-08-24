@@ -24,7 +24,7 @@ como motor de razonamiento.
 | Tests unitarios e integración — `tests/` | ✅ |
 | Backend FastAPI (endpoints de chat y panel admin/HITL) — `backend/api/` | ✅ |
 | Frontend Streamlit (chat cliente + dashboard admin) — `frontend/` | ✅ |
-| Observabilidad LLM (Langfuse self-hosted vía Docker) — `langfuse_docker/` | ✅ (opcional) |
+| Observabilidad LLM (Langfuse self-hosted vía Docker) — `langfuse_infra/` | ✅ (opcional) |
 
 ## Estructura del repositorio
 
@@ -59,7 +59,7 @@ backend/
   db/            # Cliente Supabase (singleton cacheado)
 data/         # Dataset sintético + corpus de 17 políticas para RAG + eval_cases.csv
 supabase/        # Migraciones SQL y seed de datos
-langfuse_docker/ # Observabilidad LLM (Langfuse self-hosted, opcional) — ver su README
+langfuse_infra/ # Observabilidad LLM (Langfuse self-hosted, opcional) — ver su README
 tests/
   unit/          # Tests de routing, logistics_service, supabase_service
   integration/   # Tests del grafo completo, triage, policy y resolution agents
@@ -280,11 +280,11 @@ de agentes (prompts, respuestas, tokens, latencia, coste) para poder
 depurar conversaciones desde un panel web. Es **opcional**: sin configurar,
 la app funciona exactamente igual, sin trazas.
 
-Todo lo relacionado vive en [`langfuse_docker/`](langfuse_docker/README.md)
+Todo lo relacionado vive en [`langfuse_infra/`](langfuse_infra/README.md)
 (stack self-hosted vía Docker: Postgres + ClickHouse + Redis + MinIO +
 langfuse-web/worker, más el pequeño adaptador Python que engancha el
 `CallbackHandler` en `backend/api/routers/chat.py`). Sigue el
-[README de esa carpeta](langfuse_docker/README.md) para levantarlo la
+[README de esa carpeta](langfuse_infra/README.md) para levantarlo la
 primera vez; una vez configurado, `start_all.sh`/`stop_all.sh` ya lo
 arrancan y paran junto con el resto de servicios automáticamente.
 
