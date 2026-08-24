@@ -35,6 +35,12 @@ uvicorn[standard]>=0.30.0
 streamlit>=1.38.0
 httpx>=0.27.0
 
+# Pandas (dependencia transitiva de Streamlit): fijada a una version estable
+# con reputacion acumulada en Windows Smart App Control. Versiones muy
+# recientes (p.ej. pandas 3.x recien publicado) pueden bloquearse al cargar
+# sus binarios compilados (.pyd) por "directiva de Control de aplicaciones".
+pandas==2.2.3
+
 # Testing
 pytest>=8.0.0
 pytest-asyncio>=0.24.0
