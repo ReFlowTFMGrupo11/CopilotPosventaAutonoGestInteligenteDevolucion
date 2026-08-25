@@ -62,20 +62,48 @@ optimizada para un caso de uso real:
 |---|---|---|
 | Backend | `cloud.langfuse.com`, cero infraestructura propia | Stack propio: Postgres + ClickHouse + Redis + MinIO + langfuse-web/worker |
 | Coste operativo | Ninguno (tier gratuito) | 5 contenedores Docker en local |
-| Privacidad de datos | Datos (incl. pedidos/clientes ficticios) salen a un SaaS de terceros | Todo el tracing se queda en la máquina del desarrollador |
+| Terceros con acceso a los datos trazados | Suma **un** SaaS más a los que ya existen (ver más abajo) | No añade ninguno nuevo |
 | Capacidades expuestas | `CallbackHandler` **+** cliente `Langfuse` crudo (scores manuales) | Solo `CallbackHandler` |
 
+### El argumento de "privacidad" hay que matizarlo, no venderlo como absoluto
+
+Es tentador decir "self-hosted = los datos no salen de la máquina", pero es
+**falso** en este proyecto: `SUPABASE_URL` apunta a Supabase Cloud (plan
+gratuito, no self-hosted) y `OPENAI_API_KEY` es la API de OpenAI. Los datos
+de un cliente (pedido, email, dirección) ya viven en un Postgres de terceros,
+y **cada llamada al LLM manda ese mismo contenido** (prompt con
+`order_details`, historial, políticas RAG) a OpenAI. Lo que LangFuse traza es,
+literalmente, una copia de ese prompt/respuesta que ya salió hacia OpenAI —
+no es una categoría nueva de dato expuesto.
+
+El self-hosted sí aporta algo, pero más concreto: reduce el número de
+terceros con esos datos de 3 (Supabase + OpenAI + LangFuse Cloud) a 2
+(Supabase + OpenAI), y evita que un tercero *adicional* vea algo que ni
+Supabase ni OpenAI ven por separado — **la sesión completa correlacionada**
+(las tres llamadas Triage → Policy → Resolution de una conversación,
+enlazadas bajo el mismo `thread_id`, con el resultado final). Es "una empresa
+menos con la vista agregada del caso", no "los datos no salen".
+
+Si el objetivo fuera proteger de verdad el dato sensible dentro de las
+trazas, la palanca correcta no es dónde vive el servidor de LangFuse, sino
+el parámetro `mask` que acepta el constructor de `Langfuse()` (permite
+redactar campos como email/dirección antes de convertirlos en un span) —
+funciona igual contra Cloud o contra self-hosted. No está implementado en
+este proyecto (dataset sintético, sin datos reales de clientes), pero es la
+respuesta correcta si preguntan "¿y si esto fuera producción con clientes
+reales?".
+
 **Por qué no era trivial elegir una y descartar la otra**: la versión
-self-hosted resuelve un problema real de privacidad (este es un sistema de
-devoluciones con datos de clientes) y la versión Cloud SDK resuelve un
-problema real de evaluación (los scripts de QA en `tests/qa/scripts/` necesitan
-el cliente `Langfuse` crudo para escribir métricas, no solo el callback).
+self-hosted evita sumar un tercer SaaS a la lista de quien ve los datos
+correlacionados por sesión, y la versión Cloud SDK resuelve un problema real
+de evaluación (los scripts de QA en `tests/qa/scripts/` necesitan el cliente
+`Langfuse` crudo para escribir métricas, no solo el callback).
 
 **Decisión final**: mantener **una sola** implementación de código
 (`backend/services/observability.py`, la más completa) pero dejar que
 apunte a **cualquiera de los dos backends** vía variable de entorno —
-así no hay que elegir entre privacidad y capacidad de evaluación, es una
-decisión de infraestructura (`LANGFUSE_BASE_URL`) y no de código.
+así no hay que elegir entre las dos capacidades, es una decisión de
+infraestructura (`LANGFUSE_BASE_URL`) y no de código.
 
 ```python
 def _host() -> str:
@@ -289,12 +317,16 @@ excepción de inicialización y devuelve `None`; `with_langfuse()` entonces
 devuelve el `config` original sin el callback. El grafo de agentes no
 depende de LangFuse para ejecutar.
 
-**¿Por qué no usar solo el self-hosted y evitar mandar datos a un SaaS?**
-Es la opción soportada (`langfuse_infra/`, apuntando `LANGFUSE_BASE_URL` a
-`http://localhost:3000`), pero exige tener Docker corriendo con 5
-contenedores solo para trazar. Para el flujo de desarrollo del día a día,
-LangFuse Cloud sin infraestructura propia es más rápido de levantar; el
-self-hosted queda disponible para quien lo necesite por privacidad de datos.
+**¿El self-hosted evita que los datos de los clientes salgan de la máquina?**
+No del todo, y hay que tener cuidado con esta pregunta: `SUPABASE_URL` en
+este proyecto ya apunta a Supabase **Cloud**, y cada llamada al LLM manda el
+mismo contenido a **OpenAI**. El self-hosted de LangFuse solo evita sumar
+un tercer SaaS a esa lista, y evita que ese tercero vea la sesión completa
+correlacionada (las tres llamadas de una conversación enlazadas). No hace
+que "los datos no salgan" — eso ya no es cierto desde que existen Supabase y
+OpenAI en el stack. Para el día a día, Cloud sin infraestructura propia es
+más rápido de levantar; el self-hosted queda disponible para quien quiera
+reducir el número de terceros con la vista agregada del caso.
 
 **Si levanto el Docker de `langfuse_infra/` pero no toco el `.env` de la
 raíz, ¿empieza a trazar ahí automáticamente?**
