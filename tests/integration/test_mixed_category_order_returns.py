@@ -10,7 +10,7 @@ Escenario de negocio a validar:
 
 Estos tests prueban la implementación de la Opción B (ver
 ``CoberturaDevoluvionMixta.md``): salida estructurada por artículo en
-``policy_evaluator_agent`` + filtrado por artículo en ``resolution_agent``.
+``evaluator_agent`` + filtrado por artículo en ``resolution_agent``.
 Antes de este fix, un fichero con el mismo nombre demostraba el bug
 (la categoría del primer artículo "ganaba" y toda la solicitud se
 aprobaba/rechazaba como bloque); ahora demuestra que quedó corregido.
@@ -23,7 +23,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from langchain_core.messages import AIMessage
 
-from backend.agents.nodes.policy import policy_evaluator_agent
+from backend.agents.nodes.evaluator import evaluator_agent
 from backend.agents.nodes.resolution import resolution_agent
 from backend.models import ItemEligibility, PolicyEvaluationOutput
 
@@ -83,9 +83,9 @@ class TestPolicyEvaluatorMixedCategories:
             "items_to_return": sample_items_to_return_mixed,
         }
 
-        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.policy.search_return_policy", search_mock):
-            await policy_evaluator_agent(state)
+        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.evaluator.search_return_policy", search_mock):
+            await evaluator_agent(state)
 
         assert search_mock.await_count == 2
         queried_categories = {call.kwargs["category"] for call in search_mock.await_args_list}
@@ -133,9 +133,9 @@ class TestPolicyEvaluatorMixedCategories:
             "items_to_return": sample_items_to_return_mixed,
         }
 
-        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.policy.search_return_policy", new_callable=AsyncMock, side_effect=search_side_effect):
-            result = await policy_evaluator_agent(state)
+        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.evaluator.search_return_policy", new_callable=AsyncMock, side_effect=search_side_effect):
+            result = await evaluator_agent(state)
 
         by_item = {e["order_item_id"]: e for e in result["items_eligibility"]}
         assert by_item["oi-electronics-uuid"]["is_eligible"] is True

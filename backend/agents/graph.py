@@ -51,7 +51,7 @@ if sys.platform == "win32":
     # AsyncConnectionPool falla al conectar aunque las credenciales sean correctas.
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from backend.agents.nodes.policy import policy_evaluator_agent
+from backend.agents.nodes.evaluator import evaluator_agent
 from backend.agents.nodes.resolution import (
     hitl_admin_node,
     rejection_agent,
@@ -139,7 +139,7 @@ def route_after_evaluator(state: ReturnState) -> Literal["resolver", "reject"]:
     a ``resolver``, que se encarga de procesar solo los elegibles y explicar
     al cliente por qué los demás no proceden. También avanza si el Evaluador
     marcó ``needs_admin_approval`` (reservado para una futura comprobación
-    determinista adicional; hoy ``policy_evaluator_agent`` no lo fija, así
+    determinista adicional; hoy ``evaluator_agent`` no lo fija, así
     que se comporta como ``False``). Solo se rechaza el turno completo
     cuando NINGÚN artículo es elegible.
     """
@@ -196,7 +196,7 @@ async def build_return_graph(checkpointer=None):
     # ── Nodos ──────────────────────────────────────────────────────────
     graph.add_node("triage", triage_agent)
     graph.add_node("fetch_order_data", fetch_order_data)
-    graph.add_node("evaluator", policy_evaluator_agent)
+    graph.add_node("evaluator", evaluator_agent)
     graph.add_node("resolver", resolution_agent)
     graph.add_node("reject", rejection_agent)
     graph.add_node("hitl_admin", hitl_admin_node)

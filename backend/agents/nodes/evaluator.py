@@ -98,7 +98,7 @@ def _category_by_item_id(order_details: dict[str, Any]) -> dict[str, str]:
     return categories
 
 
-async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
+async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
     """Nodo del agente Evaluador de Políticas.
 
     Evalúa CADA artículo de ``items_to_return`` de forma independiente:
