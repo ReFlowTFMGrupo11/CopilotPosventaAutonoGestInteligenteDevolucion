@@ -21,7 +21,8 @@ Uso:
 
 Requisitos:
     LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_HOST en .env
-    (ya están si tracing.py funciona; ver langfuse_docker/README.md)
+    (ya están si el tracing de backend/services/observability.py funciona;
+    ver langfuse_infra/README.md para levantar Langfuse en local)
 """
 
 from __future__ import annotations
@@ -72,7 +73,6 @@ def migrate(limit: int | None = None, force: bool = False) -> None:
     already = set() if force else _existing_case_ids(dataset)
     if already:
         logger.info("%d items ya existen en el dataset, se omiten.", len(already))
-
     rows = _load_rows(EVAL_CSV, limit)
     created = 0
     for row in rows:

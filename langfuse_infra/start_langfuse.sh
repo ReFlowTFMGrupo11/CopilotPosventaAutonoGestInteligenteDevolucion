@@ -3,7 +3,7 @@
 # Compose. Comprueba antes que Docker esté instalado y el daemon arrancado,
 # y crea el .env de esta carpeta desde la plantilla si todavía no existe.
 #
-# Uso:  ./start_langfuse.sh   (o  ./langfuse_docker/start_langfuse.sh  desde la raíz)
+# Uso:  ./start_langfuse.sh   (o  ./langfuse_infra/start_langfuse.sh  desde la raíz)
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -61,11 +61,11 @@ fi
 
 # 4. .env de esta carpeta (secretos del stack de Langfuse, no los de la app)
 if [ ! -f "$SCRIPT_DIR/.env" ]; then
-    echo "==> No existe .env en langfuse_docker/, copiando .env.example -> .env"
+    echo "==> No existe .env en langfuse_infra/, copiando .env.example -> .env"
     cp "$SCRIPT_DIR/.env.example" "$SCRIPT_DIR/.env"
     echo "    AVISO: rellena los secretos (POSTGRES_PASSWORD, CLICKHOUSE_PASSWORD,"
     echo "    MINIO_ROOT_PASSWORD, REDIS_AUTH, NEXTAUTH_SECRET, SALT, ENCRYPTION_KEY)"
-    echo "    y el bloque LANGFUSE_INIT_* en langfuse_docker/.env antes de continuar"
+    echo "    y el bloque LANGFUSE_INIT_* en langfuse_infra/.env antes de continuar"
     echo "    (ver README.md, Paso 2)."
     exit 1
 fi
