@@ -1,9 +1,14 @@
 # Langfuse (observabilidad de LLM) — self-hosted con Docker
 
-Esta carpeta agrupa todo lo relacionado con [Langfuse](https://langfuse.com):
-traza cada llamada al LLM dentro del grafo de agentes (prompts, respuestas,
-tokens, latencia, coste, tool calls) para poder depurar y auditar
+Esta carpeta agrupa la infraestructura Docker de [Langfuse](https://langfuse.com)
+self-hosted: traza cada llamada al LLM dentro del grafo de agentes (prompts,
+respuestas, tokens, latencia, coste, tool calls) para poder depurar y auditar
 conversaciones desde un panel web, en vez de solo leer logs de consola.
+
+El punto de integración Python (crear el `CallbackHandler`, envolver el
+`config` del grafo de LangGraph, exponer el cliente `Langfuse` para scores
+manuales) vive en `backend/services/observability.py`, no en esta carpeta —
+esta carpeta es solo la infraestructura del servidor.
 
 ## Qué hay en esta carpeta
 
@@ -13,16 +18,12 @@ conversaciones desde un panel web, en vez de solo leer logs de consola.
 | `.env.example` | Plantilla de variables para el docker-compose (secretos de cada servicio + bootstrap automático). |
 | `start_langfuse.sh` | Comprueba que Docker esté instalado y arrancado, y hace `docker compose up -d`. |
 | `stop_langfuse.sh` | Hace `docker compose down` (con `-v` si además quieres borrar los datos). |
-| `tracing.py` | El único punto de integración con el código de la app: crea el `CallbackHandler` de Langfuse y lo añade al `config` que se le pasa al grafo de LangGraph. |
-| `__init__.py` | Hace de `langfuse_docker` un paquete Python importable desde `backend/`. |
 
-**Por qué una carpeta aparte y no dentro de `backend/agents/`:** todo lo que
-toca a Langfuse (infraestructura Docker + el pequeño adaptador Python) vive
-junto, igual que `data/rag/` agrupa lo del RAG o `backend/mcp/` agrupa los
-servers MCP. Se llama `langfuse_docker` (no `langfuse`) a propósito: un
-paquete Python con el mismo nombre que la librería instalada (`pip install
-langfuse`) taparía a esa librería al hacer `import langfuse` desde la raíz
-del proyecto.
+No hay código Python en esta carpeta (no es un paquete importable): es solo
+infraestructura Docker, igual que `supabase/` agrupa las migraciones SQL o
+`data/` agrupa el dataset y el corpus RAG. Se llama `langfuse_infra` (no
+`langfuse`, a secas) para que quede claro a simple vista que es infra y no
+el SDK (`pip install langfuse`) usado en `backend/services/observability.py`.
 
 ### Por qué este stack (Postgres+ClickHouse+Redis+MinIO) y no algo más simple
 
@@ -92,7 +93,7 @@ Este `.env` es **distinto** del `.env` de la raíz del proyecto: solo lo lee
 ReFlow. Cópialo desde la plantilla, dentro de esta misma carpeta:
 
 ```
-cd langfuse_docker
+cd langfuse_infra
 cp .env.example .env
 ```
 
@@ -140,7 +141,7 @@ LANGFUSE_HOST=http://localhost:3000
 ### Paso 3 — Arrancar los contenedores
 
 ```
-./langfuse_docker/start_langfuse.sh
+./langfuse_infra/start_langfuse.sh
 ```
 
 El script comprueba, en orden, que: (1) `docker` esté instalado, (2)
@@ -186,7 +187,7 @@ carpeta coinciden EXACTAMENTE con `LANGFUSE_PUBLIC_KEY` / `_SECRET_KEY` del
 ### Para pararlo
 
 ```
-./langfuse_docker/stop_langfuse.sh
+./langfuse_infra/stop_langfuse.sh
 ```
 
 Añade `-v` al final (`./stop_langfuse.sh -v`) si además quieres borrar los

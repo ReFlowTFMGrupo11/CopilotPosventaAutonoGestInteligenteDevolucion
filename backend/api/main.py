@@ -23,13 +23,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.agents.graph import get_return_graph
 from backend.api.routers import admin, chat, orders
+from backend.services.observability import flush as langfuse_flush, get_langfuse
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup: pre-construye el grafo para que el primer request no espere."""
     app.state.graph = await get_return_graph()
+    # Verificar conexión LangFuse al arrancar
+    lf = get_langfuse()
+    if lf:
+        lf.create_event(name="app_startup", metadata={"version": "0.1.0"})
     yield
+    # Shutdown: vaciar el buffer de LangFuse antes de cerrar
+    langfuse_flush()
 
 
 app = FastAPI(

@@ -318,9 +318,19 @@ async def run_evaluation(
     dry_run: bool = False,
 ) -> dict:
     from backend.agents.nodes.policy import policy_evaluator_agent
+    from backend.services.observability import get_langfuse, flush as langfuse_flush
 
     cases = _load_cases(EVAL_CSV, limit, category)
     logger.info("Evaluando %d casos (modo %s)…", len(cases), "dry-run" if dry_run else "LLM real")
+
+    lf = get_langfuse()
+    run_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    # ID de traza raíz — se pasa como trace_id en cada span
+    run_trace_id: str | None = None
+    if lf:
+        from langfuse import Langfuse
+        run_trace_id = Langfuse.create_trace_id()
+        logger.info("LangFuse: trace_id=%s", run_trace_id)
 
     results: list[dict] = []
 
@@ -348,14 +358,41 @@ async def run_evaluation(
                 logger.warning("Caso %s falló: %s", case_id, exc)
                 predicted = "error"
 
+        match = expected == predicted
         results.append({
             "case_id": case_id,
             "category": cat,
             "expected": expected,
             "predicted": predicted,
-            "match": expected == predicted,
+            "match": match,
             "rationale": row.get("rationale", ""),
         })
+
+        # ── LangFuse: span + scores por caso ──────────────────────────────
+        if lf and run_trace_id:
+            try:
+                obs = lf.start_observation(
+                    name=f"eval-case-{cat}",
+                    as_type="evaluator",
+                    input={"case_id": case_id, "category": cat,
+                           "reason_category": row.get("reason_category"),
+                           "days": row.get("days_since_delivery"),
+                           "amount": row.get("refund_amount")},
+                    output={"expected": expected, "predicted": predicted, "match": match},
+                    metadata={"rationale": row.get("rationale", ""),
+                              "is_frequent_returner": row.get("is_frequent_returner")},
+                    trace_context={"trace_id": run_trace_id},
+                )
+                obs.end()
+                lf.create_score(
+                    trace_id=run_trace_id,
+                    observation_id=obs.id,
+                    name="label_match",
+                    value=1.0 if match else 0.0,
+                    data_type="NUMERIC",
+                )
+            except Exception as exc:
+                logger.debug("LangFuse span error (caso %s): %s", case_id, exc)
 
         if (i + 1) % 50 == 0:
             logger.info("  %d/%d casos procesados…", i + 1, len(cases))
@@ -369,12 +406,32 @@ async def run_evaluation(
         "mode": "dry-run" if dry_run else "llm",
         "overall": overall,
         "by_category": by_cat,
-        "mismatches": mismatches[:50],   # primeros 50 errores para no inflar el JSON
+        "mismatches": mismatches[:50],
     }
+
+    # ── LangFuse: scores agregados en la traza raíz ────────────────────────
+    if lf and run_trace_id:
+        try:
+            for metric_name, value in [
+                ("accuracy",       overall["accuracy"]),
+                ("macro_f1",       overall["macro"]["f1"]),
+                ("macro_precision", overall["macro"]["precision"]),
+                ("macro_recall",   overall["macro"]["recall"]),
+            ]:
+                lf.create_score(
+                    trace_id=run_trace_id,
+                    name=metric_name,
+                    value=value,
+                    data_type="NUMERIC",
+                )
+            langfuse_flush()
+            logger.info("LangFuse: métricas enviadas → trace_id=%s", run_trace_id)
+        except Exception as exc:
+            logger.warning("LangFuse flush error: %s", exc)
 
     # ── Guardar resultados ─────────────────────────────────────────────────
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    ts = run_ts
     json_path = RESULTS_DIR / f"eval_report_{ts}.json"
     md_path = RESULTS_DIR / f"eval_report_{ts}.md"
 
