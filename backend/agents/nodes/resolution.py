@@ -34,6 +34,7 @@ Si no es elegible:
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, SystemMessage
@@ -105,9 +106,14 @@ Motivo del rechazo: {reason}
 
 
 def _build_llm() -> ChatOpenAI:
-    """Construye el LLM para el agente de resolución."""
+    """Construye el LLM para el agente de resolución.
+
+    Modelo configurable vía ``RESOLVER_MODEL`` (admite el prefijo opcional
+    ``openai:`` de ``init_chat_model``); por defecto ``gpt-5-nano``.
+    """
+    model = os.getenv("RESOLVER_MODEL", "gpt-5-nano").removeprefix("openai:")
     return ChatOpenAI(
-        model="gpt-5-mini",
+        model=model,
         temperature=0.4,
         max_tokens=4096,
     )

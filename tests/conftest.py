@@ -24,6 +24,7 @@ def mock_order_details():
                 "id": "oi-001-uuid",
                 "order_id": "ord-001-uuid",
                 "quantity": 1,
+                "unit_price": 79.99,
                 "product": {
                     "name": "Auriculares Bluetooth Pro",
                     "sku": "AUR-BT-001",
@@ -36,6 +37,7 @@ def mock_order_details():
                 "id": "oi-002-uuid",
                 "order_id": "ord-001-uuid",
                 "quantity": 2,
+                "unit_price": 15.00,
                 "product": {
                     "name": "Funda Protectora",
                     "sku": "FUN-001",
@@ -171,6 +173,7 @@ def mock_order_details_mixed_categories():
                 "id": "oi-electronics-uuid",
                 "order_id": "ord-mixed-uuid",
                 "quantity": 1,
+                "unit_price": 79.99,
                 "product": {
                     "name": "Auriculares Bluetooth Pro",
                     "sku": "AUR-BT-001",
@@ -183,6 +186,7 @@ def mock_order_details_mixed_categories():
                 "id": "oi-cosmetics-uuid",
                 "order_id": "ord-mixed-uuid",
                 "quantity": 1,
+                "unit_price": 45.00,
                 "product": {
                     "name": "Perfume Eau de Parfum 100ml",
                     "sku": "PER-EDP-100",
