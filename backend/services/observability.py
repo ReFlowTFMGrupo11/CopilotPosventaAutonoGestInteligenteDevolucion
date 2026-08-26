@@ -83,17 +83,31 @@ def get_langfuse_callback() -> Optional[Any]:
             "configurable": {"thread_id": thread_id},
             "callbacks": callbacks,
         })
+
+    IMPORTANTE (SDK v4, OTel-only): ``CallbackHandler.__init__`` ya NO acepta
+    ``secret_key``/``host`` — solo ``public_key`` (y ``trace_context``).
+    Internamente llama a ``get_client(public_key=...)``, que busca un
+    cliente ``Langfuse`` YA REGISTRADO en un registro global indexado por
+    ``public_key`` (``LangfuseResourceManager``). Por eso hay que llamar a
+    ``get_langfuse()`` (que sí construye el cliente con las credenciales
+    completas) ANTES de crear el CallbackHandler — si no, el handler no
+    encuentra ningún cliente autenticado y las trazas no llegan a ningún
+    sitio (sin error visible, porque get_client() sin cliente registrado
+    devuelve uno "disabled").
     """
     global _callback_instance
     if not _is_configured():
         return None
     if _callback_instance is None:
+        # Debe ir ANTES de construir el CallbackHandler: registra el
+        # cliente autenticado que get_client() (llamado internamente por
+        # CallbackHandler) necesita encontrar.
+        if get_langfuse() is None:
+            return None
         try:
             from langfuse.langchain import CallbackHandler
             _callback_instance = CallbackHandler(
                 public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-                host=_host(),
             )
             logger.info("LangFuse CallbackHandler listo.")
         except Exception as exc:
