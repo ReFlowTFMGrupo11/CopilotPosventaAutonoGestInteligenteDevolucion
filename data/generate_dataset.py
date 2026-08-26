@@ -1343,18 +1343,29 @@ def main() -> None:
     OUT_EVAL_CSV.parent.mkdir(parents=True, exist_ok=True)
     with OUT_EVAL_CSV.open("w", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
+        # "condition" y "allowed_conditions" son imprescindibles para poder
+        # RE-EVALUAR un caso más tarde (p. ej. desde evaluate_rag.py):
+        # classify_case() los usa para calcular expected_label, así que sin
+        # exportarlos aquí, cualquier re-evaluación tiene que ADIVINARLOS —
+        # con el riesgo de reconstruir un caso distinto al que generó la
+        # etiqueta original. allowed_conditions se serializa con "|" como
+        # separador (son listas cortas de valores sin "|" en su contenido).
         writer.writerow([
             "case_id", "order_number", "customer_email", "category", "reason_category",
-            "max_return_days", "days_since_delivery", "refund_amount", "expected_label",
-            "return_status", "is_frequent_returner", "rationale",
+            "condition", "max_return_days", "allowed_conditions", "days_since_delivery",
+            "refund_amount", "expected_label", "return_status", "is_frequent_returner",
+            "rationale",
         ])
         for case in return_cases:
             category = case.return_items[0][0].product.category
+            condition = case.return_items[0][2]
+            allowed_conditions = "|".join(CATEGORIES[category]["allowed_conditions"])
             writer.writerow([
                 case.id, case.order.order_number, case.customer.email, category,
-                case.reason_category, CATEGORIES[category]["max_return_days"],
-                case.days_since_delivery, f"{case.refund_amount:.2f}", case.label,
-                case.status, str(case.customer.id in frequent_customer_ids), case.rationale,
+                case.reason_category, condition, CATEGORIES[category]["max_return_days"],
+                allowed_conditions, case.days_since_delivery, f"{case.refund_amount:.2f}",
+                case.label, case.status, str(case.customer.id in frequent_customer_ids),
+                case.rationale,
             ])
 
     # --- estadísticas de generación ---------------------------------------

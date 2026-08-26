@@ -72,9 +72,17 @@ def _load_cases(csv_path: Path, limit: int | None, category: str | None) -> list
     return rows
 
 
-def _build_mock_policy(category: str, max_return_days: int) -> dict:
+def _build_mock_policy(
+    category: str, max_return_days: int, allowed_conditions: list[str]
+) -> dict:
     """Construye un objeto policy_info mínimo a partir de las columnas del CSV
-    (sin necesidad de BD). Incluye los chunks RAG del corpus real."""
+    (sin necesidad de BD). Incluye los chunks RAG del corpus real.
+
+    ``allowed_conditions`` viene de la columna homónima de eval_cases.csv
+    (la real, específica de la categoría de este caso) — antes de este fix
+    se usaba una lista fija igual para las 16 categorías, sin relación con
+    la que usó classify_case() para calcular expected_label.
+    """
     policy_doc_map = {
         "electronica_informatica": "01_electronica_informatica.md",
         "electrodomesticos":       "02_electrodomesticos.md",
@@ -109,7 +117,7 @@ def _build_mock_policy(category: str, max_return_days: int) -> dict:
             "max_return_days": max_return_days,
             "requires_original_packaging": False,
             "restocking_fee_percent": 0.0,
-            "allowed_conditions": ["unopened", "defective", "wrong_item", "not_as_described", "missing_parts"],
+            "allowed_conditions": allowed_conditions,
             "policy_text": policy_text,
             "active": True,
         },
@@ -170,7 +178,11 @@ def _build_state(row: dict) -> dict[str, Any]:
             {
                 "order_item_id": order_item_id,
                 "quantity": 1,
-                "condition": "defective" if row["reason_category"] == "defective" else "unopened",
+                # Columna real de eval_cases.csv (la que classify_case() usó
+                # para calcular expected_label) — antes de este fix se
+                # ADIVINABA con una regla de 2 valores sin relación con el
+                # caso real, porque el CSV no la exportaba.
+                "condition": row["condition"],
             }
         ],
     }
@@ -344,7 +356,8 @@ async def run_evaluation(
             predicted = _deterministic_label(row)
         else:
             state = _build_state(row)
-            mock_policy = _build_mock_policy(cat, max_days)
+            allowed_conditions = row["allowed_conditions"].split("|")
+            mock_policy = _build_mock_policy(cat, max_days, allowed_conditions)
 
             async def _mock_search(query: str, category: str = "") -> dict:  # noqa: E501
                 return mock_policy

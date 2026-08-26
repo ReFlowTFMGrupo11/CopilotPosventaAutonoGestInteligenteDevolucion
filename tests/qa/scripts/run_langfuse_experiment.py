@@ -55,7 +55,8 @@ def _make_task(dry_run: bool):
         from backend.agents.nodes.evaluator import evaluator_agent
 
         state = _build_state(row)
-        mock_policy = _build_mock_policy(row["category"], int(row["max_return_days"]))
+        allowed_conditions = row["allowed_conditions"].split("|")
+        mock_policy = _build_mock_policy(row["category"], int(row["max_return_days"]), allowed_conditions)
 
         async def _mock_search(query: str, category: str = "") -> dict:
             return mock_policy
