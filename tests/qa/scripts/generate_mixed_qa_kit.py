@@ -706,7 +706,7 @@ CASE_008 = dict(
               "devolucion mixta). Verifica que fetch_order_data controle el error ANTES de llegar al "
               "evaluador, y que el LLM de triaje no invente order_id/items ni un resultado de aprobacion/"
               "rechazo para un pedido que no existe.",
-    notas="Camino de error, no ejercita policy_evaluator_agent. Complementa (no sustituye) los casos "
+    notas="Camino de error, no ejercita evaluator_agent. Complementa (no sustituye) los casos "
           "QAM-001..007, que si ejercitan el fix de elegibilidad por articulo.",
 )
 

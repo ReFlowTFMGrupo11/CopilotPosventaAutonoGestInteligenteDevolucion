@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 from langchain_core.messages import HumanMessage
 
-from backend.agents.nodes.policy import policy_evaluator_agent
+from backend.agents.nodes.evaluator import evaluator_agent
 from backend.models import ItemEligibility, PolicyEvaluationOutput
 
 
@@ -44,9 +44,9 @@ class TestPolicyEvaluatorAgent:
             "items_to_return": [{"order_item_id": "oi-001-uuid", "quantity": 1, "condition": "defective"}],
         }
 
-        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.policy.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
-            result = await policy_evaluator_agent(state)
+        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.evaluator.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
+            result = await evaluator_agent(state)
 
         assert result["any_eligible"] is True
         assert result["refund_amount"] == 79.99
@@ -84,9 +84,9 @@ class TestPolicyEvaluatorAgent:
             "items_to_return": [{"order_item_id": "oi-001-uuid", "quantity": 1, "condition": "used"}],
         }
 
-        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.policy.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
-            result = await policy_evaluator_agent(state)
+        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.evaluator.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
+            result = await evaluator_agent(state)
 
         assert result["any_eligible"] is False
         assert result["refund_amount"] == 0
@@ -105,9 +105,9 @@ class TestPolicyEvaluatorAgent:
             "items_to_return": [{"order_item_id": "oi-001-uuid", "quantity": 1, "condition": "used"}],
         }
 
-        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.policy.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
-            result = await policy_evaluator_agent(state)
+        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.evaluator.search_return_policy", new_callable=AsyncMock, return_value=mock_policy_results):
+            result = await evaluator_agent(state)
 
         # Debe defaultear a no elegible si no puede evaluar
         assert result["any_eligible"] is False
@@ -132,9 +132,9 @@ class TestPolicyEvaluatorAgent:
             "items_to_return": [],
         }
 
-        with patch("backend.agents.nodes.policy._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.policy.search_return_policy", search_mock):
-            result = await policy_evaluator_agent(state)
+        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
+             patch("backend.agents.nodes.evaluator.search_return_policy", search_mock):
+            result = await evaluator_agent(state)
 
         search_mock.assert_not_awaited()
         assert result["any_eligible"] is False

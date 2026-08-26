@@ -52,7 +52,7 @@ def _make_task(dry_run: bool):
         if dry_run:
             return _deterministic_label(row)
 
-        from backend.agents.nodes.policy import policy_evaluator_agent
+        from backend.agents.nodes.evaluator import evaluator_agent
 
         state = _build_state(row)
         mock_policy = _build_mock_policy(row["category"], int(row["max_return_days"]))
@@ -61,10 +61,10 @@ def _make_task(dry_run: bool):
             return mock_policy
 
         with patch(
-            "backend.agents.nodes.policy.search_return_policy",
+            "backend.agents.nodes.evaluator.search_return_policy",
             side_effect=_mock_search,
         ):
-            agent_result = await policy_evaluator_agent(state)
+            agent_result = await evaluator_agent(state)
         return _result_to_label(agent_result)
 
     return task
@@ -122,7 +122,7 @@ def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
     result = lf.run_experiment(
         name="policy-eval" + (" (dry-run)" if dry_run else ""),
         run_name=run_name,
-        description="Evaluación de policy_evaluator_agent contra el golden set.",
+        description="Evaluación de evaluator_agent contra el golden set.",
         data=items,
         task=_make_task(dry_run),
         evaluators=[label_match_evaluator],

@@ -3,7 +3,7 @@ Evaluador end-to-end del pipeline RAG + Agente Evaluador de Políticas.
 
 Lee los 480 casos de data/qa/eval_cases.csv, construye un estado mínimo
 por caso, mockea el RAG con los chunks REALES del corpus (sin llamadas
-a OpenAI ni a Supabase) y ejecuta policy_evaluator_agent con el LLM real
+a OpenAI ni a Supabase) y ejecuta evaluator_agent con el LLM real
 (gpt-5-mini). Calcula precisión, recall y F1 por clase y por categoría,
 y vuelca el informe como JSON y tabla Markdown en:
 
@@ -117,7 +117,7 @@ def _build_mock_policy(category: str, max_return_days: int) -> dict:
 
 
 def _build_state(row: dict) -> dict[str, Any]:
-    """Construye el estado mínimo que necesita policy_evaluator_agent."""
+    """Construye el estado mínimo que necesita evaluator_agent."""
     order_item_id = f"oi-eval-{row['case_id'][:8]}"
     # delivered_at simulado: ahora - days_since_delivery
     days = int(row["days_since_delivery"])
@@ -201,7 +201,7 @@ def _deterministic_label(row: dict) -> str:
 
 
 def _result_to_label(result: dict[str, Any]) -> str:
-    """Convierte la salida de policy_evaluator_agent en una etiqueta comparable."""
+    """Convierte la salida de evaluator_agent en una etiqueta comparable."""
     any_eligible = result.get("any_eligible", False)
     items = result.get("items_eligibility", [])
 
@@ -317,7 +317,7 @@ async def run_evaluation(
     category: str | None = None,
     dry_run: bool = False,
 ) -> dict:
-    from backend.agents.nodes.policy import policy_evaluator_agent
+    from backend.agents.nodes.evaluator import evaluator_agent
     from backend.services.observability import get_langfuse, flush as langfuse_flush
 
     cases = _load_cases(EVAL_CSV, limit, category)
@@ -350,9 +350,9 @@ async def run_evaluation(
                 return mock_policy
 
             try:
-                with patch("backend.agents.nodes.policy.search_return_policy",
+                with patch("backend.agents.nodes.evaluator.search_return_policy",
                            side_effect=_mock_search):
-                    agent_result = await policy_evaluator_agent(state)
+                    agent_result = await evaluator_agent(state)
                 predicted = _result_to_label(agent_result)
             except Exception as exc:
                 logger.warning("Caso %s falló: %s", case_id, exc)
