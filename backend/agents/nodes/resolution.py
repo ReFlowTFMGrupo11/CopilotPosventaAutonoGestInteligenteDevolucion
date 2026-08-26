@@ -34,7 +34,6 @@ Si no es elegible:
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, SystemMessage
@@ -42,12 +41,14 @@ from langchain_openai import ChatOpenAI
 from langgraph.types import Command, interrupt
 
 from backend.agents.state import ReturnState
+from backend.agents.infra.llm_factory import build_chat_llm
 from backend.agents.infra.mcp_client import (
     create_return_record,
     generate_shipping_label,
     send_customer_notification,
     update_return_status,
 )
+from backend.services.supabase_service import DUPLICATE_RETURN_MARKER
 from backend.db.supabase_client import get_supabase_client
 from backend.models import OrderItem
 
@@ -108,15 +109,9 @@ Motivo del rechazo: {reason}
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de resolución.
 
-    Modelo configurable vía ``RESOLVER_MODEL`` (admite el prefijo opcional
-    ``openai:`` de ``init_chat_model``); por defecto ``gpt-5-nano``.
+    Modelo configurable vía ``RESOLVER_MODEL``; por defecto ``gpt-5-nano``.
     """
-    model = os.getenv("RESOLVER_MODEL", "gpt-5-nano").removeprefix("openai:")
-    return ChatOpenAI(
-        model=model,
-        temperature=0.4,
-        max_tokens=4096,
-    )
+    return build_chat_llm("RESOLVER_MODEL", temperature=0.4)
 
 
 async def resolution_agent(
@@ -176,6 +171,12 @@ async def resolution_agent(
                 notes=f"Reembolso de {refund_amount:.2f}€ supera umbral o requiere revisión.",
             )
         except (RuntimeError, ValueError) as exc:
+            # Solo interpretar como duplicado si lleva el marcador de
+            # supabase_service.py; cualquier otro fallo (red, datos
+            # malformados...) se propaga en vez de silenciarse como si
+            # fuera un resume normal tras interrupt().
+            if DUPLICATE_RETURN_MARKER not in str(exc):
+                raise
             # Guard de duplicados: el registro ya existe (resume tras interrupt)
             logger.info("HITL record ya existe, reutilizando: %s", exc)
             # Buscar el ID del registro existente via BD
@@ -284,6 +285,10 @@ async def resolution_agent(
                 thread_id=state.get("thread_id", ""),
             )
         except (RuntimeError, ValueError) as exc:
+            # Solo interpretar como duplicado si lleva el marcador de
+            # supabase_service.py; ver comentario equivalente más arriba.
+            if DUPLICATE_RETURN_MARKER not in str(exc):
+                raise
             # Guard de duplicados: ya existe una devolución para este pedido/artículo
             # (p. ej. reintento del cliente o re-ejecución de un caso de QA).
             logger.info("Return record ya existe, informando al cliente: %s", exc)

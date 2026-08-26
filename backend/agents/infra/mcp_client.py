@@ -47,6 +47,12 @@ _TOOL_SERVER_MAP = {
 
 _clients: dict[str, MultiServerMCPClient] = {}
 
+# Cache de tools por server: sin esto, call_tool() hacía un round-trip HTTP
+# extra a por la lista de tools en CADA llamada (antes de invocar la tool
+# real), en cada turno de cada agente. Las tools de un server MCP no
+# cambian durante la vida del proceso, así que basta con listarlas una vez.
+_tools_cache: dict[str, list[Any]] = {}
+
 
 async def _get_server_client(server_name: str) -> MultiServerMCPClient:
     """Devuelve el cliente MCP para un server concreto, creándolo si es necesario."""
@@ -69,9 +75,18 @@ async def _get_server_client(server_name: str) -> MultiServerMCPClient:
     return _clients[server_name]
 
 
+async def _get_tools(server_name: str) -> list[Any]:
+    """Devuelve las tools de un server, cacheadas tras la primera consulta."""
+    if server_name not in _tools_cache:
+        client = await _get_server_client(server_name)
+        _tools_cache[server_name] = await client.get_tools()
+    return _tools_cache[server_name]
+
+
 async def close_mcp_client() -> None:
-    """Cierra todos los clientes MCP."""
+    """Cierra todos los clientes MCP y limpia la cache de tools."""
     _clients.clear()
+    _tools_cache.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -89,10 +104,14 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
     if server_name is None:
         raise ValueError(f"Tool '{tool_name}' no está mapeada a ningún server MCP.")
 
-    client = await _get_server_client(server_name)
-    tools = await client.get_tools()
-
+    tools = await _get_tools(server_name)
     tool = next((t for t in tools if t.name == tool_name), None)
+    if tool is None:
+        # Cache posiblemente obsoleta (p. ej. el server MCP se reinició con
+        # otro set de tools): refrescar una vez antes de rendirse.
+        _tools_cache.pop(server_name, None)
+        tools = await _get_tools(server_name)
+        tool = next((t for t in tools if t.name == tool_name), None)
     if tool is None:
         raise ValueError(f"Tool '{tool_name}' no encontrada en server '{server_name}'.")
 
