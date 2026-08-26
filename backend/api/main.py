@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     # Verificar conexión LangFuse al arrancar
     lf = get_langfuse()
     if lf:
-        lf.trace(name="app_startup", metadata={"version": "0.1.0"})
+        lf.create_event(name="app_startup", metadata={"version": "0.1.0"})
     yield
     # Shutdown: vaciar el buffer de LangFuse antes de cerrar
     langfuse_flush()
