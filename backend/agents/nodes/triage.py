@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 from langchain_core.messages import AIMessage, SystemMessage
@@ -128,9 +129,14 @@ from backend.models import TriageOutput
 
 
 def _build_llm() -> ChatOpenAI:
-    """Construye el LLM para el agente de triaje con salida estructurada."""
+    """Construye el LLM para el agente de triaje con salida estructurada.
+
+    Modelo configurable vía ``TRIAGE_MODEL`` (admite el prefijo opcional
+    ``openai:`` de ``init_chat_model``); por defecto ``gpt-5-nano``.
+    """
+    model = os.getenv("TRIAGE_MODEL", "gpt-5-nano").removeprefix("openai:")
     return ChatOpenAI(
-        model="gpt-5-mini",
+        model=model,
         temperature=0,
         max_tokens=4096,
     )

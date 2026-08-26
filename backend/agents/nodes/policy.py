@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 from langchain_core.messages import SystemMessage
@@ -22,6 +23,7 @@ from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
 from backend.agents.infra.mcp_client import search_return_policy
+from backend.agents.nodes.policy_rules import compute_refund, deterministic_check
 from backend.models import ItemEligibility, OrderItem, PolicyEvaluationOutput
 from backend.services.supabase_service import calculate_days_since_delivery
 
@@ -63,9 +65,14 @@ artículo recibido en "Artículos a evaluar", identificada por su `order_item_id
 
 
 def _build_llm() -> ChatOpenAI:
-    """Construye el LLM para el evaluador de políticas."""
+    """Construye el LLM para el evaluador de políticas.
+
+    Modelo configurable vía ``EVALUATOR_MODEL`` (admite el prefijo opcional
+    ``openai:`` de ``init_chat_model``); por defecto ``gpt-5-nano``.
+    """
+    model = os.getenv("EVALUATOR_MODEL", "gpt-5-nano").removeprefix("openai:")
     return ChatOpenAI(
-        model="gpt-5-mini",
+        model=model,
         temperature=0.0,  # Determinista para auditoría
         max_tokens=4096,
     )
@@ -203,11 +210,67 @@ async def policy_evaluator_agent(state: ReturnState) -> dict[str, Any]:
         return updates
 
     items_eligibility = [item.model_dump() for item in result.items]
+
+    # ── Reglas deterministas (policy_rules.py): vetan legalmente y fijan
+    #    el importe exacto del reembolso. El LLM aporta el razonamiento en
+    #    lenguaje natural (eligibility_reason) y decide los casos donde las
+    #    reglas no objetan nada, pero NUNCA puede:
+    #      1. Levantar un veto legal/de negocio (p. ej. exclusión de
+    #         higiene, plazo muy superado) — un veredicto "invalid" fuerza
+    #         is_eligible=False sin importar lo que dijera el LLM.
+    #      2. Decidir la aritmética del reembolso — refund_amount siempre
+    #         sale de compute_refund(), nunca del LLM.
+    #    Un veredicto "human_review" no cambia is_eligible (lo decide el
+    #    LLM/HITL), solo marca needs_admin_approval a nivel de solicitud.
+    order_items_raw = order_details.get("items", [])
+    approved_returns = return_history.get("approved", 0)
+    any_needs_review = False
+
+    for item_eligibility in items_eligibility:
+        oid = item_eligibility.get("order_item_id")
+        matching_item = next(
+            (i for i in items_to_return if i.get("order_item_id") == oid), None
+        )
+        if matching_item is None:
+            continue
+
+        category = product_categories.get(oid, "")
+        policy_info = (policy_by_category.get(category) or {}).get("policy_info") or {}
+        restocking_fee = policy_info.get("restocking_fee_percent") or 0.0
+        deterministic_refund = compute_refund(order_items_raw, [matching_item], restocking_fee)
+
+        verdict, reasons = deterministic_check(
+            days_since_order=days_since_order,
+            max_return_days=policy_info.get("max_return_days"),
+            allowed_conditions=policy_info.get("allowed_conditions"),
+            condition=matching_item.get("condition", "unknown"),
+            category=category,
+            reason_category=reason_category,
+            refund_amount=deterministic_refund,
+            approved_returns=approved_returns,
+        )
+
+        if verdict == "invalid":
+            item_eligibility["is_eligible"] = False
+            item_eligibility["refund_amount"] = 0.0
+            item_eligibility["eligibility_reason"] = " | ".join(reasons)
+        else:
+            item_eligibility["refund_amount"] = (
+                deterministic_refund if item_eligibility.get("is_eligible") else 0.0
+            )
+            if verdict == "human_review":
+                any_needs_review = True
+                logger.info(
+                    "Evaluador: artículo %s marcado para revisión humana: %s",
+                    oid, "; ".join(reasons),
+                )
+
     updates["items_eligibility"] = items_eligibility
     updates["any_eligible"] = any(item["is_eligible"] for item in items_eligibility)
     updates["refund_amount"] = sum(
         item["refund_amount"] for item in items_eligibility if item["is_eligible"]
     )
+    updates["needs_admin_approval"] = any_needs_review
     # Resumen legible: usado por rejection_agent cuando NINGÚN artículo es
     # elegible, y útil para depuración/logs en el caso mixto.
     updates["eligibility_reason"] = " | ".join(
