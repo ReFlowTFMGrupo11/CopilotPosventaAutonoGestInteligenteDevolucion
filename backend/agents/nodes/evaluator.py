@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from typing import Any
 
 from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
+from backend.agents.infra.llm_factory import build_chat_llm
 from backend.agents.infra.mcp_client import search_return_policy
 from backend.agents.nodes.policy_rules import compute_refund, deterministic_check
 from backend.models import ItemEligibility, OrderItem, PolicyEvaluationOutput
@@ -67,15 +67,9 @@ artículo recibido en "Artículos a evaluar", identificada por su `order_item_id
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el evaluador de políticas.
 
-    Modelo configurable vía ``EVALUATOR_MODEL`` (admite el prefijo opcional
-    ``openai:`` de ``init_chat_model``); por defecto ``gpt-5-nano``.
+    Modelo configurable vía ``EVALUATOR_MODEL``; por defecto ``gpt-5-nano``.
     """
-    model = os.getenv("EVALUATOR_MODEL", "gpt-5-nano").removeprefix("openai:")
-    return ChatOpenAI(
-        model=model,
-        temperature=0.0,  # Determinista para auditoría
-        max_tokens=4096,
-    )
+    return build_chat_llm("EVALUATOR_MODEL", temperature=0.0)  # determinista para auditoría
 
 
 def _product_name_by_item_id(order_details: dict[str, Any]) -> dict[str, str]:

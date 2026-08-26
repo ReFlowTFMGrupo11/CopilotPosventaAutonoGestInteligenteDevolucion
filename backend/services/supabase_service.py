@@ -24,6 +24,22 @@ from datetime import datetime, timezone
 
 from backend.db.supabase_client import get_supabase_client
 
+# ---------------------------------------------------------------------------
+# Señal de "devolución duplicada"
+# ---------------------------------------------------------------------------
+#
+# create_return_record() levanta ValueError para el guard de duplicados. Esa
+# excepción cruza la frontera MCP (mcp_supabase.py -> protocolo MCP ->
+# mcp_client.call_tool()) y al otro lado llega como un RuntimeError genérico
+# con el mensaje original como texto (el tipo original no sobrevive el
+# serializado MCP). Sin un marcador estable, el llamador (resolution.py)
+# tenía que asumir que CUALQUIER RuntimeError/ValueError de create_return_record
+# significaba "ya existe" — un fallo real no relacionado (red, datos
+# malformados...) se interpretaba igual como duplicado y se silenciaba.
+# Este marcador permite comprobar la intención real del error por su
+# contenido, no por su tipo (que ya se perdió).
+DUPLICATE_RETURN_MARKER = "[duplicate_return]"
+
 
 # ---------------------------------------------------------------------------
 # Utilidades
@@ -215,8 +231,9 @@ async def create_return_record(
     ]
     if active_returns:
         raise ValueError(
-            f"Ya existe una devolución activa para el pedido {order_id} "
-            f"(id={active_returns[0]['id']}, status={active_returns[0]['status']})."
+            f"{DUPLICATE_RETURN_MARKER} Ya existe una devolución activa para el "
+            f"pedido {order_id} (id={active_returns[0]['id']}, "
+            f"status={active_returns[0]['status']})."
         )
 
     requested_item_ids = {
@@ -235,8 +252,8 @@ async def create_return_record(
     if duplicated_item_ids:
         duplicated_str = ", ".join(sorted(duplicated_item_ids))
         raise ValueError(
-            "Ya existe una devolución previa para el/los artículo(s): "
-            f"{duplicated_str}."
+            f"{DUPLICATE_RETURN_MARKER} Ya existe una devolución previa para "
+            f"el/los artículo(s): {duplicated_str}."
         )
 
     # Toda devolución nueva arranca en estado "pending".

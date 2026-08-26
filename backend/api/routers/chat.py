@@ -7,8 +7,8 @@ Dos modos de consumo:
 
 import asyncio
 import logging
+import time
 import uuid
-from collections import defaultdict
 from typing import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,7 +34,44 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 # dos veces en paralelo sobre el mismo checkpoint. Sin esto, la segunda
 # podía toparse con un estado a medias y devolver el mensaje generico de
 # "sigue pendiente de revisión" sin haber creado ningún registro en BD.
-_thread_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+#
+# _ThreadLockRegistry en vez de un defaultdict(asyncio.Lock) plano: un
+# dict así crece con cada thread_id nuevo y nunca se libera solo (una
+# fuga de memoria lenta en un proceso de larga duración). El registro
+# expulsa entradas inactivas (no locked() y sin uso reciente) cada vez
+# que se pide un lock nuevo.
+_THREAD_LOCK_TTL_SECONDS = 3600.0  # 1 hora sin actividad
+
+
+class _ThreadLockRegistry:
+    """Registro de ``asyncio.Lock`` por ``thread_id`` con expulsión de
+    entradas inactivas, para no crecer sin límite en un proceso de larga
+    duración."""
+
+    def __init__(self, ttl_seconds: float = _THREAD_LOCK_TTL_SECONDS) -> None:
+        self._ttl = ttl_seconds
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._last_used: dict[str, float] = {}
+
+    def get(self, thread_id: str) -> asyncio.Lock:
+        self._evict_stale()
+        self._last_used[thread_id] = time.monotonic()
+        if thread_id not in self._locks:
+            self._locks[thread_id] = asyncio.Lock()
+        return self._locks[thread_id]
+
+    def _evict_stale(self) -> None:
+        now = time.monotonic()
+        stale = [
+            tid for tid, last_used in self._last_used.items()
+            if now - last_used > self._ttl and not self._locks[tid].locked()
+        ]
+        for tid in stale:
+            del self._locks[tid]
+            del self._last_used[tid]
+
+
+_thread_locks = _ThreadLockRegistry()
 
 
 @router.post("/new", response_model=NewChatResponse)
@@ -103,7 +140,7 @@ async def _stream_chat_events(
         },
         thread_id=thread_id,
     )
-    lock = _thread_locks[thread_id]
+    lock = _thread_locks.get(thread_id)
 
     if lock.locked():
         logger.warning(
