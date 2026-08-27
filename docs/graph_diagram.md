@@ -35,7 +35,7 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant U as Usuario
-    participant D as demo_chat.py
+    participant D as chat.py (API)
     participant G as LangGraph
     participant T as Triage Agent
     participant CP as Checkpointer

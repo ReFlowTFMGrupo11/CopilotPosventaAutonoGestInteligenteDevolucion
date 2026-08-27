@@ -48,11 +48,9 @@ backend/
                  #     evaluator.py    — Agente Evaluador de Políticas (RAG + LLM)
                  #     policy_rules.py — Reglas de negocio deterministas (Chain of Rules)
                  #     resolution.py   — Agente de Resolución + HITL + Rechazo
-    infra/       #   Infraestructura:
+     infra/       #   Infraestructura:
                  #     mcp_client.py      — Cliente MCP unificado (Supabase + Logistics)
                  #     llm_factory.py     — Factory compartida para construir el LLM de cada nodo
-                 #     session_tracker.py — Registro de sesiones para métricas
-    cli/         #   demo_chat.py — Demo interactiva multi-turno
   services/      # Lógica de negocio pura (sin MCP ni LLM)
                  #   supabase_service.py  — consultas, RAG, mutaciones
                  #   logistics_service.py — etiquetas PDF, notificaciones
@@ -156,14 +154,6 @@ START → Triage → [¿order_id + items?]
 ```
 
 Para diagramas Mermaid detallados ver [`docs/graph_diagram.md`](docs/graph_diagram.md).
-
-### Demo interactiva
-
-```bash
-python -m backend.agents.cli.demo_chat
-```
-
-Requiere los servidores MCP levantados y `SUPABASE_DB_URL` + `OPENAI_API_KEY` en `.env`.
 
 ## API FastAPI
 
