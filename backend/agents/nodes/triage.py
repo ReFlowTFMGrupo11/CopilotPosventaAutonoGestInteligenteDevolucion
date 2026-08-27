@@ -42,7 +42,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
-from backend.agents.llm_factory import build_chat_llm
+from backend.agents.llm_factory import build_chat_llm, trim_history
 from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
 
 logger = logging.getLogger(__name__)
@@ -152,7 +152,7 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     if state.get("order_details"):
         items = state["order_details"].get("items", [])
         context.append(SystemMessage(content=f"ARTÍCULOS DEL PEDIDO: {json.dumps(items, default=str, ensure_ascii=False)}"))
-    llm_messages = [*context, *state.get("messages", [])]
+    llm_messages = [*context, *trim_history(state.get("messages", []))]
 
     result: TriageOutput | None = await llm_structured.ainvoke(llm_messages)
 

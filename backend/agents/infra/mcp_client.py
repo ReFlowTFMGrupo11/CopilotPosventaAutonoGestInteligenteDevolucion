@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 MCP_SUPABASE_URL = os.getenv("MCP_SUPABASE_URL", "http://localhost:8001/mcp")
 MCP_LOGISTICS_URL = os.getenv("MCP_LOGISTICS_URL", "http://localhost:8002/mcp")
 
+# Sin timeout, un MCP server que acepta la conexión pero no responde (o se
+# cae a media respuesta) deja el `await tool.ainvoke()` colgado para siempre,
+# sin lanzar ninguna excepción que un try/except pueda capturar.
+MCP_TIMEOUT_SECONDS = float(os.getenv("MCP_TIMEOUT_SECONDS", "30"))
+MCP_SSE_READ_TIMEOUT_SECONDS = float(os.getenv("MCP_SSE_READ_TIMEOUT_SECONDS", "60"))
+
 # Mapeo de tool → server para saber qué cliente usar
 _TOOL_SERVER_MAP = {
     "get_order_details": "supabase",
@@ -68,6 +74,8 @@ async def _get_server_client(server_name: str) -> MultiServerMCPClient:
             server_name: {
                 "transport": "http",
                 "url": url,
+                "timeout": MCP_TIMEOUT_SECONDS,
+                "sse_read_timeout": MCP_SSE_READ_TIMEOUT_SECONDS,
             },
         })
         logger.info("Cliente MCP creado para server '%s' en %s", server_name, url)

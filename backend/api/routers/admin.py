@@ -1,5 +1,8 @@
 """Router admin: panel de gestión y HITL (Human-in-the-Loop)."""
 
+import asyncio
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 from langgraph.types import Command
 
@@ -8,6 +11,12 @@ from backend.api.schemas import AdminDecisionRequest
 from backend.services import supabase_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+# Mismo tope que backend/api/routers/chat.py: sin esto, un `ainvoke` de
+# reanudación colgado (LLM/MCP/BD sin responder) dejaba la petición del
+# admin esperando para siempre, sin ninguna excepción capturable.
+GRAPH_RECURSION_LIMIT = int(os.getenv("GRAPH_RECURSION_LIMIT", "25"))
+GRAPH_TURN_TIMEOUT_SECONDS = float(os.getenv("GRAPH_TURN_TIMEOUT_SECONDS", "60"))
 
 
 @router.get("/pending")
@@ -25,10 +34,18 @@ async def approve_return(
 ):
     """Admin aprueba una devolución pendiente. Reanuda el grafo."""
     try:
-        result = await graph.ainvoke(
-            Command(resume={"approved": True, "reason": body.reason}),
-            config={"configurable": {"thread_id": thread_id}},
+        result = await asyncio.wait_for(
+            graph.ainvoke(
+                Command(resume={"approved": True, "reason": body.reason}),
+                config={
+                    "configurable": {"thread_id": thread_id},
+                    "recursion_limit": GRAPH_RECURSION_LIMIT,
+                },
+            ),
+            timeout=GRAPH_TURN_TIMEOUT_SECONDS,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="El grafo tardó demasiado en reanudarse.")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Error reanudando el grafo: {exc}")
 
@@ -47,10 +64,18 @@ async def reject_return(
 ):
     """Admin rechaza una devolución pendiente. Reanuda el grafo."""
     try:
-        result = await graph.ainvoke(
-            Command(resume={"approved": False, "reason": body.reason}),
-            config={"configurable": {"thread_id": thread_id}},
+        result = await asyncio.wait_for(
+            graph.ainvoke(
+                Command(resume={"approved": False, "reason": body.reason}),
+                config={
+                    "configurable": {"thread_id": thread_id},
+                    "recursion_limit": GRAPH_RECURSION_LIMIT,
+                },
+            ),
+            timeout=GRAPH_TURN_TIMEOUT_SECONDS,
         )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="El grafo tardó demasiado en reanudarse.")
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Error reanudando el grafo: {exc}")
 

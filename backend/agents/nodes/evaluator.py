@@ -21,7 +21,7 @@ from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
-from backend.agents.llm_factory import build_chat_llm
+from backend.agents.llm_factory import build_chat_llm, trim_history
 from backend.agents.infra.mcp_client import search_return_policy
 from backend.agents.nodes.policy_rules import compute_refund, deterministic_check
 from backend.models import ItemEligibility, OrderItem, PolicyEvaluationOutput
@@ -174,7 +174,7 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
 
     messages = [
         SystemMessage(content=POLICY_SYSTEM_PROMPT),
-        *state.get("messages", []),
+        *trim_history(state.get("messages", [])),
         SystemMessage(content=f"CONTEXTO DE EVALUACIÓN:\n{context}"),
     ]
 

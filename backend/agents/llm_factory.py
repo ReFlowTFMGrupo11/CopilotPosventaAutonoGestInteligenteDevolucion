@@ -5,6 +5,13 @@ Antes de este módulo, triage.py/evaluator.py/resolution.py triplicaban el
 mismo patrón (leer env var, quitar el prefijo opcional "openai:", construir
 ChatOpenAI). Centralizado aquí para no repetirlo por cuarta vez la próxima
 vez que se añada un nodo.
+
+También centraliza dos controles de seguridad que antes no existían:
+- ``timeout``: sin él, un ``ainvoke()`` colgado en el proveedor (LLM_TIMEOUT_SECONDS)
+  bloquea la tarea asyncio para siempre y ningún ``try/except`` aguas arriba
+  lo captura (no lanza excepción, simplemente no vuelve nunca).
+- ``max_tokens`` configurable por env var: antes era un valor fijo en código
+  (4096) sin forma de ajustarlo sin tocar el fuente.
 """
 
 from __future__ import annotations
@@ -15,8 +22,19 @@ from langchain_openai import ChatOpenAI
 
 DEFAULT_MODEL = "gpt-5-nano"
 
+# Timeout por llamada al LLM (segundos). Cubre conexión + lectura de la
+# respuesta completa. Si el proveedor no responde en este plazo, ChatOpenAI
+# lanza una excepción capturable en vez de dejar el await colgado para siempre.
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
 
-def build_chat_llm(env_var: str, *, temperature: float, max_tokens: int = 4096) -> ChatOpenAI:
+# Límite de tokens de salida por defecto, ahora ajustable sin tocar código.
+# Si un nodo pasa `max_tokens` explícito, esta env var no lo sobreescribe.
+_DEFAULT_MAX_OUTPUT_TOKENS = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "4096"))
+
+
+def build_chat_llm(
+    env_var: str, *, temperature: float, max_tokens: int | None = None
+) -> ChatOpenAI:
     """Construye un ``ChatOpenAI`` leyendo el modelo desde una env var.
 
     Admite el prefijo opcional ``"openai:"`` (convención de
@@ -26,7 +44,35 @@ def build_chat_llm(env_var: str, *, temperature: float, max_tokens: int = 4096) 
     Args:
         env_var: Nombre de la variable de entorno (p. ej. "TRIAGE_MODEL").
         temperature: Temperatura del modelo.
-        max_tokens: Límite de tokens de salida.
+        max_tokens: Límite de tokens de salida. Si no se especifica, usa
+            ``LLM_MAX_OUTPUT_TOKENS`` (por defecto 4096).
     """
     model = os.getenv(env_var, DEFAULT_MODEL).removeprefix("openai:")
-    return ChatOpenAI(model=model, temperature=temperature, max_tokens=max_tokens)
+    return ChatOpenAI(
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens if max_tokens is not None else _DEFAULT_MAX_OUTPUT_TOKENS,
+        timeout=LLM_TIMEOUT_SECONDS,
+    )
+
+
+def trim_history(messages: list, *, max_messages: int | None = None) -> list:
+    """Recorta el historial de conversación a los últimos ``max_messages``.
+
+    Sin esto, ``triage_agent``/``evaluator_agent`` mandaban TODO el historial
+    de la conversación al LLM en cada turno: en una conversación larga, el
+    prompt (y por tanto el coste y la latencia) crece sin límite. Se
+    mantienen los últimos N mensajes, que son los relevantes para decidir
+    la respuesta del turno actual.
+
+    Args:
+        messages: Historial completo (``state["messages"]``).
+        max_messages: Tope de mensajes a conservar. Por defecto,
+            ``MAX_HISTORY_MESSAGES`` (20).
+    """
+    limit = max_messages if max_messages is not None else int(
+        os.getenv("MAX_HISTORY_MESSAGES", "20")
+    )
+    if limit <= 0 or len(messages) <= limit:
+        return messages
+    return messages[-limit:]

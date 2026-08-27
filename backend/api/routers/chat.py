@@ -7,6 +7,7 @@ Dos modos de consumo:
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from typing import AsyncIterator
@@ -27,6 +28,53 @@ from backend.services.observability import with_langfuse
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
+
+# ── Controles de ciclos/timeout/gasto ──────────────────────────────────────
+#
+# Ninguno de los tres existía antes: el grafo en sí es acíclico dentro de un
+# mismo turno, pero nada impedía (a) una conversación de cientos de turnos en
+# el mismo thread_id, (b) un `ainvoke`/`astream` colgado para siempre si el
+# LLM o un MCP server dejaban de responder sin lanzar excepción, ni (c) que
+# LangGraph corriera con el `recursion_limit` implícito del SDK (25) en vez
+# de uno explícito y documentado.
+
+# Explícito en vez de depender del default implícito de LangGraph (25).
+GRAPH_RECURSION_LIMIT = int(os.getenv("GRAPH_RECURSION_LIMIT", "25"))
+
+# Tiempo máximo para que el grafo complete un turno completo (todas las
+# llamadas a LLM/MCP/BD que ese turno dispare). Si se agota, se cancela la
+# tarea y se informa al cliente en vez de dejar la petición colgada.
+GRAPH_TURN_TIMEOUT_SECONDS = float(os.getenv("GRAPH_TURN_TIMEOUT_SECONDS", "60"))
+
+# Tope de turnos de usuario por conversación (thread_id). Protege frente a
+# conversaciones sin fin (bug de frontend, o un cliente reenviando el mismo
+# hilo indefinidamente) que harían crecer coste y contexto sin límite.
+MAX_CONVERSATION_TURNS = int(os.getenv("MAX_CONVERSATION_TURNS", "40"))
+
+_TURN_LIMIT_MSG = (
+    "Esta conversación ha alcanzado el número máximo de turnos permitido. "
+    "Por favor, inicia una nueva conversación para continuar."
+)
+_TURN_TIMEOUT_MSG = (
+    "El agente ha tardado demasiado en responder. Por favor, inténtalo de nuevo."
+)
+
+
+def _with_graph_limits(config: dict) -> dict:
+    """Añade el `recursion_limit` explícito a un config de LangGraph."""
+    merged = dict(config)
+    merged["recursion_limit"] = GRAPH_RECURSION_LIMIT
+    return merged
+
+
+async def _conversation_turn_limit_reached(graph, config: dict) -> bool:
+    """True si ``thread_id`` ya acumuló ``MAX_CONVERSATION_TURNS`` mensajes de usuario."""
+    if MAX_CONVERSATION_TURNS <= 0:
+        return False
+    state = await graph.aget_state(config)
+    messages = (state.values or {}).get("messages", []) if state else []
+    human_turns = sum(1 for m in messages if isinstance(m, HumanMessage))
+    return human_turns >= MAX_CONVERSATION_TURNS
 
 # Un lock por thread_id: si dos peticiones para el MISMO hilo llegan
 # solapadas (doble clic, doble envío del frontend, reintento de red...),
@@ -90,21 +138,32 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
 
     Útil para pruebas con curl o clientes que no soportan SSE.
     """
-    config = with_langfuse(
-        {
-            "configurable": {"thread_id": request.thread_id},
-        },
-        thread_id=request.thread_id,
-    )
-    try:
-        result = await graph.ainvoke(
+    config = _with_graph_limits(
+        with_langfuse(
             {
-                "messages": [HumanMessage(content=request.message)],
-                "thread_id": request.thread_id,
-                "selected_item_ids": request.selected_item_ids,
+                "configurable": {"thread_id": request.thread_id},
             },
-            config=config,
+            thread_id=request.thread_id,
         )
+    )
+
+    if await _conversation_turn_limit_reached(graph, config):
+        return ChatResponse(thread_id=request.thread_id, response=_TURN_LIMIT_MSG)
+
+    try:
+        result = await asyncio.wait_for(
+            graph.ainvoke(
+                {
+                    "messages": [HumanMessage(content=request.message)],
+                    "thread_id": request.thread_id,
+                    "selected_item_ids": request.selected_item_ids,
+                },
+                config=config,
+            ),
+            timeout=GRAPH_TURN_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail=_TURN_TIMEOUT_MSG)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Error ejecutando el grafo: {exc}")
 
@@ -130,15 +189,39 @@ _HITL_CUSTOMER_MSG = (
 )
 
 
+async def _astream_with_timeout(
+    aiter: AsyncIterator, timeout: float
+) -> AsyncIterator:
+    """Envuelve un async generator aplicando ``timeout`` a cada paso.
+
+    ``graph.astream`` emite un chunk por cada nodo que termina. Si un nodo
+    concreto se queda colgado (LLM/MCP/BD sin responder), el `async for`
+    original nunca produciría el siguiente chunk ni lanzaría excepción — la
+    petición SSE quedaría abierta para siempre. Al medir el timeout por
+    paso (``__anext__``) en vez de sobre el generator completo, una
+    conversación con muchos nodos legítimos no se corta por acumulación,
+    solo cuando UN paso concreto excede el plazo.
+    """
+    iterator = aiter.__aiter__()
+    while True:
+        try:
+            item = await asyncio.wait_for(iterator.__anext__(), timeout=timeout)
+        except StopAsyncIteration:
+            return
+        yield item
+
+
 async def _stream_chat_events(
     graph, message: str, thread_id: str, selected_item_ids: list[str] | None = None
 ) -> AsyncIterator[ChatStreamEvent]:
     """Genera eventos SSE conforme cada nodo del grafo termina."""
-    config = with_langfuse(
-        {
-            "configurable": {"thread_id": thread_id},
-        },
-        thread_id=thread_id,
+    config = _with_graph_limits(
+        with_langfuse(
+            {
+                "configurable": {"thread_id": thread_id},
+            },
+            thread_id=thread_id,
+        )
     )
     lock = _thread_locks.get(thread_id)
 
@@ -168,14 +251,21 @@ async def _stream_chat_events(
                 )
                 return
 
+            if await _conversation_turn_limit_reached(graph, config):
+                yield ChatStreamEvent(type="final", content=_TURN_LIMIT_MSG)
+                return
+
             input_state = {
                 "messages": [HumanMessage(content=message)],
                 "thread_id": thread_id,
                 "selected_item_ids": selected_item_ids,
             }
 
-            # stream_mode="updates": emite un chunk por cada nodo que termina
-            async for chunk in graph.astream(input_state, config=config, stream_mode="updates"):
+            # stream_mode="updates": emite un chunk por cada nodo que termina.
+            # Envuelto con timeout por paso (ver _astream_with_timeout) para no
+            # quedar colgados si un nodo concreto no responde nunca.
+            stream = graph.astream(input_state, config=config, stream_mode="updates")
+            async for chunk in _astream_with_timeout(stream, GRAPH_TURN_TIMEOUT_SECONDS):
                 for node_name in chunk:
                     if node_name == "__interrupt__":
                         continue
@@ -221,6 +311,9 @@ async def _stream_chat_events(
                 label_path=values.get("label_path"),
                 resolution=values.get("resolution"),
             )
+        except asyncio.TimeoutError:
+            logger.warning("Timeout de turno en streaming (thread_id=%s)", thread_id)
+            yield ChatStreamEvent(type="error", content=_TURN_TIMEOUT_MSG)
         except Exception as exc:
             logger.exception("Error en streaming (thread_id=%s)", thread_id)
             yield ChatStreamEvent(type="error", content=f"Error procesando tu solicitud: {exc}")
