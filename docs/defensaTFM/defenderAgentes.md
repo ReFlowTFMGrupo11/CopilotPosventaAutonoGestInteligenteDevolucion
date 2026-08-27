@@ -184,12 +184,11 @@ solo aporta la explicación en lenguaje natural y valora los casos grises.
 │ Funciones puras, 100% deterministas          │
 │ • rule_deadline     • rule_hygiene           │
 │ • rule_condition    • rule_high_amount       │
-│ • rule_borderline   • rule_sensitive_reason  │
-│ • rule_frequent_returner                     │
+│ • rule_borderline   • rule_frequent_returner │
 └──────────────────────────────────────────────┘
                     ↓ veredicto
 ┌──────────────────────────────────────────────┐
-│ CAPA 2: LLM (policy.py)                     │
+│ CAPA 2: LLM (evaluator.py)                   │
 │ Recibe el veredicto como contexto obligatorio │
 │ NO puede contradecir un "invalid"            │
 └──────────────────────────────────────────────┘
@@ -209,11 +208,18 @@ backend/agents/nodes/
   policy_rules.py   ← Código puro Python (sin dependencias externas)
                        PolicyContext (dataclass inmutable)
                        RuleResult (dataclass)
-                       7 reglas individuales (funciones puras)
+                       7 reglas individuales (funciones puras) —
+                         6 activas en POLICY_RULES; rule_sensitive_reason
+                         queda definida pero excluida de la cadena: su
+                         SENSITIVE_REASONS (allergic_reaction,
+                         counterfeit_suspicion) no tiene equivalente en
+                         el reason_category de 6 valores que triage.py
+                         produce hoy. Red de seguridad para si esa
+                         extracción se amplía en el futuro.
                        POLICY_RULES (cadena ordenada)
                        deterministic_check() (orquestador)
                        compute_refund() (aritmética exacta)
-  policy.py         ← Agente LLM + RAG + reconciliación
+  evaluator.py      ← Agente LLM + RAG + reconciliación
 ```
 
 ### Best practices aplicadas

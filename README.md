@@ -44,12 +44,13 @@ backend/
     graph.py     #   Grafo: StateGraph con routing condicional y checkpointer
     state.py     #   Re-export de ReturnState (compatibilidad)
     nodes/       #   Nodos del grafo:
-                 #     triage.py     — Agente de Triaje y Empatía
-                 #     policy.py       — Agente Evaluador de Políticas (RAG + LLM)
+                 #     triage.py       — Agente de Triaje y Empatía
+                 #     evaluator.py    — Agente Evaluador de Políticas (RAG + LLM)
                  #     policy_rules.py — Reglas de negocio deterministas (Chain of Rules)
-                 #     resolution.py — Agente de Resolución + HITL + Rechazo
+                 #     resolution.py   — Agente de Resolución + HITL + Rechazo
     infra/       #   Infraestructura:
                  #     mcp_client.py      — Cliente MCP unificado (Supabase + Logistics)
+                 #     llm_factory.py     — Factory compartida para construir el LLM de cada nodo
                  #     session_tracker.py — Registro de sesiones para métricas
     cli/         #   demo_chat.py — Demo interactiva multi-turno
   services/      # Lógica de negocio pura (sin MCP ni LLM)

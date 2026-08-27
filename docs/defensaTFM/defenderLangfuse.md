@@ -27,7 +27,7 @@ depender de un servicio de terceros con datos de clientes ficticios.
 
 ## 2. Diseño no invasivo: `with_langfuse()` como wrapper de `config`
 
-Los tres agentes (`triage.py`, `policy.py`, `resolution.py`) no importan
+Los tres agentes (`triage.py`, `evaluator.py`, `resolution.py`) no importan
 LangFuse ni saben que existe. Toda la instrumentación entra por **un único
 punto**: el `config` que se le pasa a `graph.ainvoke()` / `graph.astream()`
 en `backend/api/routers/chat.py`.
