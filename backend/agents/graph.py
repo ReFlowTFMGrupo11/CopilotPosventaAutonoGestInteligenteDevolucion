@@ -49,6 +49,14 @@ if sys.platform == "win32":
     # psycopg en modo async no soporta el ProactorEventLoop (el por defecto en
     # asyncio en Windows desde Python 3.8); necesita SelectorEventLoop. Sin esto,
     # AsyncConnectionPool falla al conectar aunque las credenciales sean correctas.
+    #
+    # OJO: esto solo tiene efecto si el loop de asyncio se crea DESPUÉS de
+    # importar este módulo. Sirviendo la API con `uvicorn backend.api.main:app`
+    # (sin --reload) NO basta: uvicorn crea su loop en Server.run() antes de
+    # importar la app, así que esta policy llega tarde y AsyncConnectionPool
+    # tarda 30s reintentando antes de caer a InMemorySaver. Para la API,
+    # arrancar con `python -m backend.api.run` (ver ese módulo para el
+    # porqué) en vez de invocar uvicorn directamente.
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 from backend.agents.nodes.evaluator import evaluator_agent

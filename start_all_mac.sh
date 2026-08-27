@@ -75,7 +75,7 @@ echo $! >> "$PIDFILE"
 sleep 2
 
 echo "==> Lanzando API FastAPI (http://localhost:8000)..."
-uvicorn backend.api.main:app --reload --port 8000 > /tmp/reflow_api.log 2>&1 &
+python -m backend.api.run --reload --port 8000 > /tmp/reflow_api.log 2>&1 &
 echo $! >> "$PIDFILE"
 sleep 3
 

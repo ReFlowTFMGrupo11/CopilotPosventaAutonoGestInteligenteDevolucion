@@ -162,8 +162,12 @@ Para diagramas Mermaid detallados ver [`docs/graph_diagram.md`](docs/graph_diagr
 ```bash
 # Asegúrate de tener los servidores MCP levantados (terminales 1 y 2 de arriba)
 # Terminal 3 — API REST en http://localhost:8000
-uvicorn backend.api.main:app --reload --port 8000
+python -m backend.api.run --reload --port 8000
 ```
+
+> En Windows, usa `python -m backend.api.run` en vez de `uvicorn backend.api.main:app`
+> directamente: sin este wrapper, un arranque sin `--reload` tarda 30s conectando a
+> Postgres antes de caer a memoria (ver comentario en `backend/api/run.py`).
 
 ### Endpoints disponibles
 
@@ -293,7 +297,7 @@ abiertas en paralelo** (uno por proceso).
 | 4 | — | Verificar conexión a Supabase *(opcional)* | Ver script en [Configuración del entorno → 4. Verificar conexión](#configuración-del-entorno) |
 | 5 | Terminal 1 | Arrancar MCP Supabase (datos + RAG) | `python -m backend.mcp.mcp_supabase` → `http://localhost:8001/mcp` |
 | 6 | Terminal 2 | Arrancar MCP Logística | `python -m backend.mcp.mcp_logistics` → `http://localhost:8002/mcp` |
-| 7 | Terminal 3 | Arrancar API FastAPI | `uvicorn backend.api.main:app --reload --port 8000` → `http://localhost:8000` |
+| 7 | Terminal 3 | Arrancar API FastAPI | `python -m backend.api.run --reload --port 8000` → `http://localhost:8000` |
 | 8 | Terminal 4 | Arrancar frontend Streamlit | `streamlit run frontend/Chat.py` → `http://localhost:8501` |
 
 Orden de arranque importante: **MCP servers (5-6) → API (7) → Frontend (8)**,
