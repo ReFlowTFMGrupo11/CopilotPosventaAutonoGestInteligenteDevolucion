@@ -79,6 +79,12 @@ Dividir por secciones (`## ...`) es superior a chunks de tamaño fijo porque:
 
 La búsqueda semántica se ejecuta como una **función PostgreSQL nativa** (`match_policy_embeddings`) invocada vía RPC sobre la API REST de Supabase. Esto permite que el cálculo de distancia coseno y el índice IVFFlat de pgvector corran dentro del motor de base de datos, sin mover los 1536 vectores al proceso Python.
 
+### ¿Cómo funciona el índice IVFFlat?
+
+El índice **IVFFlat (Inverted File Flat)** con `lists = 10` es un mecanismo de búsqueda aproximada en bases de datos vectoriales que divide el espacio de embeddings en 10 clústeres mediante K-Means. Al realizar una consulta, el sistema filtra y busca únicamente dentro de los clústeres más cercanos, en lugar de comparar el vector contra toda la base de datos.
+
+Con solo 102 chunks repartidos en 10 clústeres (~10 vectores por clúster), el filtrado apenas descarta candidatos: el coste de comparar dentro de 1-2 clústeres cercanos es prácticamente el mismo que comparar contra toda la tabla. Es decir, el mecanismo ya está en su sitio y configurado correctamente, pero a este volumen no aporta una ganancia de velocidad medible frente a un escaneo exacto — su valor real se hará notar si el corpus de políticas crece a miles de chunks, momento en el que evitar comparar contra el 100% de los vectores sí supone una diferencia de rendimiento significativa.
+
 ### ¿RPC o REST?
 
 Son el mismo transporte HTTP, con semántica diferente:
