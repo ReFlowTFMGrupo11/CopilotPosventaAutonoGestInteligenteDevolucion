@@ -221,7 +221,7 @@ Pregunta habitual en la defensa: *"¿por qué no usáis LangChain para todo, inc
 |----------|-----------|----------|
 | `langgraph` | `backend/agents/graph.py` | Orquesta el grafo de agentes (`StateGraph`, aristas condicionales, checkpointer sobre Postgres) |
 | `langchain` / `langchain-core` | `backend/agents/nodes/*.py` | Abstracción de mensajes (`HumanMessage`, `AIMessage`) y tool-calling que consume LangGraph |
-| `langchain-openai` | `triage.py`, `policy.py`, `resolution.py` | `ChatOpenAI` para las llamadas al LLM de los tres agentes |
+| `langchain-openai` | `triage.py`, `evaluator.py`, `resolution.py` | `ChatOpenAI` para las llamadas al LLM de los tres agentes |
 | `langchain-mcp-adapters` | `backend/agents/infra/mcp_client.py` | Traduce las tools de los servers MCP (Supabase, Logística) al formato de tool-calling que entiende LangGraph |
 | `openai` (SDK oficial, sin envoltorio LangChain) | `data/rag/ingest_policy_embeddings.py` y `search_return_policy()` en `supabase_service.py` | Genera los embeddings, tanto al indexar las políticas como al resolver cada consulta |
 
