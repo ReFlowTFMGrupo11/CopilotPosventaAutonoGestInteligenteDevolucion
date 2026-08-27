@@ -3,7 +3,7 @@ Evaluador end-to-end del pipeline RAG + Agente Evaluador de Políticas.
 
 Lee los 480 casos de data/qa/eval_cases.csv, construye un estado mínimo
 por caso, mockea el RAG con los chunks REALES del corpus (sin llamadas
-a OpenAI ni a Supabase) y ejecuta policy_evaluator_agent con el LLM real
+a OpenAI ni a Supabase) y ejecuta evaluator_agent con el LLM real
 (gpt-5-mini). Calcula precisión, recall y F1 por clase y por categoría,
 y vuelca el informe como JSON y tabla Markdown en:
 
@@ -72,9 +72,17 @@ def _load_cases(csv_path: Path, limit: int | None, category: str | None) -> list
     return rows
 
 
-def _build_mock_policy(category: str, max_return_days: int) -> dict:
+def _build_mock_policy(
+    category: str, max_return_days: int, allowed_conditions: list[str]
+) -> dict:
     """Construye un objeto policy_info mínimo a partir de las columnas del CSV
-    (sin necesidad de BD). Incluye los chunks RAG del corpus real."""
+    (sin necesidad de BD). Incluye los chunks RAG del corpus real.
+
+    ``allowed_conditions`` viene de la columna homónima de eval_cases.csv
+    (la real, específica de la categoría de este caso) — antes de este fix
+    se usaba una lista fija igual para las 16 categorías, sin relación con
+    la que usó classify_case() para calcular expected_label.
+    """
     policy_doc_map = {
         "electronica_informatica": "01_electronica_informatica.md",
         "electrodomesticos":       "02_electrodomesticos.md",
@@ -109,7 +117,7 @@ def _build_mock_policy(category: str, max_return_days: int) -> dict:
             "max_return_days": max_return_days,
             "requires_original_packaging": False,
             "restocking_fee_percent": 0.0,
-            "allowed_conditions": ["unopened", "defective", "wrong_item", "not_as_described", "missing_parts"],
+            "allowed_conditions": allowed_conditions,
             "policy_text": policy_text,
             "active": True,
         },
@@ -117,7 +125,7 @@ def _build_mock_policy(category: str, max_return_days: int) -> dict:
 
 
 def _build_state(row: dict) -> dict[str, Any]:
-    """Construye el estado mínimo que necesita policy_evaluator_agent."""
+    """Construye el estado mínimo que necesita evaluator_agent."""
     order_item_id = f"oi-eval-{row['case_id'][:8]}"
     # delivered_at simulado: ahora - days_since_delivery
     days = int(row["days_since_delivery"])
@@ -170,7 +178,11 @@ def _build_state(row: dict) -> dict[str, Any]:
             {
                 "order_item_id": order_item_id,
                 "quantity": 1,
-                "condition": "defective" if row["reason_category"] == "defective" else "unopened",
+                # Columna real de eval_cases.csv (la que classify_case() usó
+                # para calcular expected_label) — antes de este fix se
+                # ADIVINABA con una regla de 2 valores sin relación con el
+                # caso real, porque el CSV no la exportaba.
+                "condition": row["condition"],
             }
         ],
     }
@@ -201,7 +213,7 @@ def _deterministic_label(row: dict) -> str:
 
 
 def _result_to_label(result: dict[str, Any]) -> str:
-    """Convierte la salida de policy_evaluator_agent en una etiqueta comparable."""
+    """Convierte la salida de evaluator_agent en una etiqueta comparable."""
     any_eligible = result.get("any_eligible", False)
     items = result.get("items_eligibility", [])
 
@@ -317,7 +329,7 @@ async def run_evaluation(
     category: str | None = None,
     dry_run: bool = False,
 ) -> dict:
-    from backend.agents.nodes.policy import policy_evaluator_agent
+    from backend.agents.nodes.evaluator import evaluator_agent
     from backend.services.observability import get_langfuse, flush as langfuse_flush
 
     cases = _load_cases(EVAL_CSV, limit, category)
@@ -344,15 +356,16 @@ async def run_evaluation(
             predicted = _deterministic_label(row)
         else:
             state = _build_state(row)
-            mock_policy = _build_mock_policy(cat, max_days)
+            allowed_conditions = row["allowed_conditions"].split("|")
+            mock_policy = _build_mock_policy(cat, max_days, allowed_conditions)
 
             async def _mock_search(query: str, category: str = "") -> dict:  # noqa: E501
                 return mock_policy
 
             try:
-                with patch("backend.agents.nodes.policy.search_return_policy",
+                with patch("backend.agents.nodes.evaluator.search_return_policy",
                            side_effect=_mock_search):
-                    agent_result = await policy_evaluator_agent(state)
+                    agent_result = await evaluator_agent(state)
                 predicted = _result_to_label(agent_result)
             except Exception as exc:
                 logger.warning("Caso %s falló: %s", case_id, exc)

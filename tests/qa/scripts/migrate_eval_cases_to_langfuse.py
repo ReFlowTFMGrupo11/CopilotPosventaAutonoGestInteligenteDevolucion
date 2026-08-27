@@ -5,7 +5,7 @@ Crea (o reutiliza) el dataset `policy-eval-golden-set` en la instancia de
 Langfuse configurada por LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY/LANGFUSE_HOST
 (.env de la raíz) y sube cada fila del CSV como un dataset item:
 
-  - input:           las columnas que necesita policy_evaluator_agent
+  - input:           las columnas que necesita evaluator_agent
                       (mismo shape que usa evaluate_rag.py::_build_state)
   - expected_output:  la columna `expected_label` (valid/invalid/human_review)
   - metadata:         case_id, category y rationale, para poder leer el
@@ -64,7 +64,7 @@ def migrate(limit: int | None = None, force: bool = False) -> None:
     lf = Langfuse()
     lf.create_dataset(
         name=DATASET_NAME,
-        description="480 casos golden para validar policy_evaluator_agent "
+        description="480 casos golden para validar evaluator_agent "
         "(fuente: data/qa/eval_cases.csv).",
         metadata={"source": "data/qa/eval_cases.csv"},
     )
@@ -88,7 +88,9 @@ def migrate(limit: int | None = None, force: bool = False) -> None:
                 "customer_email": row["customer_email"],
                 "category": row["category"],
                 "reason_category": row["reason_category"],
+                "condition": row["condition"],
                 "max_return_days": row["max_return_days"],
+                "allowed_conditions": row["allowed_conditions"],
                 "days_since_delivery": row["days_since_delivery"],
                 "refund_amount": row["refund_amount"],
                 "is_frequent_returner": row["is_frequent_returner"],

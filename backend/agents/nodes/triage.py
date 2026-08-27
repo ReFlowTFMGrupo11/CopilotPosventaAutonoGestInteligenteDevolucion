@@ -42,6 +42,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
+from backend.agents.infra.llm_factory import build_chat_llm
 from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
 
 logger = logging.getLogger(__name__)
@@ -128,12 +129,11 @@ from backend.models import TriageOutput
 
 
 def _build_llm() -> ChatOpenAI:
-    """Construye el LLM para el agente de triaje con salida estructurada."""
-    return ChatOpenAI(
-        model="gpt-5-mini",
-        temperature=0,
-        max_tokens=4096,
-    )
+    """Construye el LLM para el agente de triaje con salida estructurada.
+
+    Modelo configurable vía ``TRIAGE_MODEL``; por defecto ``gpt-5-nano``.
+    """
+    return build_chat_llm("TRIAGE_MODEL", temperature=0)
 
 
 async def triage_agent(state: ReturnState) -> dict[str, Any]:

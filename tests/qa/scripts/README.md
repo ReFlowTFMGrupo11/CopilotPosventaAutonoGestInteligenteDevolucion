@@ -15,9 +15,9 @@ con `python tests/qa/scripts/archivo.py` (usan imports relativos al paquete
 |---|---|---|
 | `create_qa_testing_excel.py` | Genera el Excel coloreado de los 24 casos manuales (`qa_manual_testing_cases_v2.xlsx`) a partir del CSV curado. | No |
 | `generate_mixed_qa_kit.py` | Genera el kit de pruebas de pedidos **mixtos** (varios productos/categorías en un mismo pedido): un `.xlsx` y un seed `.sql`. | No |
-| `evaluate_rag.py` | Evaluador **local** de `policy_evaluator_agent` contra los 480 casos golden (`data/qa/eval_cases.csv`). Calcula precisión/recall/F1 y escribe el informe en `tests/qa/results/*.json` y `*.md`. | Solo si no usas `--dry-run` |
+| `evaluate_rag.py` | Evaluador **local** de `evaluator_agent` contra los 480 casos golden (`data/qa/eval_cases.csv`). Calcula precisión/recall/F1 y escribe el informe en `tests/qa/results/*.json` y `*.md`. | Solo si no usas `--dry-run` |
 | `migrate_eval_cases_to_langfuse.py` | Sube los 480 casos golden a Langfuse como **Dataset** (`policy-eval-golden-set`), reutilizando el mismo CSV que `evaluate_rag.py`. | No (solo escribe en Langfuse) |
-| `run_langfuse_experiment.py` | Ejecuta `policy_evaluator_agent` contra el dataset de Langfuse y sube los resultados como **Experiment Run**, con evaluación automática por item (`label_match`) y agregada (`accuracy`). Es el equivalente a `evaluate_rag.py` pero con historial y comparación entre ejecuciones en la UI de Langfuse en vez de ficheros locales. | Solo si no usas `--dry-run` |
+| `run_langfuse_experiment.py` | Ejecuta `evaluator_agent` contra el dataset de Langfuse y sube los resultados como **Experiment Run**, con evaluación automática por item (`label_match`) y agregada (`accuracy`). Es el equivalente a `evaluate_rag.py` pero con historial y comparación entre ejecuciones en la UI de Langfuse en vez de ficheros locales. | Solo si no usas `--dry-run` |
 
 ---
 
@@ -105,7 +105,7 @@ Qué hace, por cada item del dataset:
 1. Reconstruye el estado mínimo del agente a partir del `input` guardado
    (misma lógica que `evaluate_rag.py::_build_state` / `_build_mock_policy`,
    sin necesidad de Supabase real).
-2. Ejecuta `policy_evaluator_agent` (o, en `--dry-run`, la réplica
+2. Ejecuta `evaluator_agent` (o, en `--dry-run`, la réplica
    determinista de las reglas de negocio, sin LLM).
 3. Compara la etiqueta predicha con `expected_output` mediante el evaluator
    `label_match_evaluator` (1.0 / 0.0 por item, con comentario si falla).
