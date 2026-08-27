@@ -42,7 +42,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
-from backend.agents.infra.llm_factory import build_chat_llm
+from backend.agents.llm_factory import build_chat_llm
 from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
 
 logger = logging.getLogger(__name__)

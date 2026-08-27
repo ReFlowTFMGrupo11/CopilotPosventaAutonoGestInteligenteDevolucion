@@ -41,7 +41,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.types import Command, interrupt
 
 from backend.agents.state import ReturnState
-from backend.agents.infra.llm_factory import build_chat_llm
+from backend.agents.llm_factory import build_chat_llm
 from backend.agents.infra.mcp_client import (
     create_return_record,
     generate_shipping_label,
