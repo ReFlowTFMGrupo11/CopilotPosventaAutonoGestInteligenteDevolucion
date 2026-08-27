@@ -40,19 +40,19 @@ backend/
                  #   routers/chat.py   — /api/chat endpoints
                  #   routers/admin.py  — /api/admin HITL endpoints
                  #   routers/orders.py — /api/orders, /api/stats
-  agents/        # Sistema multi-agente LangGraph
-    graph.py     #   Grafo: StateGraph con routing condicional y checkpointer
-    state.py     #   Re-export de ReturnState (compatibilidad)
-    nodes/       #   Nodos del grafo:
-                 #     triage.py       — Agente de Triaje y Empatía
-                 #     evaluator.py    — Agente Evaluador de Políticas (RAG + LLM)
-                 #     policy_rules.py — Reglas de negocio deterministas (Chain of Rules)
-                 #     resolution.py   — Agente de Resolución + HITL + Rechazo
-    infra/       #   Infraestructura:
-                 #     mcp_client.py      — Cliente MCP unificado (Supabase + Logistics)
-                 #     llm_factory.py     — Factory compartida para construir el LLM de cada nodo
-                 #     session_tracker.py — Registro de sesiones para métricas
-    cli/         #   demo_chat.py — Demo interactiva multi-turno
+   agents/        # Sistema multi-agente LangGraph
+     graph.py        #   Grafo: StateGraph con routing condicional y checkpointer
+     state.py        #   Re-export de ReturnState (compatibilidad)
+     llm_factory.py  #   Factory compartida para construir el LLM de cada nodo
+     nodes/       #   Nodos del grafo:
+                  #     triage.py       — Agente de Triaje y Empatía
+                  #     evaluator.py    — Agente Evaluador de Políticas (RAG + LLM)
+                  #     policy_rules.py — Reglas de negocio deterministas (Chain of Rules)
+                  #     resolution.py   — Agente de Resolución + HITL + Rechazo
+     infra/       #   Clientes de sistemas externos:
+                  #     mcp_client.py      — Cliente MCP unificado (Supabase + Logistics)
+                  #     session_tracker.py — Registro de sesiones para métricas
+     cli/         #   demo_chat.py — Demo interactiva multi-turno
   services/      # Lógica de negocio pura (sin MCP ni LLM)
                  #   supabase_service.py  — consultas, RAG, mutaciones
                  #   logistics_service.py — etiquetas PDF, notificaciones
