@@ -10,10 +10,7 @@
       "WebFetch(domain:github.com)",
       "Bash(python -c ' *)",
       "Bash(.venv/Scripts/python -m pip install \"pytest>=8.0.0\" \"pytest-asyncio>=0.24.0\" --quiet)",
-      "Bash(.venv/Scripts/python -m pytest --version)",
-      "Bash(.venv/Scripts/python -m pytest agente1ConMCP/tests -v)",
-      "Bash(.venv/Scripts/python -c \"import agente1ConMCP.agente_triaje as m; print\\(m.TriageOutput.model_fields.keys\\(\\)\\); print\\(m.TRIAGE_TOOL_NAMES\\)\")",
-      "Bash(.venv/Scripts/python -m pytest agente1ConMCP/tests -q)"
+      "Bash(.venv/Scripts/python -m pytest --version)"
     ]
   }
 }
