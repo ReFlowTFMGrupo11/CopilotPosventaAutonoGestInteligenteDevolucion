@@ -105,3 +105,9 @@ def chat_state(thread_id: str) -> dict:
     r = httpx.get(f"{API_BASE}/api/chat/{thread_id}/state", timeout=10)
     r.raise_for_status()
     return r.json()
+
+
+def observability_links() -> dict:
+    r = httpx.get(f"{API_BASE}/api/admin/observability", timeout=10)
+    r.raise_for_status()
+    return r.json()

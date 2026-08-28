@@ -17,6 +17,38 @@ styles.render_backend_banner(api.health())
 
 st.markdown("## Panel de administración")
 
+# ── Monitorización de gasto (LangFuse) ──────────────────────────────────
+#
+# No hay contador de coste propio en la app (ver nota de alcance de la PR
+# de controles de terminación): LangFuse ya agrega tokens/coste por sesión
+# (langfuse_session_id = thread_id) y por cliente (langfuse_user_id =
+# customer_id, desde que se conoce), así que en vez de reimplementarlo
+# aquí se enlaza directamente a su dashboard.
+try:
+    links = api.observability_links()
+except httpx.HTTPError:
+    links = {"configured": False}
+
+with st.expander("💰 Monitorización de gasto (LangFuse)", expanded=False):
+    if not links.get("configured"):
+        st.caption(
+            "LangFuse no está configurado (faltan LANGFUSE_PUBLIC_KEY / "
+            "LANGFUSE_SECRET_KEY en el backend). Sin esto no hay tracking "
+            "de coste por sesión ni por cliente."
+        )
+    elif links.get("sessions_url"):
+        st.markdown(
+            f"- [Gasto por sesión]({links['sessions_url']})\n"
+            f"- [Gasto por cliente]({links['users_url']})"
+        )
+    else:
+        st.caption(
+            "No se pudo resolver el proyecto de LangFuse automáticamente. "
+            f"Entra en [LangFuse]({links['host']}) y busca las vistas "
+            "«Sessions» y «Users» del proyecto (o fija LANGFUSE_PROJECT_ID "
+            "en el backend para enlazarlas directamente)."
+        )
+
 
 def money(value) -> str:
     try:

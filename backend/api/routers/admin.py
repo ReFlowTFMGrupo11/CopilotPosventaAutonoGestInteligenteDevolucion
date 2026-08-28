@@ -8,7 +8,7 @@ from langgraph.types import Command
 
 from backend.api.dependencies import get_graph
 from backend.api.schemas import AdminDecisionRequest
-from backend.services import supabase_service
+from backend.services import observability, supabase_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -99,3 +99,16 @@ async def get_return_detail(return_id: str):
     if not data:
         raise HTTPException(status_code=404, detail="Devolución no encontrada.")
     return data
+
+
+@router.get("/observability")
+async def get_observability_links():
+    """Enlaces al dashboard de LangFuse para monitorizar gasto por sesión/cliente.
+
+    No hay contador de coste propio (ver nota de alcance de la PR de
+    controles de terminación): LangFuse ya trackea tokens/coste por
+    `langfuse_session_id` y `langfuse_user_id` (ver with_langfuse en
+    backend/services/observability.py), así que el panel solo enlaza a su
+    dashboard en vez de reimplementar la agregación.
+    """
+    return observability.langfuse_links()
