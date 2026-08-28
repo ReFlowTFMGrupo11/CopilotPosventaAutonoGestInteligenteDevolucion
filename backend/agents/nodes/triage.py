@@ -76,6 +76,10 @@ ejemplos orientativos (no es una lista cerrada, hay infinitas variantes):
    - "sin abrir", "precintado", "no lo he usado" → unopened
    - "ya lo he usado/probado" → used
    - "no es el que pedí", "me enviaron otra cosa" → wrong_item
+   - "he cambiado de opinión", "ya no lo quiero/necesito", "no me convence",
+     "no era lo que esperaba" (sin mención de uso o daño) → unopened, asumiendo
+     que un cliente que se arrepiente de la compra no ha llegado a usar el
+     artículo, salvo que el propio mensaje indique lo contrario
 Si el motivo de un artículo ya deja claro su estado (por significado, aunque no
 use ninguna de estas palabras), infiere `condition` en el mismo turno en el que
 se menciona; pregunta el estado explícitamente solo para los artículos cuya
