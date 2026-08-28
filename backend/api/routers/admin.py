@@ -8,7 +8,7 @@ from langgraph.types import Command
 
 from backend.api.dependencies import get_graph
 from backend.api.schemas import AdminDecisionRequest
-from backend.services import supabase_service
+from backend.services import supabase_service, usage_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -99,3 +99,20 @@ async def get_return_detail(return_id: str):
     if not data:
         raise HTTPException(status_code=404, detail="Devolución no encontrada.")
     return data
+
+
+@router.get("/usage/sessions")
+async def list_usage_sessions(limit: int = 100):
+    """Coste (tokens) y latencia agregados por sesión, con cliente/pedido asociados.
+
+    Ver backend/agents/usage_tracking.py para de dónde sale cada fila.
+    """
+    sessions = await usage_service.get_usage_by_session(limit=limit)
+    return {"sessions": sessions, "count": len(sessions)}
+
+
+@router.get("/usage/sessions/{thread_id}")
+async def get_usage_session_detail(thread_id: str):
+    """Detalle petición a petición (tokens/latencia) de una sesión concreta."""
+    requests = await usage_service.get_usage_detail(thread_id)
+    return {"thread_id": thread_id, "requests": requests, "count": len(requests)}

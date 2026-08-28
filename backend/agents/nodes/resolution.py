@@ -42,6 +42,7 @@ from langgraph.types import Command, interrupt
 
 from backend.agents.state import ReturnState
 from backend.agents.llm_factory import build_chat_llm
+from backend.agents.usage_tracking import invoke_tracked
 from backend.agents.infra.mcp_client import (
     create_return_record,
     generate_shipping_label,
@@ -219,13 +220,20 @@ async def resolution_agent(
                 resolution="rejected_by_admin",
                 notes=admin_response.get("reason", "Rechazado por administrador."),
             )
-            rejection_msg = await llm.ainvoke([
-                SystemMessage(
-                    content=REJECTION_SYSTEM_PROMPT.format(
-                        reason="El administrador ha rechazado la devolución tras revisión manual."
-                    )
-                ),
-            ])
+            rejection_msg = await invoke_tracked(
+                llm,
+                [
+                    SystemMessage(
+                        content=REJECTION_SYSTEM_PROMPT.format(
+                            reason="El administrador ha rechazado la devolución tras revisión manual."
+                        )
+                    ),
+                ],
+                node="resolution",
+                thread_id=state.get("thread_id", ""),
+                customer_id=customer_id,
+                order_id=order_id,
+            )
             return Command(
                 update={
                     "messages": [rejection_msg],
@@ -297,16 +305,23 @@ async def resolution_agent(
                 "order_id", order_id
             ).order("created_at", desc=True).limit(1).execute()
             existing = resp.data[0] if resp.data else {}
-            duplicate_msg = await llm.ainvoke([
-                SystemMessage(
-                    content=(
-                        "Eres el Agente de Resolución de ReFlow. Informa al cliente, de forma "
-                        "clara y empática, de que ya existe una solicitud de devolución en curso "
-                        f"para este pedido (estado actual: {existing.get('status', 'en proceso')}). "
-                        "No hace falta crear una nueva; nuestro equipo ya la está gestionando."
-                    )
-                ),
-            ])
+            duplicate_msg = await invoke_tracked(
+                llm,
+                [
+                    SystemMessage(
+                        content=(
+                            "Eres el Agente de Resolución de ReFlow. Informa al cliente, de forma "
+                            "clara y empática, de que ya existe una solicitud de devolución en curso "
+                            f"para este pedido (estado actual: {existing.get('status', 'en proceso')}). "
+                            "No hace falta crear una nueva; nuestro equipo ya la está gestionando."
+                        )
+                    ),
+                ],
+                node="resolution",
+                thread_id=state.get("thread_id", ""),
+                customer_id=customer_id,
+                order_id=order_id,
+            )
             return Command(
                 update={
                     "messages": [duplicate_msg],
@@ -372,10 +387,17 @@ async def resolution_agent(
     else:
         resolution_context += "No hay artículos rechazados en esta solicitud."
 
-    final_response = await llm.ainvoke([
-        SystemMessage(content=RESOLUTION_SYSTEM_PROMPT),
-        SystemMessage(content=f"CONTEXTO: {resolution_context}"),
-    ])
+    final_response = await invoke_tracked(
+        llm,
+        [
+            SystemMessage(content=RESOLUTION_SYSTEM_PROMPT),
+            SystemMessage(content=f"CONTEXTO: {resolution_context}"),
+        ],
+        node="resolution",
+        thread_id=state.get("thread_id", ""),
+        customer_id=customer_id,
+        order_id=order_id,
+    )
 
     return Command(
         update={
@@ -397,11 +419,18 @@ async def rejection_agent(state: ReturnState) -> dict[str, Any]:
 
     eligibility_reason = state.get("eligibility_reason", "No se cumple la política de devoluciones.")
 
-    response = await llm.ainvoke([
-        SystemMessage(
-            content=REJECTION_SYSTEM_PROMPT.format(reason=eligibility_reason)
-        ),
-    ])
+    response = await invoke_tracked(
+        llm,
+        [
+            SystemMessage(
+                content=REJECTION_SYSTEM_PROMPT.format(reason=eligibility_reason)
+            ),
+        ],
+        node="rejection",
+        thread_id=state.get("thread_id", ""),
+        customer_id=state.get("customer_id"),
+        order_id=state.get("order_id"),
+    )
 
     return {
         "messages": [response],
