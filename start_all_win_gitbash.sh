@@ -84,7 +84,7 @@ launch "MCP Logistics (8002)" "python -m backend.mcp.mcp_logistics"
 sleep 2
 
 echo "==> Lanzando API FastAPI (http://localhost:8000)..."
-launch "API FastAPI (8000)" "uvicorn backend.api.main:app --reload --port 8000"
+launch "API FastAPI (8000)" "python -m backend.api.run --reload --port 8000"
 sleep 3
 
 echo "==> Lanzando frontend Streamlit (http://localhost:8501)..."

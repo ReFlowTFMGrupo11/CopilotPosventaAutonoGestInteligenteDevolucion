@@ -42,7 +42,7 @@ from langchain_core.messages import AIMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
-from backend.agents.llm_factory import build_chat_llm
+from backend.agents.llm_factory import build_chat_llm, trim_history
 from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,10 @@ ejemplos orientativos (no es una lista cerrada, hay infinitas variantes):
    - "sin abrir", "precintado", "no lo he usado" → unopened
    - "ya lo he usado/probado" → used
    - "no es el que pedí", "me enviaron otra cosa" → wrong_item
+   - "he cambiado de opinión", "ya no lo quiero/necesito", "no me convence",
+     "no era lo que esperaba" (sin mención de uso o daño) → unopened, asumiendo
+     que un cliente que se arrepiente de la compra no ha llegado a usar el
+     artículo, salvo que el propio mensaje indique lo contrario
 Si el motivo de un artículo ya deja claro su estado (por significado, aunque no
 use ninguna de estas palabras), infiere `condition` en el mismo turno en el que
 se menciona; pregunta el estado explícitamente solo para los artículos cuya
@@ -152,7 +156,7 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     if state.get("order_details"):
         items = state["order_details"].get("items", [])
         context.append(SystemMessage(content=f"ARTÍCULOS DEL PEDIDO: {json.dumps(items, default=str, ensure_ascii=False)}"))
-    llm_messages = [*context, *state.get("messages", [])]
+    llm_messages = [*context, *trim_history(state.get("messages", []))]
 
     result: TriageOutput | None = await llm_structured.ainvoke(llm_messages)
 

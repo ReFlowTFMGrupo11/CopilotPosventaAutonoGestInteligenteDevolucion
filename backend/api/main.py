@@ -9,21 +9,25 @@ Endpoints:
 - /health         → Health check
 
 Ejecutar:
-    uvicorn backend.api.main:app --reload --port 8000
+    python -m backend.api.run --reload --port 8000
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.agents.graph import get_return_graph
 from backend.api.routers import admin, chat, orders
 from backend.services.observability import flush as langfuse_flush, get_langfuse
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -59,6 +63,20 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(orders.router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Red de seguridad final: garantiza una respuesta JSON ante CUALQUIER
+    excepción no capturada por el endpoint (p. ej. admin.py tiene rutas de
+    solo lectura sin try/except propio). Sin esto, FastAPI ya devuelve un 500,
+    pero sin log centralizado ni formato consistente para el frontend.
+    """
+    logger.exception("Excepción no manejada en %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno inesperado. Inténtalo de nuevo más tarde."},
+    )
 
 
 @app.get("/health")
