@@ -76,6 +76,17 @@ async def _conversation_turn_limit_reached(graph, config: dict) -> bool:
     human_turns = sum(1 for m in messages if isinstance(m, HumanMessage))
     return human_turns >= MAX_CONVERSATION_TURNS
 
+
+async def _known_customer_id(graph, thread_id: str) -> str | None:
+    """``customer_id`` ya resuelto para este thread_id en un turno anterior.
+
+    Se usa para taggear las trazas de LangFuse por cliente desde el primer
+    nodo del turno; antes de que el cliente dé su order_number todavía no
+    hay customer_id (ver fetch_order_data en triage.py) y se omite el tag.
+    """
+    state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
+    return (state.values or {}).get("customer_id") if state else None
+
 # Un lock por thread_id: si dos peticiones para el MISMO hilo llegan
 # solapadas (doble clic, doble envío del frontend, reintento de red...),
 # la segunda espera a que la primera termine en vez de invocar el grafo
@@ -144,6 +155,7 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
                 "configurable": {"thread_id": request.thread_id},
             },
             thread_id=request.thread_id,
+            customer_id=await _known_customer_id(graph, request.thread_id),
         )
     )
 
@@ -221,6 +233,7 @@ async def _stream_chat_events(
                 "configurable": {"thread_id": thread_id},
             },
             thread_id=thread_id,
+            customer_id=await _known_customer_id(graph, thread_id),
         )
     )
     lock = _thread_locks.get(thread_id)

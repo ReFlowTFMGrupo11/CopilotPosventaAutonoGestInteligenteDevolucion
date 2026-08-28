@@ -1,16 +1,23 @@
 """
 Observabilidad con LangFuse — punto central de instrumentación.
 
-Expone dos helpers:
+Expone estos helpers:
   - get_langfuse_callback()  → CallbackHandler para inyectar en LangGraph/LangChain.
                                Traza automáticamente cada nodo del grafo (latencia,
                                tokens, prompt, respuesta) sin modificar el código
                                de los agentes.
   - get_langfuse()           → cliente Langfuse para trazas manuales (p.ej. scores
                                en evaluate_rag.py o eventos de negocio custom).
+  - with_langfuse()          → añade thread_id/customer_id como
+                               langfuse_session_id/langfuse_user_id, para que
+                               LangFuse agregue coste (tokens) por sesión y
+                               por cliente sin necesidad de un contador propio.
+  - langfuse_links()         → URLs del dashboard para el panel de admin
+                               (ver frontend/pages/1_Admin.py).
 
-Ambos devuelven None si LANGFUSE_SECRET_KEY no está en el entorno, de modo que
-el sistema arranca sin errores aunque LangFuse no esté configurado.
+Todos devuelven None/deshabilitado si LANGFUSE_SECRET_KEY no está en el
+entorno, de modo que el sistema arranca sin errores aunque LangFuse no esté
+configurado.
 
 Variables de entorno necesarias (ver .env):
     LANGFUSE_PUBLIC_KEY   pk-lf-...
@@ -22,6 +29,15 @@ Variables de entorno necesarias (ver .env):
                           fallback por compatibilidad con el resto de la
                           documentación del repo (langfuse_infra/README.md,
                           tests/qa/scripts/README.md)
+    LANGFUSE_PROJECT_ID   opcional. LangFuse (cloud y self-hosted) no tiene
+                          una ruta /sessions a nivel de host que redirija
+                          sola al proyecto — da 404 sin el id (ver
+                          langfuse_links()). Por eso, si no se fija esta
+                          variable, langfuse_links() lo resuelve solo
+                          llamando a la API de LangFuse con las credenciales
+                          configuradas (GET /api/public/projects); fíjala
+                          solo si esa llamada falla o hay varios proyectos
+                          bajo las mismas keys.
 """
 
 from __future__ import annotations
@@ -36,6 +52,7 @@ logger = logging.getLogger(__name__)
 
 _langfuse_instance: Optional[Any] = None
 _callback_instance: Optional[Any] = None
+_project_id: Optional[str] = None
 
 
 def _is_configured() -> bool:
@@ -116,12 +133,22 @@ def get_langfuse_callback() -> Optional[Any]:
     return _callback_instance
 
 
-def with_langfuse(config: dict[str, Any], *, thread_id: str | None = None) -> dict[str, Any]:
+def with_langfuse(
+    config: dict[str, Any],
+    *,
+    thread_id: str | None = None,
+    customer_id: str | None = None,
+) -> dict[str, Any]:
     """Añade callback+metadata de LangFuse a config de LangGraph si aplica.
 
     - Si LangFuse no está configurado, devuelve `config` sin cambios.
     - Si hay `thread_id`, lo añade como `langfuse_session_id` para agrupar
-      toda la conversación en una misma sesión de LangFuse.
+      toda la conversación en una misma sesión de LangFuse (y así ver coste
+      acumulado por sesión en su dashboard, sin tracking propio).
+    - Si hay `customer_id` (solo se conoce a partir de que el cliente da su
+      order_number, ver fetch_order_data en triage.py), lo añade como
+      `langfuse_user_id` para poder agregar coste por cliente en LangFuse.
+      Los turnos anteriores a conocer el order_number quedan sin este tag.
     """
     callback = get_langfuse_callback()
     if callback is None:
@@ -129,11 +156,68 @@ def with_langfuse(config: dict[str, Any], *, thread_id: str | None = None) -> di
 
     merged = dict(config)
     merged["callbacks"] = [*merged.get("callbacks", []), callback]
-    if thread_id:
+    if thread_id or customer_id:
         metadata = dict(merged.get("metadata", {}))
-        metadata["langfuse_session_id"] = thread_id
+        if thread_id:
+            metadata["langfuse_session_id"] = thread_id
+        if customer_id:
+            metadata["langfuse_user_id"] = customer_id
         merged["metadata"] = metadata
     return merged
+
+
+def _resolve_project_id() -> Optional[str]:
+    """Resuelve el project_id de LangFuse asociado a las API keys configuradas.
+
+    LangFuse exige /project/{id}/... en la URL para sus vistas (Sessions,
+    Users): no hay un /sessions a nivel de host que redirija solo, da 404
+    (visto en local con el stack self-hosted de langfuse_infra/). En vez de
+    exigir configurar `LANGFUSE_PROJECT_ID` a mano, se pide una vez a la API
+    pública de LangFuse (unas API keys casi siempre pertenecen a un único
+    proyecto) y se cachea en memoria del proceso.
+    """
+    global _project_id
+    if _project_id:
+        return _project_id
+    if override := os.getenv("LANGFUSE_PROJECT_ID"):
+        _project_id = override
+        return _project_id
+
+    lf = get_langfuse()
+    if lf is None:
+        return None
+    try:
+        projects = lf.api.projects.get()
+        if projects.data:
+            _project_id = projects.data[0].id
+    except Exception as exc:
+        logger.warning("No se pudo resolver el project_id de LangFuse: %s", exc)
+        return None
+    return _project_id
+
+
+def langfuse_links() -> dict[str, Any]:
+    """URLs del dashboard de LangFuse para monitorizar gasto por sesión/cliente.
+
+    Si no se puede resolver el project_id (ver `_resolve_project_id`),
+    `sessions_url`/`users_url` vienen a None y el caller debe enlazar a
+    `host` a secas para que el usuario navegue manualmente.
+    """
+    if not _is_configured():
+        return {"configured": False}
+
+    host = _host()
+    project_id = _resolve_project_id()
+    if not project_id:
+        return {"configured": True, "host": host, "sessions_url": None, "users_url": None}
+
+    base = f"{host}/project/{project_id}"
+    return {
+        "configured": True,
+        "host": host,
+        "sessions_url": f"{base}/sessions",
+        "users_url": f"{base}/users",
+    }
 
 
 def flush() -> None:

@@ -20,7 +20,7 @@ import os
 
 from langchain_openai import ChatOpenAI
 
-DEFAULT_MODEL = "gpt-5-nano"
+DEFAULT_MODEL = "gpt-5-mini"
 
 # Timeout por llamada al LLM (segundos). Cubre conexión + lectura de la
 # respuesta completa. Si el proveedor no responde en este plazo, ChatOpenAI
@@ -41,17 +41,27 @@ def build_chat_llm(
     ``init_chat_model`` de LangChain) por si se configura así en ``.env``.
     Si ``env_var`` no está definida, usa ``DEFAULT_MODEL``.
 
+    ``temperature`` y ``max_tokens`` también son sobreescribibles por env var,
+    añadiendo el sufijo correspondiente a ``env_var`` (p. ej. "RESOLVER_MODEL"
+    -> "RESOLVER_MODEL_TEMPERATURE" / "RESOLVER_MODEL_MAX_TOKENS"). Si esas
+    env vars no están definidas, se usan los valores pasados como argumento.
+
     Args:
-        env_var: Nombre de la variable de entorno (p. ej. "TRIAGE_MODEL").
-        temperature: Temperatura del modelo.
-        max_tokens: Límite de tokens de salida. Si no se especifica, usa
-            ``LLM_MAX_OUTPUT_TOKENS`` (por defecto 4096).
+        env_var: Nombre de la variable de entorno del modelo (p. ej.
+            "TRIAGE_MODEL").
+        temperature: Temperatura por defecto si no hay env var específica.
+        max_tokens: Límite de tokens de salida por defecto si no hay env var
+            específica. Si no se especifica, usa ``LLM_MAX_OUTPUT_TOKENS``
+            (por defecto 4096).
     """
     model = os.getenv(env_var, DEFAULT_MODEL).removeprefix("openai:")
+    default_max_tokens = max_tokens if max_tokens is not None else _DEFAULT_MAX_OUTPUT_TOKENS
+    resolved_temperature = float(os.getenv(f"{env_var}_TEMPERATURE", str(temperature)))
+    resolved_max_tokens = int(os.getenv(f"{env_var}_MAX_TOKENS", str(default_max_tokens)))
     return ChatOpenAI(
         model=model,
-        temperature=temperature,
-        max_tokens=max_tokens if max_tokens is not None else _DEFAULT_MAX_OUTPUT_TOKENS,
+        temperature=resolved_temperature,
+        max_tokens=resolved_max_tokens,
         timeout=LLM_TIMEOUT_SECONDS,
     )
 

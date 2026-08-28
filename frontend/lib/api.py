@@ -117,3 +117,9 @@ def usage_session_detail(thread_id: str) -> list[dict]:
     r = httpx.get(f"{API_BASE}/api/admin/usage/sessions/{thread_id}", timeout=10)
     r.raise_for_status()
     return r.json().get("requests", [])
+
+
+def observability_links() -> dict:
+    r = httpx.get(f"{API_BASE}/api/admin/observability", timeout=10)
+    r.raise_for_status()
+    return r.json()

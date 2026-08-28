@@ -8,7 +8,7 @@ from langgraph.types import Command
 
 from backend.api.dependencies import get_graph
 from backend.api.schemas import AdminDecisionRequest
-from backend.services import supabase_service, usage_service
+from backend.services import observability, supabase_service, usage_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -116,3 +116,15 @@ async def get_usage_session_detail(thread_id: str):
     """Detalle petición a petición (tokens/latencia) de una sesión concreta."""
     requests = await usage_service.get_usage_detail(thread_id)
     return {"thread_id": thread_id, "requests": requests, "count": len(requests)}
+
+
+@router.get("/observability")
+async def get_observability_links():
+    """Enlaces al dashboard de LangFuse para monitorizar gasto por sesión/cliente.
+
+    Complementa el dashboard propio (usage/sessions arriba): LangFuse ya
+    trackea tokens/coste por `langfuse_session_id` y `langfuse_user_id`
+    (ver with_langfuse en backend/services/observability.py), así que este
+    endpoint enlaza a su dashboard en vez de reimplementar esa agregación.
+    """
+    return observability.langfuse_links()
