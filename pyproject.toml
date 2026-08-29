@@ -1,0 +1,4 @@
+[tool.black]
+# 88 es el default de black; se fija explícito porque .flake8 debe
+# coincidir con este valor (ver comentario en .flake8).
+line-length = 88

@@ -256,6 +256,25 @@ pytest tests/unit/
 pytest tests/integration/
 ```
 
+## Linting y formato
+
+`black` (formato automático) y `flake8` (estilo/errores) están en `requirements.txt`.
+
+```bash
+# Formatear todo el código
+black backend/ frontend/ data/ tests/
+
+# Solo comprobar, sin modificar (útil en CI/pre-commit)
+black --check backend/ frontend/ data/ tests/
+
+# Linting
+flake8 backend/ frontend/ data/ tests/
+```
+
+Config en `.flake8` (`max-line-length = 88`, igual que `black`) y `pyproject.toml`
+(`[tool.black]`). Convención de comentarios (concisos, porqué no qué) en el skill
+`.opencode/skills/arquitectura-backend/`.
+
 ## Dataset y políticas RAG
 
 El directorio `data/` contiene:
