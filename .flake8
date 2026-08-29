@@ -1,0 +1,14 @@
+[flake8]
+max-line-length = 88
+# E203 (espacio antes de ':') y W503 (salto de línea antes de operador
+# binario): black los produce a propósito; son incompatibilidades
+# conocidas y documentadas entre black y flake8, no bugs.
+extend-ignore = E203, W503
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    build,
+    dist,
+    *.egg-info

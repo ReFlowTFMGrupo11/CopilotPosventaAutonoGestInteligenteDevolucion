@@ -690,7 +690,7 @@ CASES = [
                   "rechazados por higiene) pero con importes pequeños: la suma de los 2 elegibles "
                   "(15.99€ + 22.00€ = 37.99€) se queda muy por debajo de 100€. Sin HITL. Comparar ambos "
                   "casos para verificar que el numero de categorias no dispara el HITL por si solo.",
-    },
+    ),
 ]
 
 # Caso 008: pedido inexistente, sin datos reales en BD.
