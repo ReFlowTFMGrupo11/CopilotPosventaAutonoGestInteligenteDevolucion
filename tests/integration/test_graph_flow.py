@@ -77,7 +77,11 @@ def _mock_llm_with_structured_output(output) -> MagicMock:
     dict con "raw"/"parsed"/"parsing_error", no el objeto Pydantic a secas."""
     llm = MagicMock()
     llm.with_structured_output.return_value.ainvoke = AsyncMock(
-        return_value={"raw": AIMessage(content=""), "parsed": output, "parsing_error": None}
+        return_value={
+            "raw": AIMessage(content=""),
+            "parsed": output,
+            "parsing_error": None,
+        }
     )
     return llm
 

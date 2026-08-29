@@ -80,7 +80,9 @@ async def _log_usage(
     except Exception:
         logger.warning(
             "No se pudo registrar el uso de LLM del nodo '%s' (thread_id=%s)",
-            node, thread_id, exc_info=True,
+            node,
+            thread_id,
+            exc_info=True,
         )
 
 
@@ -127,7 +129,9 @@ async def invoke_structured_tracked(
     falla (mismo contrato que antes tenían triage_agent/evaluator_agent).
     """
     start = time.perf_counter()
-    raw_result = await llm.with_structured_output(schema, include_raw=True).ainvoke(messages)
+    raw_result = await llm.with_structured_output(schema, include_raw=True).ainvoke(
+        messages
+    )
     latency_ms = int((time.perf_counter() - start) * 1000)
     await _log_usage(
         node=node,
@@ -141,7 +145,8 @@ async def invoke_structured_tracked(
     if raw_result.get("parsing_error"):
         logger.warning(
             "Structured output de '%s' con error de parseo: %s",
-            node, raw_result["parsing_error"],
+            node,
+            raw_result["parsing_error"],
         )
         return None
     return raw_result.get("parsed")

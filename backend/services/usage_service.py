@@ -28,17 +28,19 @@ async def log_llm_usage(
 ) -> None:
     """Inserta una fila de uso para una llamada individual al LLM."""
     client = await get_supabase_client()
-    await client.table("llm_usage").insert({
-        "thread_id": thread_id,
-        "customer_id": customer_id,
-        "order_id": order_id,
-        "node": node,
-        "model": model,
-        "input_tokens": input_tokens,
-        "output_tokens": output_tokens,
-        "total_tokens": total_tokens,
-        "latency_ms": latency_ms,
-    }).execute()
+    await client.table("llm_usage").insert(
+        {
+            "thread_id": thread_id,
+            "customer_id": customer_id,
+            "order_id": order_id,
+            "node": node,
+            "model": model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+            "latency_ms": latency_ms,
+        }
+    ).execute()
 
 
 async def get_usage_by_session(limit: int = 100) -> list[dict]:
@@ -67,21 +69,24 @@ async def get_usage_by_session(limit: int = 100) -> list[dict]:
     sessions: dict[str, dict] = {}
     for row in rows:
         thread_id = row["thread_id"]
-        session = sessions.setdefault(thread_id, {
-            "thread_id": thread_id,
-            "customer_id": None,
-            "customer_name": None,
-            "order_id": None,
-            "order_number": None,
-            "requests": 0,
-            "total_tokens": 0,
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cost_eur": 0.0,
-            "cost_complete": True,
-            "latencies_ms": [],
-            "last_seen": row["created_at"],
-        })
+        session = sessions.setdefault(
+            thread_id,
+            {
+                "thread_id": thread_id,
+                "customer_id": None,
+                "customer_name": None,
+                "order_id": None,
+                "order_number": None,
+                "requests": 0,
+                "total_tokens": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cost_eur": 0.0,
+                "cost_complete": True,
+                "latencies_ms": [],
+                "last_seen": row["created_at"],
+            },
+        )
         # Filas más recientes primero (orden de la query): el primer
         # customer_id/order_id no-nulo que se vea es el más reciente.
         if session["customer_id"] is None and row.get("customer_id"):
@@ -110,7 +115,9 @@ async def get_usage_by_session(limit: int = 100) -> list[dict]:
     result = []
     for session in sessions.values():
         latencies = session.pop("latencies_ms")
-        session["avg_latency_ms"] = round(sum(latencies) / len(latencies)) if latencies else 0
+        session["avg_latency_ms"] = (
+            round(sum(latencies) / len(latencies)) if latencies else 0
+        )
         session["max_latency_ms"] = max(latencies) if latencies else 0
         result.append(session)
 

@@ -35,6 +35,7 @@ def money(value) -> str:
     except (TypeError, ValueError):
         return "—"
 
+
 try:
     sessions = api.usage_sessions()
 except httpx.HTTPError as exc:
@@ -48,7 +49,9 @@ else:
     total_requests = sum(s.get("requests", 0) for s in sessions)
     total_cost = sum(s.get("cost_eur", 0.0) for s in sessions)
     any_incomplete = any(not s.get("cost_complete", True) for s in sessions)
-    avg_latency = round(sum(s.get("avg_latency_ms", 0) for s in sessions) / len(sessions))
+    avg_latency = round(
+        sum(s.get("avg_latency_ms", 0) for s in sessions) / len(sessions)
+    )
 
     cols = st.columns(5)
     kpis = [
@@ -69,7 +72,8 @@ else:
             "Pedido": s.get("order_number") or s.get("order_id") or "—",
             "Peticiones": s.get("requests", 0),
             "Tokens totales": s.get("total_tokens", 0),
-            "Coste (~)": money(s.get("cost_eur")) + ("*" if not s.get("cost_complete", True) else ""),
+            "Coste (~)": money(s.get("cost_eur"))
+            + ("*" if not s.get("cost_complete", True) else ""),
             "Latencia media": f"{s.get('avg_latency_ms', 0)} ms",
             "Latencia máx.": f"{s.get('max_latency_ms', 0)} ms",
             "Última actividad": s.get("last_seen", "—"),
@@ -78,7 +82,9 @@ else:
     ]
     st.dataframe(table, use_container_width=True, hide_index=True)
     if any_incomplete:
-        st.caption("* incluye peticiones de un modelo sin precio configurado; el coste real es mayor.")
+        st.caption(
+            "* incluye peticiones de un modelo sin precio configurado; el coste real es mayor."
+        )
 
     st.markdown("### Detalle por sesión")
     options = {s["thread_id"]: s for s in sessions}
@@ -109,7 +115,11 @@ else:
                     "Tokens entrada": r.get("input_tokens", 0),
                     "Tokens salida": r.get("output_tokens", 0),
                     "Tokens totales": r.get("total_tokens", 0),
-                    "Coste (~)": money(r["cost_eur"]) if r.get("cost_eur") is not None else "sin precio",
+                    "Coste (~)": (
+                        money(r["cost_eur"])
+                        if r.get("cost_eur") is not None
+                        else "sin precio"
+                    ),
                     "Latencia": f"{r.get('latency_ms', 0)} ms",
                 }
                 for r in requests

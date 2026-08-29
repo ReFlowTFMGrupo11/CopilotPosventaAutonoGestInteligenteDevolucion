@@ -112,7 +112,9 @@ def chat_state(thread_id: str) -> dict:
 
 
 def usage_sessions(limit: int = 100) -> list[dict]:
-    r = httpx.get(f"{API_BASE}/api/admin/usage/sessions", params={"limit": limit}, timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/admin/usage/sessions", params={"limit": limit}, timeout=10
+    )
     r.raise_for_status()
     return r.json().get("sessions", [])
 

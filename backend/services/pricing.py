@@ -50,15 +50,16 @@ def usd_to_eur_rate() -> float:
     return float(os.getenv("USD_TO_EUR_RATE", "0.86"))
 
 
-def estimate_cost_eur(model: str, input_tokens: int, output_tokens: int) -> float | None:
+def estimate_cost_eur(
+    model: str, input_tokens: int, output_tokens: int
+) -> float | None:
     """Coste estimado en euros de una llamada, o None si no se conoce el
     precio de ``model`` (ni por defecto ni por env var)."""
     prices = price_per_million_usd(model)
     if prices is None:
         return None
     input_price, output_price = prices
-    cost_usd = (
-        (input_tokens / 1_000_000) * input_price
-        + (output_tokens / 1_000_000) * output_price
-    )
+    cost_usd = (input_tokens / 1_000_000) * input_price + (
+        output_tokens / 1_000_000
+    ) * output_price
     return cost_usd * usd_to_eur_rate()
