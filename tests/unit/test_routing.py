@@ -60,6 +60,10 @@ class TestRouteAfterFetch:
             "items_to_return": [{"order_item_id": "oi-1", "condition": "defective"}],
             "reason": "Llegó roto",
             "reason_category": "defective",
+            # El cliente ya confirmó el resumen (ver triage.py::_items_confirmed);
+            # sin esto, route_after_fetch termina el turno para pedir confirmación
+            # en vez de avanzar, aunque el resto de datos ya estén completos.
+            "items_confirmed": True,
         }
         assert route_after_fetch(state) == "evaluator"
 
