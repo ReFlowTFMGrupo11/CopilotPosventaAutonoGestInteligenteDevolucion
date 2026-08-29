@@ -48,8 +48,11 @@ from backend.agents.infra.mcp_client import (
     send_customer_notification,
     update_return_status,
 )
-from backend.services.supabase_service import DUPLICATE_RETURN_MARKER
-from backend.db.supabase_client import get_supabase_client
+from backend.services.supabase_service import (
+    DUPLICATE_RETURN_MARKER,
+    get_latest_return_request,
+    get_pending_return_request_id,
+)
 from backend.models import OrderItem
 
 logger = logging.getLogger(__name__)
@@ -180,11 +183,7 @@ async def resolution_agent(
             # Guard de duplicados: el registro ya existe (resume tras interrupt)
             logger.info("HITL record ya existe, reutilizando: %s", exc)
             # Buscar el ID del registro existente via BD
-            client = await get_supabase_client()
-            resp = await client.table("return_requests").select("id").eq(
-                "order_id", order_id
-            ).in_("status", ["pending_approval", "pending"]).limit(1).execute()
-            existing_return_id = resp.data[0]["id"] if resp.data else ""
+            existing_return_id = await get_pending_return_request_id(order_id)
 
         admin_response = interrupt({
             "type": "admin_approval_required",
@@ -292,11 +291,7 @@ async def resolution_agent(
             # Guard de duplicados: ya existe una devolución para este pedido/artículo
             # (p. ej. reintento del cliente o re-ejecución de un caso de QA).
             logger.info("Return record ya existe, informando al cliente: %s", exc)
-            client = await get_supabase_client()
-            resp = await client.table("return_requests").select("id, status").eq(
-                "order_id", order_id
-            ).order("created_at", desc=True).limit(1).execute()
-            existing = resp.data[0] if resp.data else {}
+            existing = await get_latest_return_request(order_id)
             duplicate_msg = await llm.ainvoke([
                 SystemMessage(
                     content=(

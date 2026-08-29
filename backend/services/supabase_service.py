@@ -330,6 +330,68 @@ async def update_return_status(
 
 
 # ---------------------------------------------------------------------------
+# Búsqueda de devoluciones existentes (guard de duplicados)
+# ---------------------------------------------------------------------------
+#
+# create_return_record() levanta ValueError con DUPLICATE_RETURN_MARKER cuando
+# ya existe una devolución para el pedido (ver guard más arriba). El llamador
+# (resolution.py) necesita entonces recuperar el id de esa devolución existente
+# para poder continuar el flujo (resume tras interrupt, o informar al
+# cliente). Estas dos funciones cubren esos dos casos sin que resolution.py
+# tenga que tocar el cliente de Supabase directamente.
+
+
+async def get_pending_return_request_id(order_id: str) -> str:
+    """Devuelve el id de la devolución pendiente/en aprobación de un pedido.
+
+    Uso: tras un ValueError de duplicado al crear el registro HITL (resume
+    tras interrupt()), para recuperar el id de la devolución ya creada en el
+    intento anterior.
+
+    Args:
+        order_id: UUID del pedido.
+
+    Returns:
+        El id de la devolución, o cadena vacía si no hay ninguna en curso.
+    """
+    client = await get_supabase_client()
+    resp = await (
+        client.table("return_requests")
+        .select("id")
+        .eq("order_id", order_id)
+        .in_("status", ["pending_approval", "pending"])
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0]["id"] if resp.data else ""
+
+
+async def get_latest_return_request(order_id: str) -> dict:
+    """Devuelve la devolución más reciente de un pedido (id y status).
+
+    Uso: tras un ValueError de duplicado al crear el registro definitivo
+    (auto-aprobación), para informar al cliente del estado de la devolución
+    que ya existe.
+
+    Args:
+        order_id: UUID del pedido.
+
+    Returns:
+        Dict con "id" y "status", o {} si el pedido no tiene devoluciones.
+    """
+    client = await get_supabase_client()
+    resp = await (
+        client.table("return_requests")
+        .select("id, status")
+        .eq("order_id", order_id)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return resp.data[0] if resp.data else {}
+
+
+# ---------------------------------------------------------------------------
 # Consultas admin (panel HITL y dashboard)
 # ---------------------------------------------------------------------------
 
