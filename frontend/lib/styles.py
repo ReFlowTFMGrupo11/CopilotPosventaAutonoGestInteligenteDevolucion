@@ -119,8 +119,16 @@ _CSS = """
 </style>
 """
 
-STATUS_LABEL = {"approved": "Aprobada", "rejected": "Rechazada", "pending_approval": "Pendiente"}
-STATUS_BADGE_CLASS = {"approved": "badge-approved", "rejected": "badge-rejected", "pending_approval": "badge-pending"}
+STATUS_LABEL = {
+    "approved": "Aprobada",
+    "rejected": "Rechazada",
+    "pending_approval": "Pendiente",
+}
+STATUS_BADGE_CLASS = {
+    "approved": "badge-approved",
+    "rejected": "badge-rejected",
+    "pending_approval": "badge-pending",
+}
 
 
 def inject_css() -> None:

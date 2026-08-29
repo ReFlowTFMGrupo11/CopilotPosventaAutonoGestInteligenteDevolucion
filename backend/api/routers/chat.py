@@ -92,6 +92,7 @@ async def _known_customer_id(graph, thread_id: str) -> str | None:
     state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
     return (state.values or {}).get("customer_id") if state else None
 
+
 # Un lock por thread_id: si dos peticiones para el MISMO hilo llegan
 # solapadas (doble clic, doble envío del frontend, reintento de red...),
 # la segunda espera a que la primera termine en vez de invocar el grafo
@@ -127,7 +128,8 @@ class _ThreadLockRegistry:
     def _evict_stale(self) -> None:
         now = time.monotonic()
         stale = [
-            tid for tid, last_used in self._last_used.items()
+            tid
+            for tid, last_used in self._last_used.items()
             if now - last_used > self._ttl and not self._locks[tid].locked()
         ]
         for tid in stale:
@@ -206,9 +208,7 @@ _HITL_CUSTOMER_MSG = (
 )
 
 
-async def _astream_with_timeout(
-    aiter: AsyncIterator, timeout: float
-) -> AsyncIterator:
+async def _astream_with_timeout(aiter: AsyncIterator, timeout: float) -> AsyncIterator:
     """Envuelve un async generator aplicando ``timeout`` a cada paso.
 
     ``graph.astream`` emite un chunk por cada nodo que termina. Si un nodo
@@ -283,7 +283,9 @@ async def _stream_chat_events(
             # Envuelto con timeout por paso (ver _astream_with_timeout) para no
             # quedar colgados si un nodo concreto no responde nunca.
             stream = graph.astream(input_state, config=config, stream_mode="updates")
-            async for chunk in _astream_with_timeout(stream, GRAPH_TURN_TIMEOUT_SECONDS):
+            async for chunk in _astream_with_timeout(
+                stream, GRAPH_TURN_TIMEOUT_SECONDS
+            ):
                 for node_name in chunk:
                     if node_name == "__interrupt__":
                         continue
@@ -317,7 +319,11 @@ async def _stream_chat_events(
 
             # Respuesta final
             last_message = (values.get("messages") or [None])[-1]
-            content = last_message.content if last_message else "No he podido generar una respuesta."
+            content = (
+                last_message.content
+                if last_message
+                else "No he podido generar una respuesta."
+            )
 
             yield ChatStreamEvent(
                 type="final",
@@ -334,7 +340,9 @@ async def _stream_chat_events(
             yield ChatStreamEvent(type="error", content=_TURN_TIMEOUT_MSG)
         except Exception as exc:
             logger.exception("Error en streaming (thread_id=%s)", thread_id)
-            yield ChatStreamEvent(type="error", content=f"Error procesando tu solicitud: {exc}")
+            yield ChatStreamEvent(
+                type="error", content=f"Error procesando tu solicitud: {exc}"
+            )
 
 
 async def _to_sse(events: AsyncIterator[ChatStreamEvent]) -> AsyncIterator[bytes]:

@@ -50,9 +50,9 @@ POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 
 # ── Umbrales deterministas (deben coincidir con la lógica del agente) ──────
-HITL_AMOUNT_THRESHOLD = 100.0       # €  → human_review
-HITL_FREQUENT_RETURNER = True       # is_frequent_returner=True → human_review
-BORDER_ZONE_DAYS = 5                # plazo ± 5 días → human_review (zona frontera)
+HITL_AMOUNT_THRESHOLD = 100.0  # €  → human_review
+HITL_FREQUENT_RETURNER = True  # is_frequent_returner=True → human_review
+BORDER_ZONE_DAYS = 5  # plazo ± 5 días → human_review (zona frontera)
 
 LABELS = ["valid", "invalid", "human_review"]
 
@@ -61,6 +61,7 @@ logger = logging.getLogger(__name__)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
 
 def _load_cases(csv_path: Path, limit: int | None, category: str | None) -> list[dict]:
     with csv_path.open(encoding="utf-8", newline="") as f:
@@ -85,25 +86,27 @@ def _build_mock_policy(
     """
     policy_doc_map = {
         "electronica_informatica": "01_electronica_informatica.md",
-        "electrodomesticos":       "02_electrodomesticos.md",
-        "moda_ropa":               "03_moda_ropa.md",
-        "calzado":                 "04_calzado.md",
-        "joyeria_relojes":         "05_joyeria_relojeria.md",
-        "hogar_decoracion":        "06_hogar_decoracion.md",
-        "muebles":                 "07_muebles.md",
-        "jardineria_bricolaje":    "08_jardineria_bricolaje.md",
-        "juguetes":                "09_juguetes.md",
-        "bebe_puericultura":       "10_bebe_puericultura.md",
-        "deportes_aire_libre":     "11_deportes_aire_libre.md",
-        "cosmetica_perfumeria":    "12_cosmetica_perfumeria.md",
-        "drogueria_salud":         "13_drogueria_salud.md",
-        "alimentacion":            "14_alimentacion.md",
-        "mascotas":                "15_mascotas.md",
-        "libros_papeleria":        "16_libros_papeleria.md",
+        "electrodomesticos": "02_electrodomesticos.md",
+        "moda_ropa": "03_moda_ropa.md",
+        "calzado": "04_calzado.md",
+        "joyeria_relojes": "05_joyeria_relojeria.md",
+        "hogar_decoracion": "06_hogar_decoracion.md",
+        "muebles": "07_muebles.md",
+        "jardineria_bricolaje": "08_jardineria_bricolaje.md",
+        "juguetes": "09_juguetes.md",
+        "bebe_puericultura": "10_bebe_puericultura.md",
+        "deportes_aire_libre": "11_deportes_aire_libre.md",
+        "cosmetica_perfumeria": "12_cosmetica_perfumeria.md",
+        "drogueria_salud": "13_drogueria_salud.md",
+        "alimentacion": "14_alimentacion.md",
+        "mascotas": "15_mascotas.md",
+        "libros_papeleria": "16_libros_papeleria.md",
     }
     doc = policy_doc_map.get(category)
     policy_text = (POLICIES_DIR / doc).read_text(encoding="utf-8") if doc else ""
-    general_text = (POLICIES_DIR / "00_marco_general_devoluciones.md").read_text(encoding="utf-8")
+    general_text = (POLICIES_DIR / "00_marco_general_devoluciones.md").read_text(
+        encoding="utf-8"
+    )
 
     return {
         "query": f"devolución {category}",
@@ -131,6 +134,7 @@ def _build_state(row: dict) -> dict[str, Any]:
     days = int(row["days_since_delivery"])
     now = datetime(2026, 8, 18, 12, 0, 0, tzinfo=timezone.utc)
     from datetime import timedelta
+
     delivered = now - timedelta(days=days)
 
     return {
@@ -236,6 +240,7 @@ def _result_to_label(result: dict[str, Any]) -> str:
 
 # ── Métricas ───────────────────────────────────────────────────────────────
 
+
 def _compute_metrics(results: list[dict]) -> dict:
     """Calcula accuracy, precision, recall y F1 por clase y macro-average."""
     from collections import Counter
@@ -261,9 +266,17 @@ def _compute_metrics(results: list[dict]) -> dict:
         tp, fp, fn = counts["tp"], counts["fp"], counts["fn"]
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
         recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = (2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.0
-        class_metrics[lbl] = {"precision": precision, "recall": recall, "f1": f1,
-                               "support": tp + fn}
+        f1 = (
+            (2 * precision * recall / (precision + recall))
+            if (precision + recall) > 0
+            else 0.0
+        )
+        class_metrics[lbl] = {
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "support": tp + fn,
+        }
 
     macro_p = sum(m["precision"] for m in class_metrics.values()) / len(LABELS)
     macro_r = sum(m["recall"] for m in class_metrics.values()) / len(LABELS)
@@ -287,7 +300,10 @@ def _metrics_by_category(results: list[dict]) -> dict[str, dict]:
 
 # ── Formatters ─────────────────────────────────────────────────────────────
 
-def _render_markdown(overall: dict, by_cat: dict[str, dict], timestamp: str, mode: str) -> str:
+
+def _render_markdown(
+    overall: dict, by_cat: dict[str, dict], timestamp: str, mode: str
+) -> str:
     lines = [
         f"# Informe de Evaluación RAG — ReFlow",
         f"",
@@ -324,6 +340,7 @@ def _render_markdown(overall: dict, by_cat: dict[str, dict], timestamp: str, mod
 
 # ── Runner principal ────────────────────────────────────────────────────────
 
+
 async def run_evaluation(
     limit: int | None = None,
     category: str | None = None,
@@ -333,7 +350,11 @@ async def run_evaluation(
     from backend.services.observability import get_langfuse, flush as langfuse_flush
 
     cases = _load_cases(EVAL_CSV, limit, category)
-    logger.info("Evaluando %d casos (modo %s)…", len(cases), "dry-run" if dry_run else "LLM real")
+    logger.info(
+        "Evaluando %d casos (modo %s)…",
+        len(cases),
+        "dry-run" if dry_run else "LLM real",
+    )
 
     lf = get_langfuse()
     run_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -341,6 +362,7 @@ async def run_evaluation(
     run_trace_id: str | None = None
     if lf:
         from langfuse import Langfuse
+
         run_trace_id = Langfuse.create_trace_id()
         logger.info("LangFuse: trace_id=%s", run_trace_id)
 
@@ -359,12 +381,16 @@ async def run_evaluation(
             allowed_conditions = row["allowed_conditions"].split("|")
             mock_policy = _build_mock_policy(cat, max_days, allowed_conditions)
 
-            async def _mock_search(query: str, category: str = "") -> dict:  # noqa: E501
+            async def _mock_search(
+                query: str, category: str = ""
+            ) -> dict:  # noqa: E501
                 return mock_policy
 
             try:
-                with patch("backend.agents.nodes.evaluator.search_return_policy",
-                           side_effect=_mock_search):
+                with patch(
+                    "backend.agents.nodes.evaluator.search_return_policy",
+                    side_effect=_mock_search,
+                ):
                     agent_result = await evaluator_agent(state)
                 predicted = _result_to_label(agent_result)
             except Exception as exc:
@@ -372,14 +398,16 @@ async def run_evaluation(
                 predicted = "error"
 
         match = expected == predicted
-        results.append({
-            "case_id": case_id,
-            "category": cat,
-            "expected": expected,
-            "predicted": predicted,
-            "match": match,
-            "rationale": row.get("rationale", ""),
-        })
+        results.append(
+            {
+                "case_id": case_id,
+                "category": cat,
+                "expected": expected,
+                "predicted": predicted,
+                "match": match,
+                "rationale": row.get("rationale", ""),
+            }
+        )
 
         # ── LangFuse: span + scores por caso ──────────────────────────────
         if lf and run_trace_id:
@@ -387,13 +415,22 @@ async def run_evaluation(
                 obs = lf.start_observation(
                     name=f"eval-case-{cat}",
                     as_type="evaluator",
-                    input={"case_id": case_id, "category": cat,
-                           "reason_category": row.get("reason_category"),
-                           "days": row.get("days_since_delivery"),
-                           "amount": row.get("refund_amount")},
-                    output={"expected": expected, "predicted": predicted, "match": match},
-                    metadata={"rationale": row.get("rationale", ""),
-                              "is_frequent_returner": row.get("is_frequent_returner")},
+                    input={
+                        "case_id": case_id,
+                        "category": cat,
+                        "reason_category": row.get("reason_category"),
+                        "days": row.get("days_since_delivery"),
+                        "amount": row.get("refund_amount"),
+                    },
+                    output={
+                        "expected": expected,
+                        "predicted": predicted,
+                        "match": match,
+                    },
+                    metadata={
+                        "rationale": row.get("rationale", ""),
+                        "is_frequent_returner": row.get("is_frequent_returner"),
+                    },
                     trace_context={"trace_id": run_trace_id},
                 )
                 obs.end()
@@ -426,10 +463,10 @@ async def run_evaluation(
     if lf and run_trace_id:
         try:
             for metric_name, value in [
-                ("accuracy",       overall["accuracy"]),
-                ("macro_f1",       overall["macro"]["f1"]),
+                ("accuracy", overall["accuracy"]),
+                ("macro_f1", overall["macro"]["f1"]),
                 ("macro_precision", overall["macro"]["precision"]),
-                ("macro_recall",   overall["macro"]["recall"]),
+                ("macro_recall", overall["macro"]["recall"]),
             ]:
                 lf.create_score(
                     trace_id=run_trace_id,
@@ -448,11 +485,19 @@ async def run_evaluation(
     json_path = RESULTS_DIR / f"eval_report_{ts}.json"
     md_path = RESULTS_DIR / f"eval_report_{ts}.md"
 
-    json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-    md_path.write_text(_render_markdown(overall, by_cat, ts, report["mode"]), encoding="utf-8")
+    json_path.write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    md_path.write_text(
+        _render_markdown(overall, by_cat, ts, report["mode"]), encoding="utf-8"
+    )
 
     logger.info("─" * 60)
-    logger.info("Accuracy: %.1f%%  |  Macro F1: %.3f", overall["accuracy"] * 100, overall["macro"]["f1"])
+    logger.info(
+        "Accuracy: %.1f%%  |  Macro F1: %.3f",
+        overall["accuracy"] * 100,
+        overall["macro"]["f1"],
+    )
     logger.info("Informe JSON → %s", json_path)
     logger.info("Informe MD  → %s", md_path)
 
@@ -460,21 +505,30 @@ async def run_evaluation(
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--limit", type=int, default=None, help="Limitar a los primeros N casos.")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--limit", type=int, default=None, help="Limitar a los primeros N casos."
+    )
     p.add_argument("--category", default=None, help="Evaluar solo esta categoría.")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Usar reglas deterministas en vez del LLM (no consume tokens, apto para CI).")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Usar reglas deterministas en vez del LLM (no consume tokens, apto para CI).",
+    )
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
-    report = asyncio.run(run_evaluation(
-        limit=args.limit,
-        category=args.category,
-        dry_run=args.dry_run,
-    ))
+    report = asyncio.run(
+        run_evaluation(
+            limit=args.limit,
+            category=args.category,
+            dry_run=args.dry_run,
+        )
+    )
     # Exit code no-cero si accuracy < 70% (útil en CI)
     accuracy = report["overall"]["accuracy"]
     sys.exit(0 if accuracy >= 0.70 else 1)

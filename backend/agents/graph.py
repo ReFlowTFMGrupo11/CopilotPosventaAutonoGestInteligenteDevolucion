@@ -197,7 +197,9 @@ async def build_return_graph(checkpointer=None):
                 )
                 checkpointer = InMemorySaver()
         else:
-            logger.warning("SUPABASE_DB_URL no configurada. Usando InMemorySaver (no persistente).")
+            logger.warning(
+                "SUPABASE_DB_URL no configurada. Usando InMemorySaver (no persistente)."
+            )
             checkpointer = InMemorySaver()
 
     graph = StateGraph(ReturnState)

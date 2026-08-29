@@ -56,7 +56,9 @@ def _make_task(dry_run: bool):
 
         state = _build_state(row)
         allowed_conditions = row["allowed_conditions"].split("|")
-        mock_policy = _build_mock_policy(row["category"], int(row["max_return_days"]), allowed_conditions)
+        mock_policy = _build_mock_policy(
+            row["category"], int(row["max_return_days"]), allowed_conditions
+        )
 
         async def _mock_search(query: str, category: str = "") -> dict:
             return mock_policy
@@ -117,7 +119,8 @@ def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
 
     logger.info(
         "Lanzando experimento (%d casos, modo %s)…",
-        len(items), "dry-run" if dry_run else "LLM real",
+        len(items),
+        "dry-run" if dry_run else "LLM real",
     )
 
     result = lf.run_experiment(
@@ -134,14 +137,27 @@ def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
 
     lf.flush()
     logger.info("Experimento completado: %s", result.run_name)
-    logger.info("Revisa los resultados en Langfuse: Datasets → %s → Experiments", DATASET_NAME)
+    logger.info(
+        "Revisa los resultados en Langfuse: Datasets → %s → Experiments", DATASET_NAME
+    )
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--limit", type=int, default=None, help="Usar solo los primeros N items del dataset.")
-    p.add_argument("--dry-run", action="store_true", help="Reglas deterministas, sin LLM (gratis).")
-    p.add_argument("--run-name", default=None, help="Nombre exacto para este run (opcional).")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Usar solo los primeros N items del dataset.",
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="Reglas deterministas, sin LLM (gratis)."
+    )
+    p.add_argument(
+        "--run-name", default=None, help="Nombre exacto para este run (opcional)."
+    )
     return p.parse_args()
 
 

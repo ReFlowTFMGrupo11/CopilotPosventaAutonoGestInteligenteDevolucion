@@ -26,8 +26,12 @@ class ReturnState(TypedDict, total=False):
     messages: Annotated[list[AnyMessage], add_messages]
 
     # ── Datos extraídos por el Agente de Triaje ────────────────────────
-    order_number: str | None  # número de pedido tal cual lo da el cliente (ej. "ORD-2026-00177")
-    order_id: str | None  # UUID interno, resuelto en fetch_order_data a partir de order_number
+    order_number: (
+        str | None
+    )  # número de pedido tal cual lo da el cliente (ej. "ORD-2026-00177")
+    order_id: (
+        str | None
+    )  # UUID interno, resuelto en fetch_order_data a partir de order_number
     customer_id: str | None
     customer_name: str | None
     customer_email: str | None
@@ -48,8 +52,12 @@ class ReturnState(TypedDict, total=False):
     # Evaluación independiente por artículo (ver ItemEligibility). Un mismo
     # pedido puede tener artículos elegibles y no elegibles a la vez.
     items_eligibility: list[dict[str, Any]]
-    any_eligible: bool | None  # True si AL MENOS UN artículo es elegible (usado para el routing)
-    eligibility_reason: str | None  # Resumen agregado, usado por rejection_agent cuando NINGÚN artículo es elegible
+    any_eligible: (
+        bool | None
+    )  # True si AL MENOS UN artículo es elegible (usado para el routing)
+    eligibility_reason: (
+        str | None
+    )  # Resumen agregado, usado por rejection_agent cuando NINGÚN artículo es elegible
     policy_info: dict[str, Any] | None
     refund_amount: float  # Suma de refund_amount de los artículos elegibles únicamente
 

@@ -69,8 +69,11 @@ definida pero excluida de POLICY_RULES hasta que triage.py capture esa
 granularidad; ver docstring del módulo."""
 
 HYGIENE_CATEGORIES = {
-    "cosmetica_perfumeria", "drogueria_salud", "alimentacion",
-    "mascotas", "bebe_puericultura",
+    "cosmetica_perfumeria",
+    "drogueria_salud",
+    "alimentacion",
+    "mascotas",
+    "bebe_puericultura",
 }
 """Categorías con exclusión legal de devolución por higiene."""
 
@@ -91,12 +94,14 @@ NO_RETURN_BY_CHOICE_REASONS = {"no_longer_needed", "arrived_late", "other"}
 
 # ── Modelos de datos ───────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class PolicyContext:
     """Datos inmutables que cada regla necesita para evaluar.
 
     Se construye una vez por evaluación y se pasa a todas las reglas.
     """
+
     days_since_order: int
     max_return_days: int | None
     allowed_conditions: list[str] | None
@@ -110,6 +115,7 @@ class PolicyContext:
 @dataclass
 class RuleResult:
     """Resultado de una regla individual."""
+
     verdict: Literal["invalid", "human_review", "valid"]
     reason: str | None = None
 
@@ -253,6 +259,7 @@ POLICY_RULES = [
 
 
 # ── Evaluador determinista (orquesta la cadena) ───────────────────────────
+
 
 def deterministic_check(
     days_since_order: int,

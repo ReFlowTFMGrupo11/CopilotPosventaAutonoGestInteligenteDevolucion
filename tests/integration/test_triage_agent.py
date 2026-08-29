@@ -24,7 +24,9 @@ class TestTriageAgent:
         )
 
         mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(return_value=mock_response)
+        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=mock_response
+        )
 
         state = {
             "messages": [HumanMessage(content="Quiero devolver un producto")],
@@ -56,10 +58,16 @@ class TestTriageAgent:
         )
 
         mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(return_value=triage_out)
+        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=triage_out
+        )
 
         state = {
-            "messages": [HumanMessage(content="Mi pedido es ORD-2026-00123, el artículo está roto")],
+            "messages": [
+                HumanMessage(
+                    content="Mi pedido es ORD-2026-00123, el artículo está roto"
+                )
+            ],
         }
 
         with patch("backend.agents.nodes.triage._build_llm", return_value=mock_llm):
@@ -75,7 +83,9 @@ class TestFetchOrderData:
     """Tests para el nodo de carga de datos del pedido."""
 
     @pytest.mark.asyncio
-    async def test_fetches_order_and_history(self, mock_order_details, mock_return_history_clean):
+    async def test_fetches_order_and_history(
+        self, mock_order_details, mock_return_history_clean
+    ):
         """Carga correctamente los datos del pedido y el historial."""
         with patch(
             "backend.agents.nodes.triage.get_order_details",

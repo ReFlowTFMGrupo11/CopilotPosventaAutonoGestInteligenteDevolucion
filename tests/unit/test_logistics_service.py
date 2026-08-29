@@ -17,9 +17,7 @@ class TestGenerateShippingLabel:
     @pytest.mark.asyncio
     async def test_generates_pdf_file(self, tmp_path, monkeypatch):
         """Verifica que se crea un PDF en disco."""
-        monkeypatch.setattr(
-            "backend.services.logistics_service.LABELS_DIR", tmp_path
-        )
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
 
         result = await generate_shipping_label(
             order_id="ord-001-uuid",
@@ -39,9 +37,7 @@ class TestGenerateShippingLabel:
     @pytest.mark.asyncio
     async def test_tracking_number_is_unique(self, tmp_path, monkeypatch):
         """Dos llamadas generan tracking numbers diferentes."""
-        monkeypatch.setattr(
-            "backend.services.logistics_service.LABELS_DIR", tmp_path
-        )
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
 
         result1 = await generate_shipping_label(
             order_id="ord-001", items=[{"name": "Item", "quantity": 1}]
@@ -55,13 +51,9 @@ class TestGenerateShippingLabel:
     @pytest.mark.asyncio
     async def test_handles_empty_items(self, tmp_path, monkeypatch):
         """Funciona con lista vacía de items."""
-        monkeypatch.setattr(
-            "backend.services.logistics_service.LABELS_DIR", tmp_path
-        )
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
 
-        result = await generate_shipping_label(
-            order_id="ord-001", items=[]
-        )
+        result = await generate_shipping_label(order_id="ord-001", items=[])
 
         assert result["items_count"] == 0
         assert Path(result["label_path"]).exists()
@@ -69,9 +61,7 @@ class TestGenerateShippingLabel:
     @pytest.mark.asyncio
     async def test_truncates_long_address(self, tmp_path, monkeypatch):
         """No falla con direcciones largas."""
-        monkeypatch.setattr(
-            "backend.services.logistics_service.LABELS_DIR", tmp_path
-        )
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
 
         long_address = "A" * 200
         result = await generate_shipping_label(
@@ -89,9 +79,7 @@ class TestSendCustomerNotification:
     @pytest.mark.asyncio
     async def test_returns_simulated_status(self, tmp_path, monkeypatch):
         """Verifica que devuelve status sent_simulated."""
-        monkeypatch.setattr(
-            "backend.services.logistics_service.LABELS_DIR", tmp_path
-        )
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
 
         result = await send_customer_notification(
             email="test@example.com",
@@ -107,9 +95,7 @@ class TestSendCustomerNotification:
     @pytest.mark.asyncio
     async def test_writes_to_log_file(self, tmp_path, monkeypatch):
         """Verifica que se escribe en el log JSONL."""
-        monkeypatch.setattr(
-            "backend.services.logistics_service.LABELS_DIR", tmp_path
-        )
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
 
         await send_customer_notification(
             email="log@example.com",
@@ -128,9 +114,7 @@ class TestSendCustomerNotification:
     @pytest.mark.asyncio
     async def test_appends_multiple_entries(self, tmp_path, monkeypatch):
         """Múltiples envíos se acumulan en el log."""
-        monkeypatch.setattr(
-            "backend.services.logistics_service.LABELS_DIR", tmp_path
-        )
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
 
         await send_customer_notification(email="a@b.com", message="msg1")
         await send_customer_notification(email="c@d.com", message="msg2")
