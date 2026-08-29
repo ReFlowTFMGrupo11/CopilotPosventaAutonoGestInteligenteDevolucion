@@ -19,6 +19,18 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
+# Sin esto, el logger raíz de Python queda en su nivel por defecto (WARNING):
+# los logger.info(...) de todo el proyecto (confirmación del checkpointer
+# elegido en graph.py, inicialización de LangFuse en observability.py,
+# creación de clientes MCP en mcp_client.py...) se descartan en silencio y
+# nunca aparecen en los logs, aunque el código los emita. Solo se veían los
+# logger.warning()/.error() (por eso los fallos sí eran visibles, pero no
+# la confirmación de que algo arrancó bien).
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
