@@ -260,7 +260,7 @@ START → triage ──────────────────┐
                     │   ├── ≤100€ → END (auto-aprobado)
                     │   └── >100€ → interrupt (HITL)
                     │                    │
-                    │              hitl_admin → END
+                    │         resume EN el mismo nodo resolver → END
                     └─── (order no encontrado)
 ```
 
