@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancela runs viejos del mismo PR/rama cuando llega un push nuevo, para no
+# gastar minutos de CI en resultados que ya no importan.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (black + flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: black --check backend/ frontend/ data/ tests/
+      - run: flake8 backend/ frontend/ data/ tests/
+
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest tests/unit tests/integration -v
+
+  secrets-scan:
+    name: Secret scanning (trufflehog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@v3.97.1
+        with:
+          extra_args: --only-verified
+
+  validate-drawio:
+    name: Validar XML de docs/*.drawio
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar que cada .drawio es XML válido
+        run: |
+          set -e
+          for f in docs/*.drawio; do
+            echo "Validando $f"
+            python3 -c "import xml.etree.ElementTree as ET; ET.parse('$f')"
+          done
+
+  # ── Checks informativos (no bloquean el merge) ─────────────────────────
+  #
+  # Se introducen para ver el volumen de avisos antes de decidir si se
+  # hacen obligatorios; ver comentarios en requirements.txt/pyproject.toml.
+
+  typecheck:
+    name: mypy (no bloqueante)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: mypy backend/
+
+  dependency-audit:
+    name: pip-audit (no bloqueante)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pip-audit -r requirements.txt
