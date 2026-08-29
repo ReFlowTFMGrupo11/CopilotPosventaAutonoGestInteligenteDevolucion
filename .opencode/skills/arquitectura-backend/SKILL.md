@@ -28,11 +28,10 @@ mutaciones sobre pedidos) sea reutilizable desde cualquier consumidor —
 FastAPI, MCP, un nodo de LangGraph, un script — sin arrastrar detalles de
 conexión ni de protocolo de transporte.
 
-**Deuda conocida a corregir cuando se toque ese código:**
-- `backend/agents/nodes/resolution.py` importa `get_supabase_client` directo
-  desde `backend.db.supabase_client`, saltándose `supabase_service.py`.
-- `data/rag/ingest_policy_embeddings.py` hace lo mismo (menor prioridad: es
-  un script standalone fuera de `backend/`, no parte del grafo de servicio).
+**Deuda conocida (pendiente, fuera de `backend/`):**
+- `data/rag/ingest_policy_embeddings.py` importa `get_supabase_client`
+  directo, saltándose `supabase_service.py`. Menor prioridad: es un script
+  standalone fuera de `backend/`, no parte del grafo de servicio.
 
 ## 2. `db/` vs `services/`: no fusionar
 
@@ -71,28 +70,44 @@ cliente HTTP hacia los MCP servers). No debe contener:
 
 ## 5. Variables de entorno: centralizadas, tipadas, una sola fuente de verdad
 
-- Centralizar en un objeto de configuración tipado con `pydantic-settings`
-  (`BaseSettings`), ya es una dependencia declarada en `requirements.txt` y
-  ya hay un ejemplo correcto en `backend/db/supabase_client.py`
-  (`SupabaseSettings` + `@lru_cache`). Extender ese patrón, no inventar uno
-  nuevo ni usar `os.getenv()` suelto por el código.
-- Una sola lectura por variable. No duplicar el mismo `os.getenv(...)` con el
-  mismo default en varios archivos.
-  **Deuda conocida:** `GRAPH_RECURSION_LIMIT` y `GRAPH_TURN_TIMEOUT_SECONDS`
-  están definidos de forma independiente con el mismo default en
-  `backend/api/routers/chat.py` y `backend/api/routers/admin.py`.
-- Fallar rápido: las variables requeridas sin default deben lanzar un error
-  claro al arrancar (vía `BaseSettings` sin default), no propagar `None` en
-  silencio hasta fallar más adelante con un error críptico.
-- El nombre real de la variable en el código debe coincidir exactamente con
-  lo documentado en `.env.example` y `README.md`.
-  **Deuda conocida:** `.env.example`/`README.md` documentan `SUPABASE_URL`,
-  pero `SupabaseSettings.supabase_api_url` en realidad requiere
-  `SUPABASE_API_URL` — mismatch pendiente de corregir.
-- Los secretos (API keys, service keys) deben tipar como `pydantic.SecretStr`
-  para que no se filtren accidentalmente en logs o tracebacks.
-- El `.env` se carga una sola vez (vía `env_file` de `pydantic-settings`), no
-  con `load_dotenv()` repetido en varios módulos.
+- Todas las env vars del backend viven en `backend/config.py`
+  (`Settings` + `get_settings()`, cacheado vía `@lru_cache`). Nunca
+  `os.getenv()` suelto por el código ni objetos de settings nuevos —
+  extender `Settings`, no crear uno paralelo.
+- Una sola lectura por variable: no duplicar el mismo valor en varios
+  archivos (ej. `GRAPH_RECURSION_LIMIT` estaba duplicado de forma
+  independiente en `chat.py` y `admin.py` antes de centralizarlo).
+- Los campos son opcionales con default seguro en `Settings` (nada
+  obligatorio ahí), para que importar `Settings` desde un módulo no
+  relacionado con Supabase (p. ej. `llm_factory.py`) nunca falle por
+  falta de credenciales de BD. La validación de "falla rápido si falta
+  algo" vive en el único sitio que de verdad lo necesita: p. ej.
+  `get_supabase_client()` lanza un `RuntimeError` explícito si faltan
+  `SUPABASE_URL`/`SUPABASE_SERVICE_KEY`, en vez de ser un campo
+  obligatorio de `Settings` que acoplaría todo lo demás a Supabase.
+- El nombre del campo debe coincidir exactamente (en mayúsculas) con lo
+  documentado en `.env.example` y `README.md`.
+- Los secretos (`supabase_service_key`, `openai_api_key`,
+  `langfuse_secret_key`) tipados como `pydantic.SecretStr`, para que no
+  se filtren accidentalmente en logs o tracebacks.
+- El `.env` se carga una sola vez, vía `env_file` de `pydantic-settings`
+  dentro de `Settings` — no con `load_dotenv()` repetido en módulos
+  sueltos.
+
+## 6. Comentarios: concisos y al grano
+
+Ni `black` ni `flake8` (ver `README.md` → "Linting y formato") juzgan la
+verbosidad de un comentario: `black` no reescribe texto, y `flake8` solo
+limita la longitud de línea (`E501`), lo que fuerza a envolver una frase
+larga en más líneas, no a acortarla. Es una convención a aplicar en
+código nuevo y en review, no algo que una herramienta detecte:
+
+- Explica el **porqué** (una decisión no obvia, un bug que se evitó, una
+  limitación conocida), no el **qué** — el código ya dice qué hace.
+- Si necesitas más de 3-4 líneas para justificar algo, es señal de que
+  el código en sí debería ser más claro, o el detalle pertenece a un doc
+  separado (`docs/`), no a un comentario inline.
+- No repitas en prosa lo que ya está en el nombre de la función/variable.
 
 ## Al revisar o escribir código nuevo
 
@@ -100,7 +115,9 @@ Antes de añadir un archivo nuevo o una llamada a base de datos, comprobar:
 1. ¿Esta lógica de negocio va en `services/`, no directamente en el router,
    la tool MCP o el nodo del agente?
 2. ¿El acceso a la BD pasa por `services/`, no importa `db/` directamente?
-3. ¿La variable de entorno nueva se lee desde el objeto de settings
-   centralizado, no con un `os.getenv()` nuevo?
+3. ¿La variable de entorno nueva se lee desde `backend/config.py`
+   (`get_settings()`), no con un `os.getenv()` nuevo?
 4. ¿El nombre de la variable coincide exactamente entre código, `.env.example`
    y `README.md`?
+5. ¿Los comentarios explican el porqué, no el qué, y son concisos (ver
+   punto 6)?
