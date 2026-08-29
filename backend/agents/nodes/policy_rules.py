@@ -48,11 +48,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from backend.config import get_settings
 
 # ── Constantes de negocio ──────────────────────────────────────────────────
-
-HITL_REFUND_THRESHOLD = 100.0
-"""Umbral de importe (€) a partir del cual se requiere aprobación manual."""
+#
+# HITL_REFUND_THRESHOLD (umbral de importe a partir del cual se requiere
+# aprobación manual) vive en Settings.hitl_threshold_eur (backend/config.py,
+# env var HITL_THRESHOLD_EUR), no como constante de módulo: antes estaba
+# duplicado aquí Y en resolution.py con el mismo valor (100.0) hardcodeado,
+# y aunque .env.example ya documentaba HITL_THRESHOLD_EUR como configurable,
+# cambiarlo no tenía ningún efecto real. get_settings() no hace I/O (solo
+# parsea env vars con default), así que este módulo sigue siendo testable
+# sin mocks.
 
 SENSITIVE_REASONS: set[str] = set()
 """Vacío a propósito: el reason_category de 6 valores que triage.py
@@ -186,11 +193,12 @@ def rule_condition_allowed(ctx: PolicyContext) -> RuleResult:
 
 def rule_high_amount(ctx: PolicyContext) -> RuleResult:
     """Marca para revisión humana si el importe supera el umbral HITL."""
-    if ctx.refund_amount > HITL_REFUND_THRESHOLD:
+    threshold = get_settings().hitl_threshold_eur
+    if ctx.refund_amount > threshold:
         return RuleResult(
             "human_review",
             f"Importe {ctx.refund_amount:.2f}€ supera el umbral de "
-            f"{HITL_REFUND_THRESHOLD:.2f}€.",
+            f"{threshold:.2f}€.",
         )
     return RuleResult("valid")
 

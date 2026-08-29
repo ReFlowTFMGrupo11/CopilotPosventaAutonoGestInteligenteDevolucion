@@ -19,9 +19,9 @@ fijo (ver README.md, "Correcciones de robustez recientes"). Aquí, sin LLM de po
 medio, un `list[dict]` normal es más simple y no tiene ese problema.
 """
 
-import os
 from datetime import datetime, timezone
 
+from backend.config import get_settings
 from backend.db.supabase_client import get_supabase_client
 
 # ---------------------------------------------------------------------------
@@ -145,7 +145,8 @@ async def search_return_policy(query: str, category: str = "") -> dict:
 
     client = await get_supabase_client()
 
-    openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    api_key = get_settings().openai_api_key
+    openai_client = openai.OpenAI(api_key=api_key.get_secret_value() if api_key else None)
     # Debe ser el mismo modelo de embedding usado al indexar las políticas.
     embedding_resp = openai_client.embeddings.create(
         model="text-embedding-3-small",

@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
 from typing import Literal
 
@@ -44,6 +43,8 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from psycopg_pool import AsyncConnectionPool
+
+from backend.config import get_settings
 
 if sys.platform == "win32":
     # psycopg en modo async no soporta el ProactorEventLoop (el por defecto en
@@ -171,7 +172,7 @@ async def build_return_graph(checkpointer=None):
         El grafo compilado, listo para ``ainvoke()`` o ``astream()``.
     """
     if checkpointer is None:
-        db_url = os.getenv("SUPABASE_DB_URL")
+        db_url = get_settings().supabase_db_url
         if db_url:
             try:
                 # autocommit=True y prepare_threshold=0: mismo patrón que usa

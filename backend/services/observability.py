@@ -43,8 +43,9 @@ Variables de entorno necesarias (ver .env):
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Optional
+
+from backend.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,18 +57,16 @@ _project_id: Optional[str] = None
 
 
 def _is_configured() -> bool:
-    return bool(os.getenv("LANGFUSE_SECRET_KEY") and os.getenv("LANGFUSE_PUBLIC_KEY"))
+    settings = get_settings()
+    return bool(settings.langfuse_secret_key and settings.langfuse_public_key)
 
 
 def _host() -> str:
     """Resuelve el host de LangFuse: LANGFUSE_BASE_URL (nombre actual del SDK)
     con fallback a LANGFUSE_HOST (nombre usado en el resto de la docs del
     repo, p.ej. langfuse_infra/README.md), y por último LangFuse Cloud."""
-    return (
-        os.getenv("LANGFUSE_BASE_URL")
-        or os.getenv("LANGFUSE_HOST")
-        or "https://cloud.langfuse.com"
-    )
+    settings = get_settings()
+    return settings.langfuse_base_url or settings.langfuse_host or "https://cloud.langfuse.com"
 
 
 def get_langfuse() -> Optional[Any]:
@@ -78,9 +77,10 @@ def get_langfuse() -> Optional[Any]:
     if _langfuse_instance is None:
         try:
             from langfuse import Langfuse
+            settings = get_settings()
             _langfuse_instance = Langfuse(
-                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                public_key=settings.langfuse_public_key,
+                secret_key=settings.langfuse_secret_key.get_secret_value(),
                 host=_host(),
             )
             logger.info("LangFuse inicializado → %s", _host())
@@ -124,7 +124,7 @@ def get_langfuse_callback() -> Optional[Any]:
         try:
             from langfuse.langchain import CallbackHandler
             _callback_instance = CallbackHandler(
-                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                public_key=get_settings().langfuse_public_key,
             )
             logger.info("LangFuse CallbackHandler listo.")
         except Exception as exc:
@@ -179,7 +179,7 @@ def _resolve_project_id() -> Optional[str]:
     global _project_id
     if _project_id:
         return _project_id
-    if override := os.getenv("LANGFUSE_PROJECT_ID"):
+    if override := get_settings().langfuse_project_id:
         _project_id = override
         return _project_id
 

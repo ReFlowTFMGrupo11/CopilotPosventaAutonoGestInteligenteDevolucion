@@ -48,6 +48,7 @@ from backend.agents.infra.mcp_client import (
     send_customer_notification,
     update_return_status,
 )
+from backend.config import get_settings
 from backend.services.supabase_service import (
     DUPLICATE_RETURN_MARKER,
     get_latest_return_request,
@@ -58,7 +59,11 @@ from backend.models import OrderItem
 logger = logging.getLogger(__name__)
 
 # ── Umbral HITL ────────────────────────────────────────────────────────────
-HITL_REFUND_THRESHOLD = 100.0  # euros
+# Fuente única: Settings.hitl_threshold_eur (backend/config.py, env var
+# HITL_THRESHOLD_EUR) — la misma que usa rule_high_amount en policy_rules.py.
+# Antes este módulo tenía su PROPIA constante hardcodeada (100.0), duplicada
+# con la de policy_rules.py y desconectada de la env var que .env.example ya
+# documentaba como configurable.
 
 # ── Prompts ────────────────────────────────────────────────────────────────
 
@@ -129,6 +134,7 @@ async def resolution_agent(
     reembolso de los artículos elegibles supera el umbral.
     """
     llm = _build_llm()
+    hitl_threshold = get_settings().hitl_threshold_eur
 
     refund_amount = state.get("refund_amount", 0.0)
     order_id = state.get("order_id", "")
@@ -151,7 +157,7 @@ async def resolution_agent(
     # ── HITL: pausar si el importe supera el umbral o si el Evaluador
     #    marcó el caso como "needs_admin_approval" (zona frontera de plazo,
     #    motivo sensible o cliente frecuente, aunque el importe sea bajo) ──
-    needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > HITL_REFUND_THRESHOLD
+    needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > hitl_threshold
     if needs_admin_approval:
         # Crear registro o reutilizar existente (re-ejecución tras resume).
         thread_id = state.get("thread_id", "")
@@ -205,7 +211,7 @@ async def resolution_agent(
             "message": (
                 f"Pedido {order_number} · Cliente: {customer_name} · "
                 f"Artículos: {len(items_to_return)} · "
-                f"Reembolso: {refund_amount:.2f}€ (umbral: {HITL_REFUND_THRESHOLD:.2f}€) · "
+                f"Reembolso: {refund_amount:.2f}€ (umbral: {hitl_threshold:.2f}€) · "
                 f"Motivo: {reason_category} — {reason}"
             ),
         })
@@ -378,7 +384,7 @@ async def resolution_agent(
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
             "return_request_id": return_request_id,
-            "admin_decision": "auto_approved" if refund_amount <= HITL_REFUND_THRESHOLD else "approved",
+            "admin_decision": "auto_approved" if refund_amount <= hitl_threshold else "approved",
             "resolution": "partially_approved" if rejected_items else "approved",
             "current_agent": "resolver",
         },
