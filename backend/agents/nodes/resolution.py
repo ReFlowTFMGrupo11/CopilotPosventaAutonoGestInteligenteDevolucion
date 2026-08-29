@@ -36,7 +36,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.types import Command, interrupt
 
@@ -124,7 +124,7 @@ def _build_llm() -> ChatOpenAI:
 
 async def resolution_agent(
     state: ReturnState,
-) -> Command[Literal["hitl_admin", "__end__"]]:
+) -> Command[Literal["__end__"]]:
     """Nodo del agente de Resolución.
 
     Procesa SOLO los artículos que el Evaluador marcó como elegibles
@@ -431,36 +431,4 @@ async def rejection_agent(state: ReturnState) -> dict[str, Any]:
         "messages": [response],
         "resolution": "rejected",
         "current_agent": "resolver",
-    }
-
-
-async def hitl_admin_node(state: ReturnState) -> dict[str, Any]:
-    """Nodo HITL: punto de espera para aprobación administrativa.
-
-    Este nodo se ejecuta cuando el ``resolution_agent`` redirige aquí
-    tras recibir la aprobación del admin via ``Command(resume=...)``.
-    """
-    admin_decision = state.get("admin_decision", "approved")
-
-    if admin_decision == "approved":
-        msg = AIMessage(
-            content=(
-                "Tu devolución ha sido revisada y **aprobada** por nuestro equipo. "
-                "Recibirás un correo con la etiqueta de envío y los próximos pasos. "
-                "¡Gracias por tu paciencia!"
-            )
-        )
-    else:
-        msg = AIMessage(
-            content=(
-                "Tras la revisión de tu caso, lamentablemente no ha sido posible "
-                "aprobar la devolución. Si tienes alguna duda, puedes contactar con "
-                "nuestro equipo de soporte."
-            )
-        )
-
-    return {
-        "messages": [msg],
-        "resolution": admin_decision,
-        "current_agent": "hitl_admin",
     }

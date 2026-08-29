@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 from langchain_core.messages import AIMessage
 
-from backend.agents.nodes.resolution import rejection_agent, hitl_admin_node
+from backend.agents.nodes.resolution import rejection_agent
 
 
 class TestRejectionAgent:
@@ -30,32 +30,3 @@ class TestRejectionAgent:
         assert result["resolution"] == "rejected"
         assert result["current_agent"] == "resolver"
         assert len(result["messages"]) == 1
-
-
-class TestHitlAdminNode:
-    """Tests para el nodo HITL de administrador."""
-
-    @pytest.mark.asyncio
-    async def test_approved_message(self):
-        """Genera mensaje de aprobación cuando admin aprueba."""
-        state = {"admin_decision": "approved"}
-        result = await hitl_admin_node(state)
-
-        assert result["resolution"] == "approved"
-        assert "aprobada" in result["messages"][0].content.lower()
-
-    @pytest.mark.asyncio
-    async def test_rejected_message(self):
-        """Genera mensaje de rechazo cuando admin rechaza."""
-        state = {"admin_decision": "rejected"}
-        result = await hitl_admin_node(state)
-
-        assert result["resolution"] == "rejected"
-        assert "no ha sido posible" in result["messages"][0].content.lower()
-
-    @pytest.mark.asyncio
-    async def test_defaults_to_approved(self):
-        """Si no hay decisión explícita, asume aprobado."""
-        state = {}
-        result = await hitl_admin_node(state)
-        assert result["resolution"] == "approved"
