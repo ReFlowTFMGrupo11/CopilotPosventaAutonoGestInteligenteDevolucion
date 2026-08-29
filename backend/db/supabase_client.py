@@ -2,33 +2,23 @@
 Supabase client connection setup.
 
 Required environment variables (from .env):
-- SUPABASE_API_URL: Project URL (e.g., https://<project-id>.supabase.co)
+- SUPABASE_URL: Project URL (e.g., https://<project-id>.supabase.co)
 - SUPABASE_SERVICE_KEY: Service role key (full access, server-side only)
 - SUPABASE_DB_URL: PostgreSQL pooler URL (used by LangGraph checkpointer)
+
+Estas tres viven en el ``Settings`` centralizado de ``backend/config.py``
+junto con el resto de env vars del backend. Son opcionales ahí (para no
+acoplar la validación de Supabase a módulos no relacionados que también
+usan ``Settings``, p. ej. ``llm_factory.py``); la validación de que
+realmente estén configuradas ("falla rápido si faltan") vive aquí, en el
+único sitio que de verdad las necesita: la creación del cliente.
 """
 
-from functools import lru_cache
 from typing import Optional
 
-from pydantic_settings import BaseSettings
 from supabase import AsyncClient, create_async_client
 
-
-class SupabaseSettings(BaseSettings):
-    """Settings for Supabase connection loaded from .env."""
-
-    supabase_api_url: str
-    supabase_service_key: str
-    supabase_db_url: Optional[str] = None
-
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
-
-
-@lru_cache
-def get_settings() -> SupabaseSettings:
-    """Return cached Supabase settings."""
-    return SupabaseSettings()
-
+from backend.config import get_settings
 
 # Singleton perezoso: antes de la auditoria de ramas (ver doc/AUDITORIA_RAMAS.md),
 # mcp_supabase.py y backend/services/supabase_service.py reimplementaban cada uno
@@ -43,8 +33,13 @@ async def get_supabase_client() -> AsyncClient:
     global _client
     if _client is None:
         settings = get_settings()
+        if not settings.supabase_url or not settings.supabase_service_key:
+            raise RuntimeError(
+                "Supabase no configurado: faltan SUPABASE_URL y/o "
+                "SUPABASE_SERVICE_KEY en el entorno/.env."
+            )
         _client = await create_async_client(
-            supabase_url=settings.supabase_api_url,
-            supabase_key=settings.supabase_service_key,
+            supabase_url=settings.supabase_url,
+            supabase_key=settings.supabase_service_key.get_secret_value(),
         )
     return _client

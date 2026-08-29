@@ -68,7 +68,7 @@ artículo recibido en "Artículos a evaluar", identificada por su `order_item_id
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el evaluador de políticas.
 
-    Modelo configurable vía ``EVALUATOR_MODEL``; por defecto ``gpt-5-nano``.
+    Modelo configurable vía ``EVALUATOR_MODEL``; por defecto ``gpt-5-mini``.
     """
     return build_chat_llm("EVALUATOR_MODEL", temperature=0.0)  # determinista para auditoría
 

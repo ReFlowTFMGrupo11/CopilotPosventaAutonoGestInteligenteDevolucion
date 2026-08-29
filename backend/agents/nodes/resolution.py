@@ -49,14 +49,22 @@ from backend.agents.infra.mcp_client import (
     send_customer_notification,
     update_return_status,
 )
-from backend.services.supabase_service import DUPLICATE_RETURN_MARKER
-from backend.db.supabase_client import get_supabase_client
+from backend.config import get_settings
+from backend.services.supabase_service import (
+    DUPLICATE_RETURN_MARKER,
+    get_latest_return_request,
+    get_pending_return_request_id,
+)
 from backend.models import OrderItem
 
 logger = logging.getLogger(__name__)
 
 # ── Umbral HITL ────────────────────────────────────────────────────────────
-HITL_REFUND_THRESHOLD = 100.0  # euros
+# Fuente única: Settings.hitl_threshold_eur (backend/config.py, env var
+# HITL_THRESHOLD_EUR) — la misma que usa rule_high_amount en policy_rules.py.
+# Antes este módulo tenía su PROPIA constante hardcodeada (100.0), duplicada
+# con la de policy_rules.py y desconectada de la env var que .env.example ya
+# documentaba como configurable.
 
 # ── Prompts ────────────────────────────────────────────────────────────────
 
@@ -110,7 +118,7 @@ Motivo del rechazo: {reason}
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de resolución.
 
-    Modelo configurable vía ``RESOLVER_MODEL``; por defecto ``gpt-5-nano``.
+    Modelo configurable vía ``RESOLVER_MODEL``; por defecto ``gpt-5-mini``.
     """
     return build_chat_llm("RESOLVER_MODEL", temperature=0.4)
 
@@ -127,6 +135,7 @@ async def resolution_agent(
     reembolso de los artículos elegibles supera el umbral.
     """
     llm = _build_llm()
+    hitl_threshold = get_settings().hitl_threshold_eur
 
     refund_amount = state.get("refund_amount", 0.0)
     order_id = state.get("order_id", "")
@@ -149,7 +158,7 @@ async def resolution_agent(
     # ── HITL: pausar si el importe supera el umbral o si el Evaluador
     #    marcó el caso como "needs_admin_approval" (zona frontera de plazo,
     #    motivo sensible o cliente frecuente, aunque el importe sea bajo) ──
-    needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > HITL_REFUND_THRESHOLD
+    needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > hitl_threshold
     if needs_admin_approval:
         # Crear registro o reutilizar existente (re-ejecución tras resume).
         thread_id = state.get("thread_id", "")
@@ -181,11 +190,7 @@ async def resolution_agent(
             # Guard de duplicados: el registro ya existe (resume tras interrupt)
             logger.info("HITL record ya existe, reutilizando: %s", exc)
             # Buscar el ID del registro existente via BD
-            client = await get_supabase_client()
-            resp = await client.table("return_requests").select("id").eq(
-                "order_id", order_id
-            ).in_("status", ["pending_approval", "pending"]).limit(1).execute()
-            existing_return_id = resp.data[0]["id"] if resp.data else ""
+            existing_return_id = await get_pending_return_request_id(order_id)
 
         admin_response = interrupt({
             "type": "admin_approval_required",
@@ -207,7 +212,7 @@ async def resolution_agent(
             "message": (
                 f"Pedido {order_number} · Cliente: {customer_name} · "
                 f"Artículos: {len(items_to_return)} · "
-                f"Reembolso: {refund_amount:.2f}€ (umbral: {HITL_REFUND_THRESHOLD:.2f}€) · "
+                f"Reembolso: {refund_amount:.2f}€ (umbral: {hitl_threshold:.2f}€) · "
                 f"Motivo: {reason_category} — {reason}"
             ),
         })
@@ -300,11 +305,7 @@ async def resolution_agent(
             # Guard de duplicados: ya existe una devolución para este pedido/artículo
             # (p. ej. reintento del cliente o re-ejecución de un caso de QA).
             logger.info("Return record ya existe, informando al cliente: %s", exc)
-            client = await get_supabase_client()
-            resp = await client.table("return_requests").select("id, status").eq(
-                "order_id", order_id
-            ).order("created_at", desc=True).limit(1).execute()
-            existing = resp.data[0] if resp.data else {}
+            existing = await get_latest_return_request(order_id)
             duplicate_msg = await invoke_tracked(
                 llm,
                 [
@@ -405,7 +406,7 @@ async def resolution_agent(
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
             "return_request_id": return_request_id,
-            "admin_decision": "auto_approved" if refund_amount <= HITL_REFUND_THRESHOLD else "approved",
+            "admin_decision": "auto_approved" if refund_amount <= hitl_threshold else "approved",
             "resolution": "partially_approved" if rejected_items else "approved",
             "current_agent": "resolver",
         },

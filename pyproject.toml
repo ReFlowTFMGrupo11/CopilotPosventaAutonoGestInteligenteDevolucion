@@ -1,0 +1,15 @@
+[tool.black]
+# 88 es el default de black; se fija explícito porque .flake8 debe
+# coincidir con este valor (ver comentario en .flake8).
+line-length = 88
+
+[tool.mypy]
+python_version = "3.12"
+# backend/ es namespace package (sin __init__.py): sin esto, mypy confunde
+# "backend.agents.graph" con "agents.graph" y aborta con "Source file
+# found twice under different module names".
+explicit_package_bases = true
+# No bloquea el merge todavía (ver .github/workflows/ci.yml); se mantiene
+# permisivo para no ahogarse en falsos positivos de librerías sin stubs
+# (langchain, mcp, reportlab...) mientras se decide si se hace obligatorio.
+ignore_missing_imports = true
