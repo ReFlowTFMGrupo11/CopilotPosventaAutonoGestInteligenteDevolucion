@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Cancela runs viejos del mismo PR/rama cuando llega un push nuevo, para no
+# gastar minutos de CI en resultados que ya no importan.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (black + flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: black --check backend/ frontend/ data/ tests/
+      - run: flake8 backend/ frontend/ data/ tests/
+
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest tests/unit tests/integration -v
+
+  secrets-scan:
+    name: Secret scanning (trufflehog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@v3.97.1
+        with:
+          extra_args: --only-verified
+
+  validate-drawio:
+    name: Validar XML de docs/*.drawio
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar que cada .drawio es XML válido
+        run: |
+          set -e
+          for f in docs/*.drawio; do
+            echo "Validando $f"
+            python3 -c "import xml.etree.ElementTree as ET; ET.parse('$f')"
+          done
+
+  # ── Checks específicos del pipeline RAG/LLM ─────────────────────────────
+  #
+  # Ninguno de los dos llama a OpenAI ni a Supabase (ver --dry-run en cada
+  # script) — validan la consistencia del pipeline RAG y del golden dataset
+  # sin coste ni necesidad de secrets. El eval con el LLM real (sin
+  # --dry-run) queda fuera de este workflow a propósito: cuesta dinero por
+  # ejecución y necesita OPENAI_API_KEY; se plantea como workflow aparte,
+  # manual o programado, no en cada PR.
+
+  rag-ingest-dry-run:
+    name: RAG ingest --dry-run (chunking de políticas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m data.rag.ingest_policy_embeddings --dry-run
+
+  qa-golden-dataset-dry-run:
+    name: Golden dataset --dry-run (consistencia con policy_rules.py)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m tests.qa.scripts.evaluate_rag --dry-run
+
+  smoke-boot:
+    name: Smoke test (arranca los 3 servicios)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      # Sin .env: Settings cae a los defaults (InMemorySaver en vez de
+      # AsyncPostgresSaver, etc. — ver backend/config.py). Solo comprueba
+      # que los 3 procesos arrancan y responden, no que el flujo de
+      # negocio funcione de verdad (eso ya lo cubre `test`, mockeado).
+      - name: Arrancar MCP Supabase, MCP Logística y FastAPI en background
+        run: |
+          python -m backend.mcp.mcp_supabase > mcp_supabase.log 2>&1 &
+          python -m backend.mcp.mcp_logistics > mcp_logistics.log 2>&1 &
+          python -m backend.api.run --port 8000 > api.log 2>&1 &
+          sleep 5
+
+      - name: Comprobar que los 3 responden
+        run: |
+          set -e
+          # --max-time: los MCP servers usan streamable-HTTP/SSE y no
+          # cierran la conexión ante un GET simple sin las cabeceras del
+          # protocolo -- sin este flag, curl se queda colgado esperando.
+          echo "FastAPI /health:"
+          curl -sf --max-time 5 http://localhost:8000/health
+          echo ""
+          echo "MCP Supabase :8001/mcp:"
+          curl -s --max-time 5 -o /dev/null -w "%{http_code}\n" http://localhost:8001/mcp | grep -qE "^(200|400|406)$"
+          echo "MCP Logistics :8002/mcp:"
+          curl -s --max-time 5 -o /dev/null -w "%{http_code}\n" http://localhost:8002/mcp | grep -qE "^(200|400|406)$"
+
+      - name: Logs (si algo falló)
+        if: failure()
+        run: |
+          echo "── api.log ──"; cat api.log || true
+          echo "── mcp_supabase.log ──"; cat mcp_supabase.log || true
+          echo "── mcp_logistics.log ──"; cat mcp_logistics.log || true
+
+  # ── Checks informativos (no bloquean el merge) ─────────────────────────
+  #
+  # Se introducen para ver el volumen de avisos antes de decidir si se
+  # hacen obligatorios; ver comentarios en requirements.txt/pyproject.toml.
+
+  typecheck:
+    name: mypy (no bloqueante)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: mypy backend/
+
+  dependency-audit:
+    name: pip-audit (no bloqueante)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pip-audit -r requirements.txt
