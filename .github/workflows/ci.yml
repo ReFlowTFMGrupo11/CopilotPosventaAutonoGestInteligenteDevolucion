@@ -94,6 +94,49 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m tests.qa.scripts.evaluate_rag --dry-run
 
+  smoke-boot:
+    name: Smoke test (arranca los 3 servicios)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      # Sin .env: Settings cae a los defaults (InMemorySaver en vez de
+      # AsyncPostgresSaver, etc. — ver backend/config.py). Solo comprueba
+      # que los 3 procesos arrancan y responden, no que el flujo de
+      # negocio funcione de verdad (eso ya lo cubre `test`, mockeado).
+      - name: Arrancar MCP Supabase, MCP Logística y FastAPI en background
+        run: |
+          python -m backend.mcp.mcp_supabase > mcp_supabase.log 2>&1 &
+          python -m backend.mcp.mcp_logistics > mcp_logistics.log 2>&1 &
+          python -m backend.api.run --port 8000 > api.log 2>&1 &
+          sleep 5
+
+      - name: Comprobar que los 3 responden
+        run: |
+          set -e
+          # --max-time: los MCP servers usan streamable-HTTP/SSE y no
+          # cierran la conexión ante un GET simple sin las cabeceras del
+          # protocolo -- sin este flag, curl se queda colgado esperando.
+          echo "FastAPI /health:"
+          curl -sf --max-time 5 http://localhost:8000/health
+          echo ""
+          echo "MCP Supabase :8001/mcp:"
+          curl -s --max-time 5 -o /dev/null -w "%{http_code}\n" http://localhost:8001/mcp | grep -qE "^(200|400|406)$"
+          echo "MCP Logistics :8002/mcp:"
+          curl -s --max-time 5 -o /dev/null -w "%{http_code}\n" http://localhost:8002/mcp | grep -qE "^(200|400|406)$"
+
+      - name: Logs (si algo falló)
+        if: failure()
+        run: |
+          echo "── api.log ──"; cat api.log || true
+          echo "── mcp_supabase.log ──"; cat mcp_supabase.log || true
+          echo "── mcp_logistics.log ──"; cat mcp_logistics.log || true
+
   # ── Checks informativos (no bloquean el merge) ─────────────────────────
   #
   # Se introducen para ver el volumen de avisos antes de decidir si se
