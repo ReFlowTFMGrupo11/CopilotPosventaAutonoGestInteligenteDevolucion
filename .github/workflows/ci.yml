@@ -61,6 +61,39 @@ jobs:
             python3 -c "import xml.etree.ElementTree as ET; ET.parse('$f')"
           done
 
+  # ── Checks específicos del pipeline RAG/LLM ─────────────────────────────
+  #
+  # Ninguno de los dos llama a OpenAI ni a Supabase (ver --dry-run en cada
+  # script) — validan la consistencia del pipeline RAG y del golden dataset
+  # sin coste ni necesidad de secrets. El eval con el LLM real (sin
+  # --dry-run) queda fuera de este workflow a propósito: cuesta dinero por
+  # ejecución y necesita OPENAI_API_KEY; se plantea como workflow aparte,
+  # manual o programado, no en cada PR.
+
+  rag-ingest-dry-run:
+    name: RAG ingest --dry-run (chunking de políticas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m data.rag.ingest_policy_embeddings --dry-run
+
+  qa-golden-dataset-dry-run:
+    name: Golden dataset --dry-run (consistencia con policy_rules.py)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m tests.qa.scripts.evaluate_rag --dry-run
+
   # ── Checks informativos (no bloquean el merge) ─────────────────────────
   #
   # Se introducen para ver el volumen de avisos antes de decidir si se
