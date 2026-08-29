@@ -43,7 +43,10 @@ from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
 from backend.agents.llm_factory import build_chat_llm, trim_history
-from backend.agents.infra.mcp_client import get_order_details, get_customer_return_history
+from backend.agents.infra.mcp_client import (
+    get_order_details,
+    get_customer_return_history,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -152,10 +155,16 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     # Construir la lista de mensajes para el LLM
     context = [SystemMessage(content=TRIAGE_SYSTEM_PROMPT)]
     if state.get("order_number"):
-        context.append(SystemMessage(content=f"order_number ya conocido: {state['order_number']}"))
+        context.append(
+            SystemMessage(content=f"order_number ya conocido: {state['order_number']}")
+        )
     if state.get("order_details"):
         items = state["order_details"].get("items", [])
-        context.append(SystemMessage(content=f"ARTÍCULOS DEL PEDIDO: {json.dumps(items, default=str, ensure_ascii=False)}"))
+        context.append(
+            SystemMessage(
+                content=f"ARTÍCULOS DEL PEDIDO: {json.dumps(items, default=str, ensure_ascii=False)}"
+            )
+        )
     llm_messages = [*context, *trim_history(state.get("messages", []))]
 
     result: TriageOutput | None = await llm_structured.ainvoke(llm_messages)
@@ -164,7 +173,11 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
         # Fallback: el LLM no generó structured output válido
         logger.warning("Triaje: structured output devolvió None, usando fallback.")
         return {
-            "messages": [AIMessage(content="Lo siento, no he podido procesar tu mensaje. ¿Podrías repetirlo?")],
+            "messages": [
+                AIMessage(
+                    content="Lo siento, no he podido procesar tu mensaje. ¿Podrías repetirlo?"
+                )
+            ],
             "current_agent": "triage",
         }
 
@@ -178,13 +191,19 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     # cliente da un order_number DISTINTO, se le deja intentar con ese
     # otro pedido en vez de quedar bloqueado para siempre.
     blocking_error = state.get("error")
-    switching_order = bool(result.order_number) and result.order_number != state.get("order_number")
+    switching_order = bool(result.order_number) and result.order_number != state.get(
+        "order_number"
+    )
     if blocking_error and not switching_order:
         return {
-            "messages": [AIMessage(content=(
-                f"{blocking_error} Si quieres devolver un artículo de OTRO pedido, "
-                "dime su número."
-            ))],
+            "messages": [
+                AIMessage(
+                    content=(
+                        f"{blocking_error} Si quieres devolver un artículo de OTRO pedido, "
+                        "dime su número."
+                    )
+                )
+            ],
             "current_agent": "triage",
         }
 
@@ -245,8 +264,7 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
 def _items_key(items: list[dict[str, Any]]) -> frozenset[tuple[str, str]]:
     """Firma de (order_item_id, condition) para detectar si items_to_return cambió."""
     return frozenset(
-        (item.get("order_item_id", ""), item.get("condition", ""))
-        for item in items
+        (item.get("order_item_id", ""), item.get("condition", "")) for item in items
     )
 
 
@@ -266,10 +284,10 @@ def _apply_deterministic_selection(
     if not selected_item_ids or not order_items:
         return
 
-    valid_items_by_id = {
-        item.get("id"): item for item in order_items if item.get("id")
-    }
-    condition = (result.items_to_return[0].condition if result.items_to_return else "unknown")
+    valid_items_by_id = {item.get("id"): item for item in order_items if item.get("id")}
+    condition = (
+        result.items_to_return[0].condition if result.items_to_return else "unknown"
+    )
 
     normalized = [
         {"order_item_id": item_id, "quantity": 1, "condition": condition}
@@ -283,7 +301,9 @@ def _apply_deterministic_selection(
 
     if condition == "unknown":
         names = [
-            ((valid_items_by_id.get(i) or {}).get("product") or {}).get("name", "Artículo")
+            ((valid_items_by_id.get(i) or {}).get("product") or {}).get(
+                "name", "Artículo"
+            )
             for i in selected_item_ids
         ]
         updates["items_confirmed"] = False
@@ -316,7 +336,8 @@ def _check_existing_return(
     """Si ya existe una devolución activa para el pedido, devuelve error+mensaje."""
     active_statuses = {"pending", "pending_approval", "processing"}
     existing = [
-        r for r in (return_history.get("returns") or [])
+        r
+        for r in (return_history.get("returns") or [])
         if r.get("order_id") == order_id and r.get("status") in active_statuses
     ]
     if not existing:
@@ -351,11 +372,14 @@ def _build_items_prompt(order_number: str, items: list[dict]) -> AIMessage:
                 f"se encuentra el artículo (sin abrir, defectuoso, artículo incorrecto, etc.)?"
             )
         )
-    items_text = "\n".join(
-        f"- {(item.get('product') or {}).get('name', 'Artículo')} "
-        f"(cantidad: {item.get('quantity', 1)}, precio: {item.get('unit_price')}€)"
-        for item in items
-    ) or "(no se encontraron artículos en este pedido)"
+    items_text = (
+        "\n".join(
+            f"- {(item.get('product') or {}).get('name', 'Artículo')} "
+            f"(cantidad: {item.get('quantity', 1)}, precio: {item.get('unit_price')}€)"
+            for item in items
+        )
+        or "(no se encontraron artículos en este pedido)"
+    )
     return AIMessage(
         content=(
             f"He encontrado tu pedido {order_number}. Estos son los artículos:\n"
@@ -399,7 +423,9 @@ def _auto_select_single_item(
     product_name = (single.get("product") or {}).get("name", "Artículo")
     label = _CONDITION_LABELS.get(condition, condition)
     return {
-        "items_to_return": [{"order_item_id": single["id"], "quantity": 1, "condition": condition}],
+        "items_to_return": [
+            {"order_item_id": single["id"], "quantity": 1, "condition": condition}
+        ],
         "messages": [
             AIMessage(
                 content=(

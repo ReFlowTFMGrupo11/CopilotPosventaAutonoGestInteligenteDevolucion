@@ -73,9 +73,8 @@ def mock_return_history_suspicious():
         "returns": [
             {"id": f"ret-{i}", "status": "approved", "refund_amount": 50.0}
             for i in range(6)
-        ] + [
-            {"id": "ret-7", "status": "rejected", "refund_amount": 0.0}
-        ],
+        ]
+        + [{"id": "ret-7", "status": "rejected", "refund_amount": 0.0}],
     }
 
 
@@ -203,7 +202,11 @@ def mock_order_details_mixed_categories():
 def sample_items_to_return_mixed():
     """El cliente pide devolver AMBOS artículos del pedido mixto."""
     return [
-        {"order_item_id": "oi-electronics-uuid", "quantity": 1, "condition": "defective"},
+        {
+            "order_item_id": "oi-electronics-uuid",
+            "quantity": 1,
+            "condition": "defective",
+        },
         {"order_item_id": "oi-cosmetics-uuid", "quantity": 1, "condition": "used"},
     ]
 
@@ -220,7 +223,13 @@ def mock_policy_results_electronics():
             "max_return_days": 30,
             "requires_original_packaging": True,
             "restocking_fee_percent": 0.0,
-            "allowed_conditions": ["unopened", "opened_tested", "defective", "wrong_item", "damaged_in_transit"],
+            "allowed_conditions": [
+                "unopened",
+                "opened_tested",
+                "defective",
+                "wrong_item",
+                "damaged_in_transit",
+            ],
             "active": True,
         },
     }

@@ -54,98 +54,180 @@ HYGIENE_SENSITIVE = {
 
 CATEGORIES = {
     "electronica_informatica": dict(
-        label="Electrónica e Informática", prefix="ELEC", max_return_days=30,
-        requires_original_packaging=True, restocking_fee_percent=15.00,
-        allowed_conditions=["unopened", "opened_tested", "defective", "wrong_item", "damaged_in_transit"],
+        label="Electrónica e Informática",
+        prefix="ELEC",
+        max_return_days=30,
+        requires_original_packaging=True,
+        restocking_fee_percent=15.00,
+        allowed_conditions=[
+            "unopened",
+            "opened_tested",
+            "defective",
+            "wrong_item",
+            "damaged_in_transit",
+        ],
         policy_doc="01_electronica_informatica.md",
     ),
     "electrodomesticos": dict(
-        label="Electrodomésticos", prefix="ELDO", max_return_days=30,
-        requires_original_packaging=True, restocking_fee_percent=10.00,
-        allowed_conditions=["unopened", "defective", "wrong_item", "damaged_in_transit", "missing_parts"],
+        label="Electrodomésticos",
+        prefix="ELDO",
+        max_return_days=30,
+        requires_original_packaging=True,
+        restocking_fee_percent=10.00,
+        allowed_conditions=[
+            "unopened",
+            "defective",
+            "wrong_item",
+            "damaged_in_transit",
+            "missing_parts",
+        ],
         policy_doc="02_electrodomesticos.md",
     ),
     "moda_ropa": dict(
-        label="Moda y Complementos", prefix="MODA", max_return_days=30,
-        requires_original_packaging=False, restocking_fee_percent=0.00,
-        allowed_conditions=["unopened", "wrong_size", "wrong_item", "not_as_described", "defective"],
+        label="Moda y Complementos",
+        prefix="MODA",
+        max_return_days=30,
+        requires_original_packaging=False,
+        restocking_fee_percent=0.00,
+        allowed_conditions=[
+            "unopened",
+            "wrong_size",
+            "wrong_item",
+            "not_as_described",
+            "defective",
+        ],
         policy_doc="03_moda_ropa.md",
     ),
     "calzado": dict(
-        label="Calzado", prefix="CALZ", max_return_days=30,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Calzado",
+        prefix="CALZ",
+        max_return_days=30,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "wrong_size", "defective", "wrong_item"],
         policy_doc="04_calzado.md",
     ),
     "joyeria_relojes": dict(
-        label="Joyería y Relojería", prefix="JOYA", max_return_days=15,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Joyería y Relojería",
+        prefix="JOYA",
+        max_return_days=15,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "defective", "wrong_item", "not_as_described"],
         policy_doc="05_joyeria_relojeria.md",
     ),
     "hogar_decoracion": dict(
-        label="Hogar y Decoración", prefix="HOGA", max_return_days=30,
-        requires_original_packaging=False, restocking_fee_percent=0.00,
-        allowed_conditions=["unopened", "opened_unused", "defective", "wrong_item", "damaged_in_transit"],
+        label="Hogar y Decoración",
+        prefix="HOGA",
+        max_return_days=30,
+        requires_original_packaging=False,
+        restocking_fee_percent=0.00,
+        allowed_conditions=[
+            "unopened",
+            "opened_unused",
+            "defective",
+            "wrong_item",
+            "damaged_in_transit",
+        ],
         policy_doc="06_hogar_decoracion.md",
     ),
     "muebles": dict(
-        label="Muebles", prefix="MUEB", max_return_days=14,
-        requires_original_packaging=True, restocking_fee_percent=10.00,
-        allowed_conditions=["unopened", "defective", "damaged_in_transit", "wrong_item"],
+        label="Muebles",
+        prefix="MUEB",
+        max_return_days=14,
+        requires_original_packaging=True,
+        restocking_fee_percent=10.00,
+        allowed_conditions=[
+            "unopened",
+            "defective",
+            "damaged_in_transit",
+            "wrong_item",
+        ],
         policy_doc="07_muebles.md",
     ),
     "jardineria_bricolaje": dict(
-        label="Jardinería y Bricolaje", prefix="JARD", max_return_days=30,
-        requires_original_packaging=True, restocking_fee_percent=5.00,
-        allowed_conditions=["unopened", "defective", "wrong_item", "damaged_in_transit"],
+        label="Jardinería y Bricolaje",
+        prefix="JARD",
+        max_return_days=30,
+        requires_original_packaging=True,
+        restocking_fee_percent=5.00,
+        allowed_conditions=[
+            "unopened",
+            "defective",
+            "wrong_item",
+            "damaged_in_transit",
+        ],
         policy_doc="08_jardineria_bricolaje.md",
     ),
     "juguetes": dict(
-        label="Juguetes", prefix="JUGU", max_return_days=30,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Juguetes",
+        prefix="JUGU",
+        max_return_days=30,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "defective", "wrong_item", "not_as_described"],
         policy_doc="09_juguetes.md",
     ),
     "bebe_puericultura": dict(
-        label="Bebé y Puericultura", prefix="BEBE", max_return_days=30,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Bebé y Puericultura",
+        prefix="BEBE",
+        max_return_days=30,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "defective", "wrong_item"],
         policy_doc="10_bebe_puericultura.md",
     ),
     "deportes_aire_libre": dict(
-        label="Deportes y Aire Libre", prefix="DEPO", max_return_days=30,
-        requires_original_packaging=True, restocking_fee_percent=5.00,
+        label="Deportes y Aire Libre",
+        prefix="DEPO",
+        max_return_days=30,
+        requires_original_packaging=True,
+        restocking_fee_percent=5.00,
         allowed_conditions=["unopened", "opened_tested", "defective", "wrong_item"],
         policy_doc="11_deportes_aire_libre.md",
     ),
     "cosmetica_perfumeria": dict(
-        label="Cosmética y Perfumería", prefix="COSM", max_return_days=21,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Cosmética y Perfumería",
+        prefix="COSM",
+        max_return_days=21,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "defective", "wrong_item"],
         policy_doc="12_cosmetica_perfumeria.md",
     ),
     "drogueria_salud": dict(
-        label="Droguería, Higiene y Salud", prefix="DROG", max_return_days=21,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Droguería, Higiene y Salud",
+        prefix="DROG",
+        max_return_days=21,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "defective", "wrong_item"],
         policy_doc="13_drogueria_salud.md",
     ),
     "alimentacion": dict(
-        label="Alimentación y Gran Consumo", prefix="ALIM", max_return_days=14,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Alimentación y Gran Consumo",
+        prefix="ALIM",
+        max_return_days=14,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "defective", "wrong_item"],
         policy_doc="14_alimentacion.md",
     ),
     "mascotas": dict(
-        label="Mascotas", prefix="MASC", max_return_days=21,
-        requires_original_packaging=True, restocking_fee_percent=0.00,
+        label="Mascotas",
+        prefix="MASC",
+        max_return_days=21,
+        requires_original_packaging=True,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "defective", "wrong_item"],
         policy_doc="15_mascotas.md",
     ),
     "libros_papeleria": dict(
-        label="Libros, Papelería y Oficina", prefix="LIBR", max_return_days=21,
-        requires_original_packaging=False, restocking_fee_percent=0.00,
+        label="Libros, Papelería y Oficina",
+        prefix="LIBR",
+        max_return_days=21,
+        requires_original_packaging=False,
+        restocking_fee_percent=0.00,
         allowed_conditions=["unopened", "wrong_item", "defective"],
         policy_doc="16_libros_papeleria.md",
     ),
@@ -153,232 +235,1167 @@ CATEGORIES = {
 
 PRODUCT_CATALOG = {
     "electronica_informatica": [
-        ("Nortek UltraBook 14\" Ryzen 7 16GB/512GB", "Portátil ligero con procesador Ryzen 7, 16GB RAM y SSD 512GB", 749.99, 1.4),
-        ("Nortek UltraBook 14\" i5 8GB/256GB", "Portátil de uso diario con Intel i5, 8GB RAM y SSD 256GB", 549.99, 1.4),
-        ("Vionix Smartphone Aurora 128GB", "Smartphone con pantalla AMOLED 6.5\" y 128GB de almacenamiento", 399.99, 0.18),
-        ("Vionix Smartphone Aurora Pro 256GB 5G", "Smartphone 5G con triple cámara y 256GB de almacenamiento", 599.99, 0.19),
-        ("Quantia Tablet Air 10.5\" 64GB", "Tablet ligera con pantalla de 10.5 pulgadas y 64GB", 249.99, 0.45),
-        ("Pulsar Auriculares TWS Cancelación de Ruido", "Auriculares inalámbricos con cancelación activa de ruido", 89.99, 0.05),
-        ("Pulsar Altavoz Bluetooth Portátil 360°", "Altavoz resistente al agua con sonido envolvente 360°", 59.99, 0.6),
-        ("Nortek Monitor Curvo 27\" 144Hz", "Monitor gaming curvo con panel a 144Hz", 259.99, 4.2),
-        ("Vionix Smartwatch Fit 2", "Reloj inteligente con monitor de ritmo cardíaco y GPS", 129.99, 0.06),
-        ("Quantia Cámara Instantánea Retro", "Cámara de fotos instantáneas de diseño retro", 79.99, 0.35),
-        ("Nortek Disco SSD Externo 1TB USB-C", "Disco SSD externo portátil de 1TB con conexión USB-C", 79.99, 0.05),
-        ("Pulsar Teclado Mecánico RGB", "Teclado mecánico retroiluminado RGB para gaming", 69.99, 0.9),
-        ("Vionix Ratón Inalámbrico Ergonómico", "Ratón inalámbrico ergonómico de alta precisión", 29.99, 0.12),
-        ("Quantia Dron Compacto con Cámara 4K", "Dron plegable con cámara 4K estabilizada", 349.99, 0.6),
+        (
+            'Nortek UltraBook 14" Ryzen 7 16GB/512GB',
+            "Portátil ligero con procesador Ryzen 7, 16GB RAM y SSD 512GB",
+            749.99,
+            1.4,
+        ),
+        (
+            'Nortek UltraBook 14" i5 8GB/256GB',
+            "Portátil de uso diario con Intel i5, 8GB RAM y SSD 256GB",
+            549.99,
+            1.4,
+        ),
+        (
+            "Vionix Smartphone Aurora 128GB",
+            'Smartphone con pantalla AMOLED 6.5" y 128GB de almacenamiento',
+            399.99,
+            0.18,
+        ),
+        (
+            "Vionix Smartphone Aurora Pro 256GB 5G",
+            "Smartphone 5G con triple cámara y 256GB de almacenamiento",
+            599.99,
+            0.19,
+        ),
+        (
+            'Quantia Tablet Air 10.5" 64GB',
+            "Tablet ligera con pantalla de 10.5 pulgadas y 64GB",
+            249.99,
+            0.45,
+        ),
+        (
+            "Pulsar Auriculares TWS Cancelación de Ruido",
+            "Auriculares inalámbricos con cancelación activa de ruido",
+            89.99,
+            0.05,
+        ),
+        (
+            "Pulsar Altavoz Bluetooth Portátil 360°",
+            "Altavoz resistente al agua con sonido envolvente 360°",
+            59.99,
+            0.6,
+        ),
+        (
+            'Nortek Monitor Curvo 27" 144Hz',
+            "Monitor gaming curvo con panel a 144Hz",
+            259.99,
+            4.2,
+        ),
+        (
+            "Vionix Smartwatch Fit 2",
+            "Reloj inteligente con monitor de ritmo cardíaco y GPS",
+            129.99,
+            0.06,
+        ),
+        (
+            "Quantia Cámara Instantánea Retro",
+            "Cámara de fotos instantáneas de diseño retro",
+            79.99,
+            0.35,
+        ),
+        (
+            "Nortek Disco SSD Externo 1TB USB-C",
+            "Disco SSD externo portátil de 1TB con conexión USB-C",
+            79.99,
+            0.05,
+        ),
+        (
+            "Pulsar Teclado Mecánico RGB",
+            "Teclado mecánico retroiluminado RGB para gaming",
+            69.99,
+            0.9,
+        ),
+        (
+            "Vionix Ratón Inalámbrico Ergonómico",
+            "Ratón inalámbrico ergonómico de alta precisión",
+            29.99,
+            0.12,
+        ),
+        (
+            "Quantia Dron Compacto con Cámara 4K",
+            "Dron plegable con cámara 4K estabilizada",
+            349.99,
+            0.6,
+        ),
     ],
     "electrodomesticos": [
-        ("Frescor Frigorífico Combi No Frost 300L", "Frigorífico combi de bajo consumo con tecnología No Frost", 549.99, 65),
-        ("Frescor Congelador Vertical 200L", "Congelador vertical de gran capacidad, clase energética A+", 399.99, 45),
-        ("HomeLine Lavadora Carga Frontal 8kg", "Lavadora de carga frontal con 12 programas", 379.99, 60),
-        ("HomeLine Lavavajillas Integrable 12 servicios", "Lavavajillas integrable con capacidad para 12 servicios", 429.99, 45),
-        ("Cucina Horno Multifunción Empotrable", "Horno empotrable con 8 funciones de cocinado", 289.99, 30),
-        ("Cucina Microondas con Grill 25L", "Microondas de 25 litros con función grill", 99.99, 12),
-        ("HomeLine Aspiradora Robot Navegación Láser", "Robot aspirador con navegación láser y mapeo de estancias", 219.99, 3.5),
-        ("Cucina Cafetera Superautomática", "Cafetera superautomática con molinillo integrado", 349.99, 8),
-        ("HomeLine Batidora de Vaso 1200W", "Batidora de vaso profesional con 6 velocidades", 69.99, 2.5),
-        ("Cucina Freidora de Aire 5.5L", "Freidora sin aceite de 5.5 litros de capacidad", 89.99, 4),
-        ("Frescor Vinoteca 18 Botellas", "Vinoteca compacta con capacidad para 18 botellas", 199.99, 20),
-        ("HomeLine Plancha de Vapor Vertical", "Plancha de vapor vertical para prendas delicadas", 79.99, 3),
+        (
+            "Frescor Frigorífico Combi No Frost 300L",
+            "Frigorífico combi de bajo consumo con tecnología No Frost",
+            549.99,
+            65,
+        ),
+        (
+            "Frescor Congelador Vertical 200L",
+            "Congelador vertical de gran capacidad, clase energética A+",
+            399.99,
+            45,
+        ),
+        (
+            "HomeLine Lavadora Carga Frontal 8kg",
+            "Lavadora de carga frontal con 12 programas",
+            379.99,
+            60,
+        ),
+        (
+            "HomeLine Lavavajillas Integrable 12 servicios",
+            "Lavavajillas integrable con capacidad para 12 servicios",
+            429.99,
+            45,
+        ),
+        (
+            "Cucina Horno Multifunción Empotrable",
+            "Horno empotrable con 8 funciones de cocinado",
+            289.99,
+            30,
+        ),
+        (
+            "Cucina Microondas con Grill 25L",
+            "Microondas de 25 litros con función grill",
+            99.99,
+            12,
+        ),
+        (
+            "HomeLine Aspiradora Robot Navegación Láser",
+            "Robot aspirador con navegación láser y mapeo de estancias",
+            219.99,
+            3.5,
+        ),
+        (
+            "Cucina Cafetera Superautomática",
+            "Cafetera superautomática con molinillo integrado",
+            349.99,
+            8,
+        ),
+        (
+            "HomeLine Batidora de Vaso 1200W",
+            "Batidora de vaso profesional con 6 velocidades",
+            69.99,
+            2.5,
+        ),
+        (
+            "Cucina Freidora de Aire 5.5L",
+            "Freidora sin aceite de 5.5 litros de capacidad",
+            89.99,
+            4,
+        ),
+        (
+            "Frescor Vinoteca 18 Botellas",
+            "Vinoteca compacta con capacidad para 18 botellas",
+            199.99,
+            20,
+        ),
+        (
+            "HomeLine Plancha de Vapor Vertical",
+            "Plancha de vapor vertical para prendas delicadas",
+            79.99,
+            3,
+        ),
     ],
     "moda_ropa": [
-        ("Urbano Camiseta Algodón Orgánico", "Camiseta básica de algodón 100% orgánico", 14.99, 0.15),
-        ("Urbano Pantalón Chino Slim Fit", "Pantalón chino de corte slim fit", 34.99, 0.4),
-        ("Nordic Wear Abrigo Parka Impermeable", "Abrigo parka impermeable con capucha desmontable", 129.99, 1.1),
-        ("Nordic Wear Chaqueta de Cuero Premium", "Chaqueta de cuero auténtico de corte clásico", 199.99, 1.2),
-        ("Bellamoda Vestido Midi Estampado", "Vestido midi con estampado floral de temporada", 44.99, 0.3),
+        (
+            "Urbano Camiseta Algodón Orgánico",
+            "Camiseta básica de algodón 100% orgánico",
+            14.99,
+            0.15,
+        ),
+        (
+            "Urbano Pantalón Chino Slim Fit",
+            "Pantalón chino de corte slim fit",
+            34.99,
+            0.4,
+        ),
+        (
+            "Nordic Wear Abrigo Parka Impermeable",
+            "Abrigo parka impermeable con capucha desmontable",
+            129.99,
+            1.1,
+        ),
+        (
+            "Nordic Wear Chaqueta de Cuero Premium",
+            "Chaqueta de cuero auténtico de corte clásico",
+            199.99,
+            1.2,
+        ),
+        (
+            "Bellamoda Vestido Midi Estampado",
+            "Vestido midi con estampado floral de temporada",
+            44.99,
+            0.3,
+        ),
         ("Bellamoda Blusa Satinada", "Blusa satinada de manga larga", 29.99, 0.2),
-        ("Urbano Sudadera con Capucha", "Sudadera de algodón con capucha y bolsillo canguro", 39.99, 0.5),
+        (
+            "Urbano Sudadera con Capucha",
+            "Sudadera de algodón con capucha y bolsillo canguro",
+            39.99,
+            0.5,
+        ),
         ("Urbano Vaqueros Rectos", "Vaqueros de corte recto y tiro medio", 44.99, 0.6),
-        ("Nordic Wear Jersey de Lana Merino", "Jersey de lana merino de cuello redondo", 59.99, 0.4),
+        (
+            "Nordic Wear Jersey de Lana Merino",
+            "Jersey de lana merino de cuello redondo",
+            59.99,
+            0.4,
+        ),
         ("Bellamoda Falda Plisada", "Falda plisada midi de tejido fluido", 27.99, 0.25),
         ("Urbano Bañador Deportivo", "Bañador deportivo de secado rápido", 19.99, 0.1),
-        ("Urbano Ropa Interior Pack 3", "Pack de 3 unidades de ropa interior de algodón", 14.99, 0.1),
-        ("Nordic Wear Guantes Térmicos", "Guantes térmicos táctiles para invierno", 17.99, 0.1),
-        ("Bellamoda Bufanda de Punto", "Bufanda de punto grueso tejida a mano", 15.99, 0.15),
+        (
+            "Urbano Ropa Interior Pack 3",
+            "Pack de 3 unidades de ropa interior de algodón",
+            14.99,
+            0.1,
+        ),
+        (
+            "Nordic Wear Guantes Térmicos",
+            "Guantes térmicos táctiles para invierno",
+            17.99,
+            0.1,
+        ),
+        (
+            "Bellamoda Bufanda de Punto",
+            "Bufanda de punto grueso tejida a mano",
+            15.99,
+            0.15,
+        ),
     ],
     "calzado": [
-        ("StridePro Zapatillas Running ProAir", "Zapatillas de running con amortiguación de aire", 89.99, 0.7),
-        ("StridePro Zapatillas Trail Grip", "Zapatillas de trail running con suela de alto agarre", 99.99, 0.8),
-        ("Caminar Botas de Montaña Impermeables", "Botas de montaña con membrana impermeable", 119.99, 1.1),
-        ("Caminar Zapato de Vestir Piel", "Zapato de vestir de piel genuina", 79.99, 0.9),
-        ("StridePro Zapatillas Casual Urbanas", "Zapatillas casuales de estilo urbano", 59.99, 0.6),
+        (
+            "StridePro Zapatillas Running ProAir",
+            "Zapatillas de running con amortiguación de aire",
+            89.99,
+            0.7,
+        ),
+        (
+            "StridePro Zapatillas Trail Grip",
+            "Zapatillas de trail running con suela de alto agarre",
+            99.99,
+            0.8,
+        ),
+        (
+            "Caminar Botas de Montaña Impermeables",
+            "Botas de montaña con membrana impermeable",
+            119.99,
+            1.1,
+        ),
+        (
+            "Caminar Zapato de Vestir Piel",
+            "Zapato de vestir de piel genuina",
+            79.99,
+            0.9,
+        ),
+        (
+            "StridePro Zapatillas Casual Urbanas",
+            "Zapatillas casuales de estilo urbano",
+            59.99,
+            0.6,
+        ),
         ("Caminar Sandalias de Verano", "Sandalias planas de verano", 29.99, 0.4),
-        ("StridePro Zapatillas Infantiles Luces LED", "Zapatillas infantiles con luces LED en la suela", 34.99, 0.5),
+        (
+            "StridePro Zapatillas Infantiles Luces LED",
+            "Zapatillas infantiles con luces LED en la suela",
+            34.99,
+            0.5,
+        ),
         ("Caminar Botines de Piel Mujer", "Botines de piel de tacón bajo", 69.99, 0.8),
-        ("StridePro Zapatillas de Baloncesto", "Zapatillas de baloncesto de caña alta", 94.99, 0.85),
-        ("Caminar Mocasines de Ante", "Mocasines de ante con forro interior", 64.99, 0.6),
-        ("StridePro Chanclas de Piscina Pack 2", "Pack de 2 pares de chanclas de piscina", 12.99, 0.2),
+        (
+            "StridePro Zapatillas de Baloncesto",
+            "Zapatillas de baloncesto de caña alta",
+            94.99,
+            0.85,
+        ),
+        (
+            "Caminar Mocasines de Ante",
+            "Mocasines de ante con forro interior",
+            64.99,
+            0.6,
+        ),
+        (
+            "StridePro Chanclas de Piscina Pack 2",
+            "Pack de 2 pares de chanclas de piscina",
+            12.99,
+            0.2,
+        ),
         ("Caminar Botas de Agua", "Botas de agua antideslizantes", 24.99, 0.7),
     ],
     "joyeria_relojes": [
-        ("Aurelia Collar Plata de Ley con Circonita", "Collar de plata de ley con circonita central", 49.99, 0.03),
-        ("Aurelia Pendientes de Oro 18k", "Pendientes de oro de 18 quilates", 129.99, 0.02),
-        ("Aurelia Anillo Solitario Plata", "Anillo solitario de plata de ley", 39.99, 0.02),
-        ("Cronos Reloj Clásico Automático", "Reloj automático de esfera clásica y correa de piel", 249.99, 0.15),
-        ("Cronos Reloj Deportivo Multifunción", "Reloj deportivo con cronógrafo y sumergible 100m", 149.99, 0.12),
-        ("Aurelia Pulsera de Perlas Cultivadas", "Pulsera de perlas cultivadas de agua dulce", 69.99, 0.03),
-        ("Cronos Smartwatch Elegance", "Smartwatch de diseño elegante con correa de acero", 199.99, 0.06),
-        ("Aurelia Gemelos de Plata Grabados", "Gemelos de plata con grabado personalizado", 44.99, 0.02),
-        ("Cronos Reloj de Bolsillo Vintage", "Reloj de bolsillo de estilo vintage", 89.99, 0.1),
-        ("Aurelia Broche Vintage Esmaltado", "Broche vintage con acabado esmaltado", 34.99, 0.02),
+        (
+            "Aurelia Collar Plata de Ley con Circonita",
+            "Collar de plata de ley con circonita central",
+            49.99,
+            0.03,
+        ),
+        (
+            "Aurelia Pendientes de Oro 18k",
+            "Pendientes de oro de 18 quilates",
+            129.99,
+            0.02,
+        ),
+        (
+            "Aurelia Anillo Solitario Plata",
+            "Anillo solitario de plata de ley",
+            39.99,
+            0.02,
+        ),
+        (
+            "Cronos Reloj Clásico Automático",
+            "Reloj automático de esfera clásica y correa de piel",
+            249.99,
+            0.15,
+        ),
+        (
+            "Cronos Reloj Deportivo Multifunción",
+            "Reloj deportivo con cronógrafo y sumergible 100m",
+            149.99,
+            0.12,
+        ),
+        (
+            "Aurelia Pulsera de Perlas Cultivadas",
+            "Pulsera de perlas cultivadas de agua dulce",
+            69.99,
+            0.03,
+        ),
+        (
+            "Cronos Smartwatch Elegance",
+            "Smartwatch de diseño elegante con correa de acero",
+            199.99,
+            0.06,
+        ),
+        (
+            "Aurelia Gemelos de Plata Grabados",
+            "Gemelos de plata con grabado personalizado",
+            44.99,
+            0.02,
+        ),
+        (
+            "Cronos Reloj de Bolsillo Vintage",
+            "Reloj de bolsillo de estilo vintage",
+            89.99,
+            0.1,
+        ),
+        (
+            "Aurelia Broche Vintage Esmaltado",
+            "Broche vintage con acabado esmaltado",
+            34.99,
+            0.02,
+        ),
     ],
     "hogar_decoracion": [
-        ("CasaViva Juego de Sartenes Antiadherentes x3", "Set de 3 sartenes con recubrimiento antiadherente", 59.99, 2.5),
-        ("CasaViva Vajilla Porcelana 18 piezas", "Vajilla completa de porcelana para 6 comensales", 79.99, 8),
-        ("Lumina Lámpara de Pie Diseño Nórdico", "Lámpara de pie de diseño nórdico minimalista", 89.99, 4),
-        ("Lumina Set de Velas Aromáticas x4", "Set de 4 velas aromáticas en distintos aromas", 24.99, 0.8),
-        ("CasaViva Juego de Sábanas Algodón 150cm", "Juego de sábanas 100% algodón para cama de 150cm", 39.99, 1.2),
-        ("CasaViva Alfombra Shaggy 160x230", "Alfombra de pelo largo 160x230cm", 99.99, 6),
-        ("Lumina Espejo de Pared Redondo", "Espejo de pared redondo con marco metálico", 49.99, 3),
-        ("CasaViva Cristalería Set 12 Copas", "Set de 12 copas de cristal para vino y agua", 34.99, 3.5),
-        ("Lumina Cojines Decorativos Pack 2", "Pack de 2 cojines decorativos de terciopelo", 19.99, 0.6),
-        ("CasaViva Cortinas Opacas 140x260", "Cortinas opacas térmicas 140x260cm", 29.99, 1),
-        ("Lumina Organizador de Armario Modular", "Sistema modular de organización de armario", 44.99, 2),
-        ("CasaViva Set de Cuchillos de Cocina", "Set de cuchillos de cocina con soporte de madera", 54.99, 1.5),
-        ("Lumina Difusor de Aromas USB", "Difusor de aromas por ultrasonidos con conexión USB", 22.99, 0.4),
-        ("CasaViva Toallas de Baño Pack 4", "Pack de 4 toallas de baño de algodón egipcio", 27.99, 1.4),
+        (
+            "CasaViva Juego de Sartenes Antiadherentes x3",
+            "Set de 3 sartenes con recubrimiento antiadherente",
+            59.99,
+            2.5,
+        ),
+        (
+            "CasaViva Vajilla Porcelana 18 piezas",
+            "Vajilla completa de porcelana para 6 comensales",
+            79.99,
+            8,
+        ),
+        (
+            "Lumina Lámpara de Pie Diseño Nórdico",
+            "Lámpara de pie de diseño nórdico minimalista",
+            89.99,
+            4,
+        ),
+        (
+            "Lumina Set de Velas Aromáticas x4",
+            "Set de 4 velas aromáticas en distintos aromas",
+            24.99,
+            0.8,
+        ),
+        (
+            "CasaViva Juego de Sábanas Algodón 150cm",
+            "Juego de sábanas 100% algodón para cama de 150cm",
+            39.99,
+            1.2,
+        ),
+        (
+            "CasaViva Alfombra Shaggy 160x230",
+            "Alfombra de pelo largo 160x230cm",
+            99.99,
+            6,
+        ),
+        (
+            "Lumina Espejo de Pared Redondo",
+            "Espejo de pared redondo con marco metálico",
+            49.99,
+            3,
+        ),
+        (
+            "CasaViva Cristalería Set 12 Copas",
+            "Set de 12 copas de cristal para vino y agua",
+            34.99,
+            3.5,
+        ),
+        (
+            "Lumina Cojines Decorativos Pack 2",
+            "Pack de 2 cojines decorativos de terciopelo",
+            19.99,
+            0.6,
+        ),
+        (
+            "CasaViva Cortinas Opacas 140x260",
+            "Cortinas opacas térmicas 140x260cm",
+            29.99,
+            1,
+        ),
+        (
+            "Lumina Organizador de Armario Modular",
+            "Sistema modular de organización de armario",
+            44.99,
+            2,
+        ),
+        (
+            "CasaViva Set de Cuchillos de Cocina",
+            "Set de cuchillos de cocina con soporte de madera",
+            54.99,
+            1.5,
+        ),
+        (
+            "Lumina Difusor de Aromas USB",
+            "Difusor de aromas por ultrasonidos con conexión USB",
+            22.99,
+            0.4,
+        ),
+        (
+            "CasaViva Toallas de Baño Pack 4",
+            "Pack de 4 toallas de baño de algodón egipcio",
+            27.99,
+            1.4,
+        ),
     ],
     "muebles": [
-        ("Robledo Sofá 3 Plazas Tela Gris", "Sofá de 3 plazas tapizado en tela gris", 599.99, 55),
-        ("Robledo Mesa de Comedor Extensible", "Mesa de comedor extensible de madera maciza", 349.99, 40),
-        ("Nordika Silla de Oficina Ergonómica", "Silla de oficina ergonómica con soporte lumbar", 179.99, 15),
-        ("Nordika Estantería Modular 5 Baldas", "Estantería modular de 5 baldas ajustables", 129.99, 20),
-        ("Robledo Cama Canapé Abatible 150", "Cama canapé abatible con gran capacidad de almacenaje", 399.99, 60),
-        ("Robledo Colchón Viscoelástico 150x190", "Colchón viscoelástico de firmeza media", 349.99, 25),
-        ("Nordika Armario Ropero 3 Puertas", "Armario ropero de 3 puertas con espejo", 449.99, 70),
+        (
+            "Robledo Sofá 3 Plazas Tela Gris",
+            "Sofá de 3 plazas tapizado en tela gris",
+            599.99,
+            55,
+        ),
+        (
+            "Robledo Mesa de Comedor Extensible",
+            "Mesa de comedor extensible de madera maciza",
+            349.99,
+            40,
+        ),
+        (
+            "Nordika Silla de Oficina Ergonómica",
+            "Silla de oficina ergonómica con soporte lumbar",
+            179.99,
+            15,
+        ),
+        (
+            "Nordika Estantería Modular 5 Baldas",
+            "Estantería modular de 5 baldas ajustables",
+            129.99,
+            20,
+        ),
+        (
+            "Robledo Cama Canapé Abatible 150",
+            "Cama canapé abatible con gran capacidad de almacenaje",
+            399.99,
+            60,
+        ),
+        (
+            "Robledo Colchón Viscoelástico 150x190",
+            "Colchón viscoelástico de firmeza media",
+            349.99,
+            25,
+        ),
+        (
+            "Nordika Armario Ropero 3 Puertas",
+            "Armario ropero de 3 puertas con espejo",
+            449.99,
+            70,
+        ),
         ("Nordika Mesa Auxiliar Nido x2", "Juego de 2 mesas auxiliares nido", 79.99, 8),
-        ("Robledo Cabecero Tapizado 150", "Cabecero tapizado en tela para cama de 150", 149.99, 12),
-        ("Nordika Silla Comedor Pack 2", "Pack de 2 sillas de comedor de madera", 159.99, 14),
-        ("Robledo Sofá Cama Chaise Longue", "Sofá cama con chaise longue reversible", 699.99, 65),
-        ("Nordika Mueble TV Diseño Industrial", "Mueble de TV de estilo industrial con ruedas", 189.99, 25),
+        (
+            "Robledo Cabecero Tapizado 150",
+            "Cabecero tapizado en tela para cama de 150",
+            149.99,
+            12,
+        ),
+        (
+            "Nordika Silla Comedor Pack 2",
+            "Pack de 2 sillas de comedor de madera",
+            159.99,
+            14,
+        ),
+        (
+            "Robledo Sofá Cama Chaise Longue",
+            "Sofá cama con chaise longue reversible",
+            699.99,
+            65,
+        ),
+        (
+            "Nordika Mueble TV Diseño Industrial",
+            "Mueble de TV de estilo industrial con ruedas",
+            189.99,
+            25,
+        ),
     ],
     "jardineria_bricolaje": [
-        ("GreenTool Taladro Percutor Inalámbrico 20V", "Taladro percutor inalámbrico con batería de 20V", 89.99, 1.8),
-        ("GreenTool Cortacésped Eléctrico 1400W", "Cortacésped eléctrico con recogedor de hierba", 149.99, 12),
-        ("TerraVerde Maceta de Cerámica Grande", "Maceta de cerámica esmaltada de gran tamaño", 24.99, 3),
-        ("TerraVerde Kit de Riego por Goteo", "Kit completo de riego por goteo para jardín", 34.99, 1.5),
-        ("GreenTool Motosierra Eléctrica 2000W", "Motosierra eléctrica de 2000W de potencia", 119.99, 4.5),
-        ("TerraVerde Mesa y Sillas de Terraza Set", "Set de mesa y 4 sillas para terraza", 199.99, 25),
-        ("GreenTool Barbacoa de Carbón Portátil", "Barbacoa de carbón portátil para exteriores", 79.99, 8),
-        ("TerraVerde Sustrato Universal 50L", "Saco de sustrato universal para plantas de 50L", 12.99, 20),
-        ("GreenTool Sierra Circular de Mesa", "Sierra circular de mesa para bricolaje", 179.99, 15),
-        ("TerraVerde Fertilizante Líquido Universal 1L", "Fertilizante líquido concentrado de uso universal", 9.99, 1.1),
-        ("GreenTool Set de Herramientas de Mano 45 piezas", "Maletín con 45 herramientas de mano", 49.99, 3.5),
-        ("TerraVerde Sombrilla de Jardín 3m", "Sombrilla de jardín de 3 metros de diámetro", 69.99, 6),
-        ("GreenTool Generador Portátil 2000W", "Generador eléctrico portátil de 2000W", 349.99, 20),
-        ("TerraVerde Planta de Interior Ficus 60cm", "Planta de interior Ficus de 60cm de altura", 29.99, 4),
+        (
+            "GreenTool Taladro Percutor Inalámbrico 20V",
+            "Taladro percutor inalámbrico con batería de 20V",
+            89.99,
+            1.8,
+        ),
+        (
+            "GreenTool Cortacésped Eléctrico 1400W",
+            "Cortacésped eléctrico con recogedor de hierba",
+            149.99,
+            12,
+        ),
+        (
+            "TerraVerde Maceta de Cerámica Grande",
+            "Maceta de cerámica esmaltada de gran tamaño",
+            24.99,
+            3,
+        ),
+        (
+            "TerraVerde Kit de Riego por Goteo",
+            "Kit completo de riego por goteo para jardín",
+            34.99,
+            1.5,
+        ),
+        (
+            "GreenTool Motosierra Eléctrica 2000W",
+            "Motosierra eléctrica de 2000W de potencia",
+            119.99,
+            4.5,
+        ),
+        (
+            "TerraVerde Mesa y Sillas de Terraza Set",
+            "Set de mesa y 4 sillas para terraza",
+            199.99,
+            25,
+        ),
+        (
+            "GreenTool Barbacoa de Carbón Portátil",
+            "Barbacoa de carbón portátil para exteriores",
+            79.99,
+            8,
+        ),
+        (
+            "TerraVerde Sustrato Universal 50L",
+            "Saco de sustrato universal para plantas de 50L",
+            12.99,
+            20,
+        ),
+        (
+            "GreenTool Sierra Circular de Mesa",
+            "Sierra circular de mesa para bricolaje",
+            179.99,
+            15,
+        ),
+        (
+            "TerraVerde Fertilizante Líquido Universal 1L",
+            "Fertilizante líquido concentrado de uso universal",
+            9.99,
+            1.1,
+        ),
+        (
+            "GreenTool Set de Herramientas de Mano 45 piezas",
+            "Maletín con 45 herramientas de mano",
+            49.99,
+            3.5,
+        ),
+        (
+            "TerraVerde Sombrilla de Jardín 3m",
+            "Sombrilla de jardín de 3 metros de diámetro",
+            69.99,
+            6,
+        ),
+        (
+            "GreenTool Generador Portátil 2000W",
+            "Generador eléctrico portátil de 2000W",
+            349.99,
+            20,
+        ),
+        (
+            "TerraVerde Planta de Interior Ficus 60cm",
+            "Planta de interior Ficus de 60cm de altura",
+            29.99,
+            4,
+        ),
     ],
     "juguetes": [
-        ("Kidonia Set de Construcción 500 piezas", "Set de construcción de bloques de 500 piezas", 44.99, 1.2),
-        ("PlayNova Muñeca Interactiva Habla", "Muñeca interactiva con frases y sonidos", 34.99, 0.6),
-        ("Kidonia Puzle 1000 piezas Paisaje", "Puzle de 1000 piezas con paisaje natural", 14.99, 0.7),
-        ("PlayNova Pista de Coches Eléctrica", "Pista de coches eléctrica con looping", 59.99, 2),
-        ("Kidonia Peluche Oso Gigante 80cm", "Peluche de oso de 80cm de altura", 29.99, 0.9),
-        ("PlayNova Consola de Juguete Retro", "Consola de juguete con juegos retro precargados", 39.99, 0.4),
-        ("Kidonia Juego de Mesa Familiar", "Juego de mesa para toda la familia", 24.99, 0.8),
-        ("PlayNova Figura de Colección Edición Limitada", "Figura de colección de edición limitada numerada", 49.99, 0.2),
-        ("Kidonia Cocina de Juguete de Madera", "Cocina de juguete de madera con accesorios", 89.99, 8),
-        ("PlayNova Dron de Juguete con Cámara", "Dron de juguete con cámara integrada", 54.99, 0.4),
-        ("Kidonia Set de Ciencia Experimentos", "Set de experimentos científicos para niños", 27.99, 1),
-        ("PlayNova Patinete de Juguete Luces", "Patinete infantil con ruedas luminosas", 32.99, 2.5),
+        (
+            "Kidonia Set de Construcción 500 piezas",
+            "Set de construcción de bloques de 500 piezas",
+            44.99,
+            1.2,
+        ),
+        (
+            "PlayNova Muñeca Interactiva Habla",
+            "Muñeca interactiva con frases y sonidos",
+            34.99,
+            0.6,
+        ),
+        (
+            "Kidonia Puzle 1000 piezas Paisaje",
+            "Puzle de 1000 piezas con paisaje natural",
+            14.99,
+            0.7,
+        ),
+        (
+            "PlayNova Pista de Coches Eléctrica",
+            "Pista de coches eléctrica con looping",
+            59.99,
+            2,
+        ),
+        (
+            "Kidonia Peluche Oso Gigante 80cm",
+            "Peluche de oso de 80cm de altura",
+            29.99,
+            0.9,
+        ),
+        (
+            "PlayNova Consola de Juguete Retro",
+            "Consola de juguete con juegos retro precargados",
+            39.99,
+            0.4,
+        ),
+        (
+            "Kidonia Juego de Mesa Familiar",
+            "Juego de mesa para toda la familia",
+            24.99,
+            0.8,
+        ),
+        (
+            "PlayNova Figura de Colección Edición Limitada",
+            "Figura de colección de edición limitada numerada",
+            49.99,
+            0.2,
+        ),
+        (
+            "Kidonia Cocina de Juguete de Madera",
+            "Cocina de juguete de madera con accesorios",
+            89.99,
+            8,
+        ),
+        (
+            "PlayNova Dron de Juguete con Cámara",
+            "Dron de juguete con cámara integrada",
+            54.99,
+            0.4,
+        ),
+        (
+            "Kidonia Set de Ciencia Experimentos",
+            "Set de experimentos científicos para niños",
+            27.99,
+            1,
+        ),
+        (
+            "PlayNova Patinete de Juguete Luces",
+            "Patinete infantil con ruedas luminosas",
+            32.99,
+            2.5,
+        ),
     ],
     "bebe_puericultura": [
-        ("Bebicare Cochecito 3 en 1 Todo Terreno", "Cochecito 3 en 1 con capazo y silla de coche", 349.99, 14),
-        ("Bebicare Silla de Coche Grupo 0+/1", "Silla de coche homologada grupo 0+/1", 199.99, 8),
-        ("Pequenin Cuna Convertible de Madera", "Cuna convertible en cama junior", 249.99, 30),
-        ("Pequenin Trona Regulable en Altura", "Trona regulable en altura y reclinación", 89.99, 7),
-        ("Bebicare Biberón Anticólico Pack 3", "Pack de 3 biberones anticólico", 19.99, 0.3),
-        ("Pequenin Chupete Silicona Pack 2", "Pack de 2 chupetes de silicona", 7.99, 0.05),
-        ("Bebicare Sacaleches Eléctrico Doble", "Sacaleches eléctrico de extracción doble", 129.99, 1),
-        ("Pequenin Body de Algodón Pack 5", "Pack de 5 bodies de algodón para bebé", 24.99, 0.4),
-        ("Bebicare Vigilabebés con Cámara HD", "Vigilabebés con cámara HD y visión nocturna", 99.99, 0.5),
-        ("Pequenin Bañera de Bebé Plegable", "Bañera plegable para bebé con soporte", 39.99, 2),
-        ("Bebicare Portabebés Ergonómico", "Portabebés ergonómico multiposición", 59.99, 0.6),
-        ("Pequenin Parque de Juegos Plegable", "Parque de juegos plegable con colchoneta", 79.99, 12),
+        (
+            "Bebicare Cochecito 3 en 1 Todo Terreno",
+            "Cochecito 3 en 1 con capazo y silla de coche",
+            349.99,
+            14,
+        ),
+        (
+            "Bebicare Silla de Coche Grupo 0+/1",
+            "Silla de coche homologada grupo 0+/1",
+            199.99,
+            8,
+        ),
+        (
+            "Pequenin Cuna Convertible de Madera",
+            "Cuna convertible en cama junior",
+            249.99,
+            30,
+        ),
+        (
+            "Pequenin Trona Regulable en Altura",
+            "Trona regulable en altura y reclinación",
+            89.99,
+            7,
+        ),
+        (
+            "Bebicare Biberón Anticólico Pack 3",
+            "Pack de 3 biberones anticólico",
+            19.99,
+            0.3,
+        ),
+        (
+            "Pequenin Chupete Silicona Pack 2",
+            "Pack de 2 chupetes de silicona",
+            7.99,
+            0.05,
+        ),
+        (
+            "Bebicare Sacaleches Eléctrico Doble",
+            "Sacaleches eléctrico de extracción doble",
+            129.99,
+            1,
+        ),
+        (
+            "Pequenin Body de Algodón Pack 5",
+            "Pack de 5 bodies de algodón para bebé",
+            24.99,
+            0.4,
+        ),
+        (
+            "Bebicare Vigilabebés con Cámara HD",
+            "Vigilabebés con cámara HD y visión nocturna",
+            99.99,
+            0.5,
+        ),
+        (
+            "Pequenin Bañera de Bebé Plegable",
+            "Bañera plegable para bebé con soporte",
+            39.99,
+            2,
+        ),
+        (
+            "Bebicare Portabebés Ergonómico",
+            "Portabebés ergonómico multiposición",
+            59.99,
+            0.6,
+        ),
+        (
+            "Pequenin Parque de Juegos Plegable",
+            "Parque de juegos plegable con colchoneta",
+            79.99,
+            12,
+        ),
     ],
     "deportes_aire_libre": [
-        ("TrailMax Bicicleta de Montaña 27.5\"", "Bicicleta de montaña con ruedas de 27.5 pulgadas", 449.99, 15),
-        ("TrailMax Bicicleta Urbana Plegable", "Bicicleta urbana plegable para ciudad", 349.99, 13),
-        ("FitPro Cinta de Correr Plegable", "Cinta de correr plegable con pantalla LED", 399.99, 40),
-        ("FitPro Banco de Musculación Ajustable", "Banco de musculación ajustable multiposición", 179.99, 22),
-        ("TrailMax Tienda de Campaña 4 Personas", "Tienda de campaña familiar para 4 personas", 129.99, 5),
-        ("TrailMax Saco de Dormir -10°C", "Saco de dormir para temperaturas de hasta -10°C", 59.99, 1.5),
-        ("FitPro Esterilla de Yoga Antideslizante", "Esterilla de yoga antideslizante de 6mm", 24.99, 1),
-        ("FitPro Guantes de Boxeo Pro", "Guantes de boxeo profesionales acolchados", 34.99, 0.5),
-        ("TrailMax Mochila de Trekking 40L", "Mochila de trekking de 40 litros de capacidad", 69.99, 1.2),
-        ("FitPro Patinete Eléctrico Urbano", "Patinete eléctrico urbano plegable", 349.99, 13),
-        ("TrailMax Caña de Pescar Telescópica", "Caña de pescar telescópica de fibra de carbono", 44.99, 0.6),
-        ("FitPro Set de Mancuernas Ajustables", "Set de mancuernas ajustables de peso variable", 149.99, 20),
+        (
+            'TrailMax Bicicleta de Montaña 27.5"',
+            "Bicicleta de montaña con ruedas de 27.5 pulgadas",
+            449.99,
+            15,
+        ),
+        (
+            "TrailMax Bicicleta Urbana Plegable",
+            "Bicicleta urbana plegable para ciudad",
+            349.99,
+            13,
+        ),
+        (
+            "FitPro Cinta de Correr Plegable",
+            "Cinta de correr plegable con pantalla LED",
+            399.99,
+            40,
+        ),
+        (
+            "FitPro Banco de Musculación Ajustable",
+            "Banco de musculación ajustable multiposición",
+            179.99,
+            22,
+        ),
+        (
+            "TrailMax Tienda de Campaña 4 Personas",
+            "Tienda de campaña familiar para 4 personas",
+            129.99,
+            5,
+        ),
+        (
+            "TrailMax Saco de Dormir -10°C",
+            "Saco de dormir para temperaturas de hasta -10°C",
+            59.99,
+            1.5,
+        ),
+        (
+            "FitPro Esterilla de Yoga Antideslizante",
+            "Esterilla de yoga antideslizante de 6mm",
+            24.99,
+            1,
+        ),
+        (
+            "FitPro Guantes de Boxeo Pro",
+            "Guantes de boxeo profesionales acolchados",
+            34.99,
+            0.5,
+        ),
+        (
+            "TrailMax Mochila de Trekking 40L",
+            "Mochila de trekking de 40 litros de capacidad",
+            69.99,
+            1.2,
+        ),
+        (
+            "FitPro Patinete Eléctrico Urbano",
+            "Patinete eléctrico urbano plegable",
+            349.99,
+            13,
+        ),
+        (
+            "TrailMax Caña de Pescar Telescópica",
+            "Caña de pescar telescópica de fibra de carbono",
+            44.99,
+            0.6,
+        ),
+        (
+            "FitPro Set de Mancuernas Ajustables",
+            "Set de mancuernas ajustables de peso variable",
+            149.99,
+            20,
+        ),
     ],
     "cosmetica_perfumeria": [
-        ("Essenza Eau de Parfum Floral 90ml", "Eau de parfum de notas florales, 90ml", 59.99, 0.3),
-        ("Essenza Eau de Toilette Cítrico 100ml", "Eau de toilette de notas cítricas, 100ml", 44.99, 0.3),
-        ("PureSkin Crema Facial Antiedad", "Crema facial antiedad con ácido hialurónico", 34.99, 0.15),
-        ("PureSkin Sérum Vitamina C", "Sérum facial con vitamina C concentrada", 29.99, 0.1),
-        ("Essenza Set de Maquillaje Profesional", "Set de maquillaje profesional con paleta de sombras", 49.99, 0.5),
-        ("PureSkin Mascarilla Facial de Arcilla", "Mascarilla facial purificante de arcilla verde", 14.99, 0.2),
-        ("Essenza Perfume de Viaje Pack 3x20ml", "Pack de 3 perfumes de viaje de 20ml", 39.99, 0.15),
-        ("PureSkin Aceite Corporal Hidratante", "Aceite corporal hidratante de argán", 19.99, 0.25),
-        ("Essenza Labial Mate Larga Duración", "Labial mate de larga duración", 12.99, 0.03),
-        ("PureSkin Champú Reparador Sin Sulfatos", "Champú reparador sin sulfatos para cabello dañado", 9.99, 0.4),
-        ("Essenza Colonia Infantil Suave 100ml", "Colonia infantil de fórmula suave, 100ml", 17.99, 0.15),
-        ("PureSkin Kit de Manicura Profesional", "Kit de manicura profesional con estuche", 24.99, 0.3),
+        (
+            "Essenza Eau de Parfum Floral 90ml",
+            "Eau de parfum de notas florales, 90ml",
+            59.99,
+            0.3,
+        ),
+        (
+            "Essenza Eau de Toilette Cítrico 100ml",
+            "Eau de toilette de notas cítricas, 100ml",
+            44.99,
+            0.3,
+        ),
+        (
+            "PureSkin Crema Facial Antiedad",
+            "Crema facial antiedad con ácido hialurónico",
+            34.99,
+            0.15,
+        ),
+        (
+            "PureSkin Sérum Vitamina C",
+            "Sérum facial con vitamina C concentrada",
+            29.99,
+            0.1,
+        ),
+        (
+            "Essenza Set de Maquillaje Profesional",
+            "Set de maquillaje profesional con paleta de sombras",
+            49.99,
+            0.5,
+        ),
+        (
+            "PureSkin Mascarilla Facial de Arcilla",
+            "Mascarilla facial purificante de arcilla verde",
+            14.99,
+            0.2,
+        ),
+        (
+            "Essenza Perfume de Viaje Pack 3x20ml",
+            "Pack de 3 perfumes de viaje de 20ml",
+            39.99,
+            0.15,
+        ),
+        (
+            "PureSkin Aceite Corporal Hidratante",
+            "Aceite corporal hidratante de argán",
+            19.99,
+            0.25,
+        ),
+        (
+            "Essenza Labial Mate Larga Duración",
+            "Labial mate de larga duración",
+            12.99,
+            0.03,
+        ),
+        (
+            "PureSkin Champú Reparador Sin Sulfatos",
+            "Champú reparador sin sulfatos para cabello dañado",
+            9.99,
+            0.4,
+        ),
+        (
+            "Essenza Colonia Infantil Suave 100ml",
+            "Colonia infantil de fórmula suave, 100ml",
+            17.99,
+            0.15,
+        ),
+        (
+            "PureSkin Kit de Manicura Profesional",
+            "Kit de manicura profesional con estuche",
+            24.99,
+            0.3,
+        ),
     ],
     "drogueria_salud": [
-        ("VitaPlus Multivitamínico 60 comprimidos", "Complejo multivitamínico, 60 comprimidos", 14.99, 0.15),
-        ("VitaPlus Colágeno con Magnesio 300g", "Colágeno hidrolizado con magnesio, bote de 300g", 22.99, 0.35),
-        ("CleanHome Detergente Líquido 5L", "Detergente líquido para lavadora, garrafa de 5L", 12.99, 5.2),
+        (
+            "VitaPlus Multivitamínico 60 comprimidos",
+            "Complejo multivitamínico, 60 comprimidos",
+            14.99,
+            0.15,
+        ),
+        (
+            "VitaPlus Colágeno con Magnesio 300g",
+            "Colágeno hidrolizado con magnesio, bote de 300g",
+            22.99,
+            0.35,
+        ),
+        (
+            "CleanHome Detergente Líquido 5L",
+            "Detergente líquido para lavadora, garrafa de 5L",
+            12.99,
+            5.2,
+        ),
         ("CleanHome Lejía Multiusos 2L", "Lejía multiusos concentrada, 2L", 2.99, 2.1),
-        ("VitaPlus Cepillo de Dientes Eléctrico", "Cepillo de dientes eléctrico recargable", 39.99, 0.3),
-        ("CleanHome Desinfectante Multisuperficie", "Desinfectante multisuperficie apto para cocina y baño", 4.99, 1),
-        ("VitaPlus Tensiómetro Digital de Brazo", "Tensiómetro digital de brazo con memoria", 34.99, 0.4),
-        ("VitaPlus Termómetro Digital Infrarrojo", "Termómetro digital de infrarrojos sin contacto", 19.99, 0.1),
-        ("CleanHome Suavizante Concentrado 3L", "Suavizante concentrado para ropa, 3L", 8.99, 3),
-        ("VitaPlus Báscula de Bioimpedancia", "Báscula de baño con análisis de bioimpedancia", 29.99, 1.5),
-        ("CleanHome Papel Higiénico Pack 24", "Papel higiénico de doble capa, pack de 24 rollos", 11.99, 4),
-        ("VitaPlus Botiquín de Primeros Auxilios", "Botiquín completo de primeros auxilios", 24.99, 0.8),
+        (
+            "VitaPlus Cepillo de Dientes Eléctrico",
+            "Cepillo de dientes eléctrico recargable",
+            39.99,
+            0.3,
+        ),
+        (
+            "CleanHome Desinfectante Multisuperficie",
+            "Desinfectante multisuperficie apto para cocina y baño",
+            4.99,
+            1,
+        ),
+        (
+            "VitaPlus Tensiómetro Digital de Brazo",
+            "Tensiómetro digital de brazo con memoria",
+            34.99,
+            0.4,
+        ),
+        (
+            "VitaPlus Termómetro Digital Infrarrojo",
+            "Termómetro digital de infrarrojos sin contacto",
+            19.99,
+            0.1,
+        ),
+        (
+            "CleanHome Suavizante Concentrado 3L",
+            "Suavizante concentrado para ropa, 3L",
+            8.99,
+            3,
+        ),
+        (
+            "VitaPlus Báscula de Bioimpedancia",
+            "Báscula de baño con análisis de bioimpedancia",
+            29.99,
+            1.5,
+        ),
+        (
+            "CleanHome Papel Higiénico Pack 24",
+            "Papel higiénico de doble capa, pack de 24 rollos",
+            11.99,
+            4,
+        ),
+        (
+            "VitaPlus Botiquín de Primeros Auxilios",
+            "Botiquín completo de primeros auxilios",
+            24.99,
+            0.8,
+        ),
     ],
     "alimentacion": [
-        ("Huerto Real Aceite de Oliva Virgen Extra 1L", "Aceite de oliva virgen extra de primera prensada, 1L", 8.99, 1),
-        ("Huerto Real Pack Conservas Variadas x12", "Pack de 12 conservas variadas de verduras y pescado", 19.99, 3.5),
-        ("Despensa Ibérica Jamón Curado Loncheado 200g", "Jamón curado loncheado envasado al vacío, 200g", 6.99, 0.2),
-        ("Despensa Ibérica Pasta Italiana Pack 6", "Pack de 6 formatos de pasta italiana", 7.99, 3),
-        ("Huerto Real Arroz Bomba 1kg", "Arroz bomba de denominación de origen, 1kg", 3.49, 1),
-        ("Despensa Ibérica Café en Grano 1kg", "Café en grano de tueste natural, 1kg", 12.99, 1),
-        ("Huerto Real Miel Artesana 500g", "Miel artesana de flores silvestres, 500g", 6.49, 0.6),
-        ("Despensa Ibérica Vino Tinto Reserva", "Vino tinto reserva D.O., botella 750ml", 9.99, 1.2),
-        ("Huerto Real Frutos Secos Selección 1kg", "Selección de frutos secos variados, 1kg", 11.99, 1),
-        ("Despensa Ibérica Chocolate Negro 70% Pack 5", "Pack de 5 tabletas de chocolate negro 70%", 9.99, 0.5),
-        ("Huerto Real Cerveza Artesana Pack 12", "Pack de 12 botellines de cerveza artesana", 14.99, 4.8),
-        ("Despensa Ibérica Snacks Salados Pack Familiar", "Pack familiar de snacks salados variados", 8.99, 1.2),
+        (
+            "Huerto Real Aceite de Oliva Virgen Extra 1L",
+            "Aceite de oliva virgen extra de primera prensada, 1L",
+            8.99,
+            1,
+        ),
+        (
+            "Huerto Real Pack Conservas Variadas x12",
+            "Pack de 12 conservas variadas de verduras y pescado",
+            19.99,
+            3.5,
+        ),
+        (
+            "Despensa Ibérica Jamón Curado Loncheado 200g",
+            "Jamón curado loncheado envasado al vacío, 200g",
+            6.99,
+            0.2,
+        ),
+        (
+            "Despensa Ibérica Pasta Italiana Pack 6",
+            "Pack de 6 formatos de pasta italiana",
+            7.99,
+            3,
+        ),
+        (
+            "Huerto Real Arroz Bomba 1kg",
+            "Arroz bomba de denominación de origen, 1kg",
+            3.49,
+            1,
+        ),
+        (
+            "Despensa Ibérica Café en Grano 1kg",
+            "Café en grano de tueste natural, 1kg",
+            12.99,
+            1,
+        ),
+        (
+            "Huerto Real Miel Artesana 500g",
+            "Miel artesana de flores silvestres, 500g",
+            6.49,
+            0.6,
+        ),
+        (
+            "Despensa Ibérica Vino Tinto Reserva",
+            "Vino tinto reserva D.O., botella 750ml",
+            9.99,
+            1.2,
+        ),
+        (
+            "Huerto Real Frutos Secos Selección 1kg",
+            "Selección de frutos secos variados, 1kg",
+            11.99,
+            1,
+        ),
+        (
+            "Despensa Ibérica Chocolate Negro 70% Pack 5",
+            "Pack de 5 tabletas de chocolate negro 70%",
+            9.99,
+            0.5,
+        ),
+        (
+            "Huerto Real Cerveza Artesana Pack 12",
+            "Pack de 12 botellines de cerveza artesana",
+            14.99,
+            4.8,
+        ),
+        (
+            "Despensa Ibérica Snacks Salados Pack Familiar",
+            "Pack familiar de snacks salados variados",
+            8.99,
+            1.2,
+        ),
     ],
     "mascotas": [
-        ("PetLoop Pienso para Perro Adulto 15kg", "Pienso completo para perro adulto, saco de 15kg", 44.99, 15),
-        ("PetLoop Pienso para Gato Esterilizado 10kg", "Pienso para gato esterilizado, saco de 10kg", 34.99, 10),
-        ("AnimalFeliz Transportín de Viaje Homologado", "Transportín rígido homologado para viajes", 49.99, 3),
-        ("AnimalFeliz Cama Acolchada para Perro", "Cama acolchada lavable para perro", 29.99, 1.5),
-        ("PetLoop Arena Aglomerante para Gatos 10L", "Arena aglomerante con control de olores, 10L", 9.99, 8),
-        ("AnimalFeliz Correa Retráctil 5m", "Correa retráctil de 5 metros con freno", 14.99, 0.4),
-        ("PetLoop Snacks Dentales para Perro Pack", "Pack de snacks dentales para perro", 7.99, 0.5),
-        ("AnimalFeliz Rascador para Gatos Torre", "Rascador tipo torre con varios niveles", 39.99, 6),
-        ("PetLoop Comedero Automático con Temporizador", "Comedero automático programable con temporizador", 34.99, 1.2),
-        ("AnimalFeliz Juguete Interactivo para Perro", "Juguete interactivo dispensador de premios", 12.99, 0.3),
+        (
+            "PetLoop Pienso para Perro Adulto 15kg",
+            "Pienso completo para perro adulto, saco de 15kg",
+            44.99,
+            15,
+        ),
+        (
+            "PetLoop Pienso para Gato Esterilizado 10kg",
+            "Pienso para gato esterilizado, saco de 10kg",
+            34.99,
+            10,
+        ),
+        (
+            "AnimalFeliz Transportín de Viaje Homologado",
+            "Transportín rígido homologado para viajes",
+            49.99,
+            3,
+        ),
+        (
+            "AnimalFeliz Cama Acolchada para Perro",
+            "Cama acolchada lavable para perro",
+            29.99,
+            1.5,
+        ),
+        (
+            "PetLoop Arena Aglomerante para Gatos 10L",
+            "Arena aglomerante con control de olores, 10L",
+            9.99,
+            8,
+        ),
+        (
+            "AnimalFeliz Correa Retráctil 5m",
+            "Correa retráctil de 5 metros con freno",
+            14.99,
+            0.4,
+        ),
+        (
+            "PetLoop Snacks Dentales para Perro Pack",
+            "Pack de snacks dentales para perro",
+            7.99,
+            0.5,
+        ),
+        (
+            "AnimalFeliz Rascador para Gatos Torre",
+            "Rascador tipo torre con varios niveles",
+            39.99,
+            6,
+        ),
+        (
+            "PetLoop Comedero Automático con Temporizador",
+            "Comedero automático programable con temporizador",
+            34.99,
+            1.2,
+        ),
+        (
+            "AnimalFeliz Juguete Interactivo para Perro",
+            "Juguete interactivo dispensador de premios",
+            12.99,
+            0.3,
+        ),
     ],
     "libros_papeleria": [
-        ("Letra Viva Novela Best Seller Tapa Dura", "Novela superventas en edición de tapa dura", 21.99, 0.5),
-        ("Letra Viva Colección Clásicos Pack 5", "Pack de 5 novelas clásicas de la literatura universal", 39.99, 1.8),
-        ("OficinaPro Agenda Anual 2026/2027", "Agenda anual con vista semanal, curso 2026/2027", 12.99, 0.4),
-        ("OficinaPro Set de Bolígrafos Premium x10", "Set de 10 bolígrafos premium de gel", 9.99, 0.2),
-        ("Letra Viva Libro de Cocina Ilustrado", "Libro de recetas ilustrado a todo color", 24.99, 0.9),
-        ("OficinaPro Cuadernos A5 Pack 3", "Pack de 3 cuadernos tapa dura A5", 8.99, 0.5),
-        ("Letra Viva Cómic Edición Coleccionista", "Cómic en edición coleccionista numerada", 17.99, 0.4),
-        ("OficinaPro Tóner Compatible Multicolor", "Tóner compatible multicolor para impresora láser", 29.99, 0.6),
-        ("Letra Viva Libro Infantil Ilustrado", "Cuento infantil ilustrado a todo color", 13.99, 0.3),
-        ("OficinaPro Mochila Escolar Reforzada", "Mochila escolar reforzada con múltiples compartimentos", 34.99, 0.9),
-        ("Letra Viva Diccionario Bilingüe", "Diccionario bilingüe español-inglés", 19.99, 1.1),
-        ("OficinaPro Calculadora Científica", "Calculadora científica de 240 funciones", 16.99, 0.2),
+        (
+            "Letra Viva Novela Best Seller Tapa Dura",
+            "Novela superventas en edición de tapa dura",
+            21.99,
+            0.5,
+        ),
+        (
+            "Letra Viva Colección Clásicos Pack 5",
+            "Pack de 5 novelas clásicas de la literatura universal",
+            39.99,
+            1.8,
+        ),
+        (
+            "OficinaPro Agenda Anual 2026/2027",
+            "Agenda anual con vista semanal, curso 2026/2027",
+            12.99,
+            0.4,
+        ),
+        (
+            "OficinaPro Set de Bolígrafos Premium x10",
+            "Set de 10 bolígrafos premium de gel",
+            9.99,
+            0.2,
+        ),
+        (
+            "Letra Viva Libro de Cocina Ilustrado",
+            "Libro de recetas ilustrado a todo color",
+            24.99,
+            0.9,
+        ),
+        (
+            "OficinaPro Cuadernos A5 Pack 3",
+            "Pack de 3 cuadernos tapa dura A5",
+            8.99,
+            0.5,
+        ),
+        (
+            "Letra Viva Cómic Edición Coleccionista",
+            "Cómic en edición coleccionista numerada",
+            17.99,
+            0.4,
+        ),
+        (
+            "OficinaPro Tóner Compatible Multicolor",
+            "Tóner compatible multicolor para impresora láser",
+            29.99,
+            0.6,
+        ),
+        (
+            "Letra Viva Libro Infantil Ilustrado",
+            "Cuento infantil ilustrado a todo color",
+            13.99,
+            0.3,
+        ),
+        (
+            "OficinaPro Mochila Escolar Reforzada",
+            "Mochila escolar reforzada con múltiples compartimentos",
+            34.99,
+            0.9,
+        ),
+        (
+            "Letra Viva Diccionario Bilingüe",
+            "Diccionario bilingüe español-inglés",
+            19.99,
+            1.1,
+        ),
+        (
+            "OficinaPro Calculadora Científica",
+            "Calculadora científica de 240 funciones",
+            16.99,
+            0.2,
+        ),
     ],
 }
 
@@ -387,39 +1404,142 @@ PRODUCT_CATALOG = {
 # ---------------------------------------------------------------------------
 
 FIRST_NAMES = [
-    "María", "Carlos", "Laura", "Javier", "Ana", "David", "Elena", "Pablo",
-    "Marta", "Sergio", "Lucía", "Diego", "Sara", "Alejandro", "Cristina",
-    "Miguel", "Paula", "Adrián", "Isabel", "Raúl", "Nuria", "Óscar", "Rocío",
-    "Iván", "Beatriz", "Rubén", "Silvia", "Fernando", "Patricia", "Álvaro",
-    "Carmen", "Jorge", "Irene", "Manuel", "Andrea", "Antonio", "Natalia",
-    "Francisco", "Eva", "Víctor", "Alba", "Rodrigo", "Sandra", "Hugo",
-    "Claudia", "Mario", "Julia", "Gonzalo", "Marina", "Ignacio",
+    "María",
+    "Carlos",
+    "Laura",
+    "Javier",
+    "Ana",
+    "David",
+    "Elena",
+    "Pablo",
+    "Marta",
+    "Sergio",
+    "Lucía",
+    "Diego",
+    "Sara",
+    "Alejandro",
+    "Cristina",
+    "Miguel",
+    "Paula",
+    "Adrián",
+    "Isabel",
+    "Raúl",
+    "Nuria",
+    "Óscar",
+    "Rocío",
+    "Iván",
+    "Beatriz",
+    "Rubén",
+    "Silvia",
+    "Fernando",
+    "Patricia",
+    "Álvaro",
+    "Carmen",
+    "Jorge",
+    "Irene",
+    "Manuel",
+    "Andrea",
+    "Antonio",
+    "Natalia",
+    "Francisco",
+    "Eva",
+    "Víctor",
+    "Alba",
+    "Rodrigo",
+    "Sandra",
+    "Hugo",
+    "Claudia",
+    "Mario",
+    "Julia",
+    "Gonzalo",
+    "Marina",
+    "Ignacio",
 ]
 
 LAST_NAMES = [
-    "García", "Martínez", "López", "Fernández", "Ruiz", "Soto", "Gómez",
-    "Díaz", "Álvarez", "Romero", "Navarro", "Torres", "Domínguez", "Vázquez",
-    "Ramos", "Gil", "Serrano", "Blanco", "Suárez", "Molina", "Ortega",
-    "Delgado", "Castro", "Ortiz", "Rubio", "Marín", "Sanz", "Iglesias",
-    "Nuñez", "Medina", "Cortés", "Santos", "Guerrero", "Cano", "Prieto",
-    "Vega", "Herrera", "Peña", "Flores", "Cabrera",
+    "García",
+    "Martínez",
+    "López",
+    "Fernández",
+    "Ruiz",
+    "Soto",
+    "Gómez",
+    "Díaz",
+    "Álvarez",
+    "Romero",
+    "Navarro",
+    "Torres",
+    "Domínguez",
+    "Vázquez",
+    "Ramos",
+    "Gil",
+    "Serrano",
+    "Blanco",
+    "Suárez",
+    "Molina",
+    "Ortega",
+    "Delgado",
+    "Castro",
+    "Ortiz",
+    "Rubio",
+    "Marín",
+    "Sanz",
+    "Iglesias",
+    "Nuñez",
+    "Medina",
+    "Cortés",
+    "Santos",
+    "Guerrero",
+    "Cano",
+    "Prieto",
+    "Vega",
+    "Herrera",
+    "Peña",
+    "Flores",
+    "Cabrera",
 ]
 
 CITIES = [
-    ("Madrid", "28013"), ("Barcelona", "08018"), ("Sevilla", "41004"),
-    ("Valencia", "46002"), ("Bilbao", "48005"), ("Zaragoza", "50001"),
-    ("Málaga", "29005"), ("Murcia", "30001"), ("Palma", "07001"),
-    ("Las Palmas de Gran Canaria", "35001"), ("Alicante", "03001"),
-    ("Córdoba", "14001"), ("Valladolid", "47001"), ("Vigo", "36201"),
-    ("Gijón", "33201"), ("A Coruña", "15001"), ("Granada", "18001"),
-    ("San Sebastián", "20001"), ("Santander", "39001"), ("Toledo", "45001"),
+    ("Madrid", "28013"),
+    ("Barcelona", "08018"),
+    ("Sevilla", "41004"),
+    ("Valencia", "46002"),
+    ("Bilbao", "48005"),
+    ("Zaragoza", "50001"),
+    ("Málaga", "29005"),
+    ("Murcia", "30001"),
+    ("Palma", "07001"),
+    ("Las Palmas de Gran Canaria", "35001"),
+    ("Alicante", "03001"),
+    ("Córdoba", "14001"),
+    ("Valladolid", "47001"),
+    ("Vigo", "36201"),
+    ("Gijón", "33201"),
+    ("A Coruña", "15001"),
+    ("Granada", "18001"),
+    ("San Sebastián", "20001"),
+    ("Santander", "39001"),
+    ("Toledo", "45001"),
 ]
 
 STREET_TYPES = ["Calle", "Avenida", "Plaza", "Paseo"]
 STREET_NAMES = [
-    "Mayor", "Gran Vía", "de la Constitución", "del Sol", "de la Paz",
-    "San Francisco", "Alcalá", "Diagonal", "Sierpes", "de la Rosa",
-    "Colón", "del Prado", "Real", "Nueva", "de Andalucía", "Reyes Católicos",
+    "Mayor",
+    "Gran Vía",
+    "de la Constitución",
+    "del Sol",
+    "de la Paz",
+    "San Francisco",
+    "Alcalá",
+    "Diagonal",
+    "Sierpes",
+    "de la Rosa",
+    "Colón",
+    "del Prado",
+    "Real",
+    "Nueva",
+    "de Andalucía",
+    "Reyes Católicos",
 ]
 
 EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "outlook.com", "yahoo.es", "mail.com"]
@@ -448,8 +1568,14 @@ def build_customers(n: int) -> list[Customer]:
         if full_name in used_names:
             continue
         used_names.add(full_name)
-        base_email = f"{first.lower()}.{last1.lower()}".replace("á", "a").replace(
-            "é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+        base_email = (
+            f"{first.lower()}.{last1.lower()}".replace("á", "a")
+            .replace("é", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ú", "u")
+            .replace("ñ", "n")
+        )
         domain = rng.choice(EMAIL_DOMAINS)
         email = f"{base_email}@{domain}"
         suffix = 1
@@ -461,16 +1587,24 @@ def build_customers(n: int) -> list[Customer]:
         street = f"{rng.choice(STREET_TYPES)} {rng.choice(STREET_NAMES)} {rng.randint(1, 200)}"
         postal_code = f"{postal_prefix[:2]}{rng.randint(0, 99):03d}"
         phone = f"+346{rng.randint(0, 9)}{rng.randint(1000000, 9999999)}"
-        customers.append(Customer(
-            id=str(uuid.uuid4()), email=email, full_name=full_name, phone=phone,
-            city=city, postal_code=postal_code, street=street,
-        ))
+        customers.append(
+            Customer(
+                id=str(uuid.uuid4()),
+                email=email,
+                full_name=full_name,
+                phone=phone,
+                city=city,
+                postal_code=postal_code,
+                street=street,
+            )
+        )
     return customers
 
 
 # ---------------------------------------------------------------------------
 # 3. Productos
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Product:
@@ -488,16 +1622,24 @@ def build_products() -> list[Product]:
     for category, items in PRODUCT_CATALOG.items():
         prefix = CATEGORIES[category]["prefix"]
         for idx, (name, desc, price, weight) in enumerate(items, start=1):
-            products.append(Product(
-                id=str(uuid.uuid4()), sku=f"{prefix}-{idx:03d}", name=name,
-                description=desc, category=category, price=price, weight_kg=weight,
-            ))
+            products.append(
+                Product(
+                    id=str(uuid.uuid4()),
+                    sku=f"{prefix}-{idx:03d}",
+                    name=name,
+                    description=desc,
+                    category=category,
+                    price=price,
+                    weight_kg=weight,
+                )
+            )
     return products
 
 
 # ---------------------------------------------------------------------------
 # 4. Pedidos y líneas de pedido
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class OrderItem:
@@ -522,7 +1664,11 @@ class Order:
 
 
 ORDER_STATUS_WEIGHTS = [
-    ("delivered", 78), ("shipped", 6), ("processing", 5), ("cancelled", 6), ("returned", 5),
+    ("delivered", 78),
+    ("shipped", 6),
+    ("processing", 5),
+    ("cancelled", 6),
+    ("returned", 5),
 ]
 
 
@@ -538,7 +1684,12 @@ def weighted_choice(pairs, rng_local):
 
 
 def shipping_days_for_category(category: str, rng_local) -> int:
-    heavy = {"electrodomesticos", "muebles", "jardineria_bricolaje", "deportes_aire_libre"}
+    heavy = {
+        "electrodomesticos",
+        "muebles",
+        "jardineria_bricolaje",
+        "deportes_aire_libre",
+    }
     if category in heavy:
         return rng_local.randint(4, 10)
     return rng_local.randint(1, 5)
@@ -553,8 +1704,12 @@ def next_order_number(ordered_at: datetime) -> str:
     return f"ORD-{year}-{_order_counters[year]:05d}"
 
 
-def build_orders(customers: list[Customer], products: list[Product], n_orders: int,
-                  frequent_customer_ids: set[str]) -> list[Order]:
+def build_orders(
+    customers: list[Customer],
+    products: list[Product],
+    n_orders: int,
+    frequent_customer_ids: set[str],
+) -> list[Order]:
     by_category: dict[str, list[Product]] = {}
     for p in products:
         by_category.setdefault(p.category, []).append(p)
@@ -571,10 +1726,14 @@ def build_orders(customers: list[Customer], products: list[Product], n_orders: i
             customer = rng.choice(customers)
 
         days_ago = rng.randint(3, 420)
-        ordered_at = TODAY - timedelta(days=days_ago, hours=rng.randint(0, 23), minutes=rng.randint(0, 59))
+        ordered_at = TODAY - timedelta(
+            days=days_ago, hours=rng.randint(0, 23), minutes=rng.randint(0, 59)
+        )
 
         multi_category = rng.random() < 0.2
-        chosen_categories = rng.sample(categories, 2) if multi_category else [rng.choice(categories)]
+        chosen_categories = (
+            rng.sample(categories, 2) if multi_category else [rng.choice(categories)]
+        )
 
         order_id = str(uuid.uuid4())
         order_items = []
@@ -587,29 +1746,46 @@ def build_orders(customers: list[Customer], products: list[Product], n_orders: i
                 qty = rng.choices([1, 1, 1, 2, 2, 3], k=1)[0]
                 unit_price = product.price
                 total_price = round(unit_price * qty, 2)
-                order_items.append(OrderItem(
-                    id=str(uuid.uuid4()), order_id=order_id, product=product,
-                    quantity=qty, unit_price=unit_price, total_price=total_price,
-                ))
+                order_items.append(
+                    OrderItem(
+                        id=str(uuid.uuid4()),
+                        order_id=order_id,
+                        product=product,
+                        quantity=qty,
+                        unit_price=unit_price,
+                        total_price=total_price,
+                    )
+                )
                 total_amount += total_price
         total_amount = round(total_amount, 2)
 
         status = weighted_choice(ORDER_STATUS_WEIGHTS, rng)
-        max_ship_days = max(shipping_days_for_category(oi.product.category, rng) for oi in order_items)
+        max_ship_days = max(
+            shipping_days_for_category(oi.product.category, rng) for oi in order_items
+        )
         delivered_at = None
         if status in ("delivered", "returned"):
-            delivered_at = ordered_at + timedelta(days=max_ship_days, hours=rng.randint(0, 12))
+            delivered_at = ordered_at + timedelta(
+                days=max_ship_days, hours=rng.randint(0, 12)
+            )
             if delivered_at > TODAY:
                 delivered_at = TODAY - timedelta(days=1)
                 status = "shipped"
         elif status == "shipped":
             delivered_at = None
 
-        orders.append(Order(
-            id=order_id, customer=customer, order_number=next_order_number(ordered_at),
-            status=status, total_amount=total_amount, ordered_at=ordered_at,
-            delivered_at=delivered_at, items=order_items,
-        ))
+        orders.append(
+            Order(
+                id=order_id,
+                customer=customer,
+                order_number=next_order_number(ordered_at),
+                status=status,
+                total_amount=total_amount,
+                ordered_at=ordered_at,
+                delivered_at=delivered_at,
+                items=order_items,
+            )
+        )
     return orders
 
 
@@ -619,9 +1795,27 @@ def build_orders(customers: list[Customer], products: list[Product], n_orders: i
 #    general (dataset/policies/00_marco_general_devoluciones.md, sección 5).
 # ---------------------------------------------------------------------------
 
-STORE_FAULT_REASONS = ["defective", "wrong_item_shipped", "damaged_in_transit", "missing_parts", "not_as_described"]
-CUSTOMER_FAULT_REASONS = ["changed_mind", "wrong_size", "better_price_found", "quality_issue"]
-SPECIAL_REASONS = ["allergic_reaction", "duplicate_order", "arrived_late", "assembly_issue", "incompatible", "counterfeit_suspicion"]
+STORE_FAULT_REASONS = [
+    "defective",
+    "wrong_item_shipped",
+    "damaged_in_transit",
+    "missing_parts",
+    "not_as_described",
+]
+CUSTOMER_FAULT_REASONS = [
+    "changed_mind",
+    "wrong_size",
+    "better_price_found",
+    "quality_issue",
+]
+SPECIAL_REASONS = [
+    "allergic_reaction",
+    "duplicate_order",
+    "arrived_late",
+    "assembly_issue",
+    "incompatible",
+    "counterfeit_suspicion",
+]
 
 CONDITION_FOR_REASON = {
     "defective": ["defective"],
@@ -804,18 +1998,29 @@ def sample_days(cfg_max_days: int) -> tuple[int, str]:
     return days, bucket
 
 
-def classify_case(cfg_max_days: int, days: int, condition: str, allowed_conditions: list[str],
-                   reason: str, category: str, refund_amount: float, is_frequent_returner: bool,
-                   missing_evidence: bool) -> tuple[str, str]:
+def classify_case(
+    cfg_max_days: int,
+    days: int,
+    condition: str,
+    allowed_conditions: list[str],
+    reason: str,
+    category: str,
+    refund_amount: float,
+    is_frequent_returner: bool,
+    missing_evidence: bool,
+) -> tuple[str, str]:
     diff = days - cfg_max_days
     reasons: list[str] = []
 
     hygiene_excluded = (
-        category in HYGIENE_SENSITIVE and reason in ("changed_mind", "quality_issue", "better_price_found")
+        category in HYGIENE_SENSITIVE
+        and reason in ("changed_mind", "quality_issue", "better_price_found")
         and condition in ("opened_unused", "opened_tested", "used")
     )
     condition_not_allowed = condition not in allowed_conditions and condition not in (
-        "damaged", "used", "missing_parts",
+        "damaged",
+        "used",
+        "missing_parts",
     )
 
     if hygiene_excluded:
@@ -840,18 +2045,29 @@ def classify_case(cfg_max_days: int, days: int, condition: str, allowed_conditio
         )
 
     if reason in ("allergic_reaction", "counterfeit_suspicion"):
-        reasons.append(f"motivo sensible ('{reason}') que requiere valoración humana según política general")
+        reasons.append(
+            f"motivo sensible ('{reason}') que requiere valoración humana según política general"
+        )
     if -2 <= diff <= 5:
-        reasons.append(f"solicitud en zona frontera del plazo ({days} de {cfg_max_days} días, diferencia {diff:+d})")
+        reasons.append(
+            f"solicitud en zona frontera del plazo ({days} de {cfg_max_days} días, diferencia {diff:+d})"
+        )
     if refund_amount > 100:
-        reasons.append(f"importe a reembolsar de {refund_amount:.2f} € supera el umbral de 100 € (HITL fijo de la plataforma)")
+        reasons.append(
+            f"importe a reembolsar de {refund_amount:.2f} € supera el umbral de 100 € (HITL fijo de la plataforma)"
+        )
     if is_frequent_returner:
-        reasons.append("cliente con historial de devoluciones por encima del umbral de alerta (posible abuso)")
+        reasons.append(
+            "cliente con historial de devoluciones por encima del umbral de alerta (posible abuso)"
+        )
     if missing_evidence:
         reasons.append("falta evidencia fotográfica exigible para el motivo declarado")
 
     if reasons:
-        return "human_review", "Revisión humana obligatoria: " + "; ".join(reasons) + "."
+        return (
+            "human_review",
+            "Revisión humana obligatoria: " + "; ".join(reasons) + ".",
+        )
 
     return "valid", (
         f"Solicitud dentro de plazo ({days} de {cfg_max_days} días), estado del artículo "
@@ -860,7 +2076,9 @@ def classify_case(cfg_max_days: int, days: int, condition: str, allowed_conditio
     )
 
 
-def pick_reason_and_condition(category: str, allowed_conditions: list[str]) -> tuple[str, str]:
+def pick_reason_and_condition(
+    category: str, allowed_conditions: list[str]
+) -> tuple[str, str]:
     roll = rng.random()
     if roll < 0.07:
         reason = rng.choice(SPECIAL_REASONS)
@@ -872,24 +2090,40 @@ def pick_reason_and_condition(category: str, allowed_conditions: list[str]) -> t
     candidate_conditions = CONDITION_FOR_REASON.get(reason, ["unopened"])
     # Sesgo: en categorías sensibles a higiene, favorecer condiciones "abiertas"
     # para generar suficientes casos de exclusión legal.
-    if category in HYGIENE_SENSITIVE and reason in CUSTOMER_FAULT_REASONS and rng.random() < 0.5:
+    if (
+        category in HYGIENE_SENSITIVE
+        and reason in CUSTOMER_FAULT_REASONS
+        and rng.random() < 0.5
+    ):
         condition = rng.choice(["opened_unused", "opened_tested", "used"])
     else:
         preferred = [c for c in candidate_conditions if c in allowed_conditions]
-        condition = rng.choice(preferred) if preferred else rng.choice(candidate_conditions)
+        condition = (
+            rng.choice(preferred) if preferred else rng.choice(candidate_conditions)
+        )
     return reason, condition
 
 
-def build_return_cases(orders: list[Order], target_count: int, frequent_customer_ids: set[str]) -> list[ReturnCase]:
-    eligible_orders = [o for o in orders if o.status in ("delivered", "returned") and o.delivered_at and o.items]
+def build_return_cases(
+    orders: list[Order], target_count: int, frequent_customer_ids: set[str]
+) -> list[ReturnCase]:
+    eligible_orders = [
+        o
+        for o in orders
+        if o.status in ("delivered", "returned") and o.delivered_at and o.items
+    ]
     rng.shuffle(eligible_orders)
 
     cases: list[ReturnCase] = []
     used_orders: set[str] = set()
 
     # Priorizar a los "clientes frecuentes" para simular patrones de abuso.
-    frequent_orders = [o for o in eligible_orders if o.customer.id in frequent_customer_ids]
-    other_orders = [o for o in eligible_orders if o.customer.id not in frequent_customer_ids]
+    frequent_orders = [
+        o for o in eligible_orders if o.customer.id in frequent_customer_ids
+    ]
+    other_orders = [
+        o for o in eligible_orders if o.customer.id not in frequent_customer_ids
+    ]
 
     pool = frequent_orders[:60] + other_orders
     rng.shuffle(pool)
@@ -901,7 +2135,10 @@ def build_return_cases(orders: list[Order], target_count: int, frequent_customer
             continue
         used_orders.add(order.id)
 
-        return_all = rng.random() < 0.15 and len({oi.product.category for oi in order.items}) == 1
+        return_all = (
+            rng.random() < 0.15
+            and len({oi.product.category for oi in order.items}) == 1
+        )
         if return_all:
             chosen_items = order.items
         else:
@@ -911,16 +2148,25 @@ def build_return_cases(orders: list[Order], target_count: int, frequent_customer
         cfg = CATEGORIES[category]
 
         days, bucket = sample_days(cfg["max_return_days"])
-        reason, condition = pick_reason_and_condition(category, cfg["allowed_conditions"])
+        reason, condition = pick_reason_and_condition(
+            category, cfg["allowed_conditions"]
+        )
 
         return_items_spec = []
         refund_amount = 0.0
         for oi in chosen_items:
-            qty_returned = oi.quantity if (return_all or rng.random() < 0.8) else max(1, oi.quantity - 1)
+            qty_returned = (
+                oi.quantity
+                if (return_all or rng.random() < 0.8)
+                else max(1, oi.quantity - 1)
+            )
             line_amount = oi.unit_price * qty_returned
-            if reason in CUSTOMER_FAULT_REASONS and condition in ("opened_unused", "opened_tested", "used") \
-                    and cfg["restocking_fee_percent"] > 0:
-                line_amount *= (1 - cfg["restocking_fee_percent"] / 100)
+            if (
+                reason in CUSTOMER_FAULT_REASONS
+                and condition in ("opened_unused", "opened_tested", "used")
+                and cfg["restocking_fee_percent"] > 0
+            ):
+                line_amount *= 1 - cfg["restocking_fee_percent"] / 100
             refund_amount += line_amount
             return_items_spec.append((oi, qty_returned, condition))
         refund_amount = round(refund_amount, 2)
@@ -929,8 +2175,15 @@ def build_return_cases(orders: list[Order], target_count: int, frequent_customer
         missing_evidence = reason in STORE_FAULT_REASONS and rng.random() < 0.08
 
         label, rationale = classify_case(
-            cfg["max_return_days"], days, condition, cfg["allowed_conditions"], reason,
-            category, refund_amount, is_frequent, missing_evidence,
+            cfg["max_return_days"],
+            days,
+            condition,
+            cfg["allowed_conditions"],
+            reason,
+            category,
+            refund_amount,
+            is_frequent,
+            missing_evidence,
         )
 
         created_at = order.delivered_at + timedelta(days=days, hours=rng.randint(0, 23))
@@ -938,8 +2191,14 @@ def build_return_cases(orders: list[Order], target_count: int, frequent_customer
             created_at = TODAY - timedelta(hours=rng.randint(1, 48))
 
         if label == "valid":
-            status = rng.choices(["approved", "refunded", "closed"], weights=[30, 50, 20])[0]
-            resolution = rng.choice(["full_refund", "replacement"]) if reason in STORE_FAULT_REASONS else "full_refund"
+            status = rng.choices(
+                ["approved", "refunded", "closed"], weights=[30, 50, 20]
+            )[0]
+            resolution = (
+                rng.choice(["full_refund", "replacement"])
+                if reason in STORE_FAULT_REASONS
+                else "full_refund"
+            )
             if cfg["restocking_fee_percent"] > 0 and reason in CUSTOMER_FAULT_REASONS:
                 resolution = "partial_refund"
             resolved_at = min(created_at + timedelta(days=rng.randint(1, 6)), TODAY)
@@ -958,13 +2217,25 @@ def build_return_cases(orders: list[Order], target_count: int, frequent_customer
             tracking_number = None
             notes = f"[CASE:HUMAN_REVIEW] Pendiente de aprobación manual (HITL). {rationale}"
 
-        cases.append(ReturnCase(
-            id=str(uuid.uuid4()), order=order, customer=order.customer,
-            return_items=return_items_spec, reason_category=reason, status=status,
-            resolution=resolution, refund_amount=refund_amount, notes=notes,
-            created_at=created_at, resolved_at=resolved_at, tracking_number=tracking_number,
-            label=label, rationale=rationale, days_since_delivery=days,
-        ))
+        cases.append(
+            ReturnCase(
+                id=str(uuid.uuid4()),
+                order=order,
+                customer=order.customer,
+                return_items=return_items_spec,
+                reason_category=reason,
+                status=status,
+                resolution=resolution,
+                refund_amount=refund_amount,
+                notes=notes,
+                created_at=created_at,
+                resolved_at=resolved_at,
+                tracking_number=tracking_number,
+                label=label,
+                rationale=rationale,
+                days_since_delivery=days,
+            )
+        )
 
     return cases
 
@@ -1046,7 +2317,9 @@ class ChatSession:
     expected_label: str
 
 
-def build_chat_sessions(return_cases: list["ReturnCase"], n_conversations: int) -> list[ChatSession]:
+def build_chat_sessions(
+    return_cases: list["ReturnCase"], n_conversations: int
+) -> list[ChatSession]:
     sample = rng.sample(return_cases, min(n_conversations, len(return_cases)))
     sessions: list[ChatSession] = []
 
@@ -1061,16 +2334,20 @@ def build_chat_sessions(return_cases: list["ReturnCase"], n_conversations: int) 
         t2 = t + timedelta(seconds=rng.randint(10, 40))
         messages.append(("assistant", rng.choice(ASK_ORDER_NUMBER)))
         t3 = t2 + timedelta(seconds=rng.randint(20, 90))
-        messages.append((
-            "user",
-            f"Es el pedido {case.order.order_number}. {render_reason_text(case)}",
-        ))
+        messages.append(
+            (
+                "user",
+                f"Es el pedido {case.order.order_number}. {render_reason_text(case)}",
+            )
+        )
         t4 = t3 + timedelta(seconds=rng.randint(30, 120))
-        messages.append((
-            "assistant",
-            f"Gracias, dame un momento para revisar el pedido {case.order.order_number} "
-            f"y comprobar la política de devolución de {category_label.lower()}.",
-        ))
+        messages.append(
+            (
+                "assistant",
+                f"Gracias, dame un momento para revisar el pedido {case.order.order_number} "
+                f"y comprobar la política de devolución de {category_label.lower()}.",
+            )
+        )
         t5 = t4 + timedelta(seconds=rng.randint(20, 60))
 
         rationale_short = case.rationale
@@ -1088,11 +2365,13 @@ def build_chat_sessions(return_cases: list["ReturnCase"], n_conversations: int) 
         messages.append(("assistant", closing_text))
         if case.label == "human_review":
             t6 = t5 + timedelta(seconds=rng.randint(5, 15))
-            messages.append((
-                "system",
-                f"Caso derivado a HITL: return_request_id={case.id}, "
-                f"motivo={case.reason_category}, importe={case.refund_amount:.2f} EUR.",
-            ))
+            messages.append(
+                (
+                    "system",
+                    f"Caso derivado a HITL: return_request_id={case.id}, "
+                    f"motivo={case.reason_category}, importe={case.refund_amount:.2f} EUR.",
+                )
+            )
 
         timestamps = [t, t2, t3, t4, t5]
         while len(timestamps) < len(messages):
@@ -1101,18 +2380,28 @@ def build_chat_sessions(return_cases: list["ReturnCase"], n_conversations: int) 
         session_id = str(uuid.uuid4())
         chat_messages = [
             ChatMessage(
-                id=str(uuid.uuid4()), session_id=session_id, role=role, content=content,
+                id=str(uuid.uuid4()),
+                session_id=session_id,
+                role=role,
+                content=content,
                 created_at=timestamps[i],
             )
             for i, (role, content) in enumerate(messages)
         ]
 
-        sessions.append(ChatSession(
-            id=session_id, customer_id=case.customer.id, status="closed",
-            started_at=t, ended_at=timestamps[len(messages) - 1], messages=chat_messages,
-            return_request_id=case.id, order_number=case.order.order_number,
-            expected_label=case.label,
-        ))
+        sessions.append(
+            ChatSession(
+                id=session_id,
+                customer_id=case.customer.id,
+                status="closed",
+                started_at=t,
+                ended_at=timestamps[len(messages) - 1],
+                messages=chat_messages,
+                return_request_id=case.id,
+                order_number=case.order.order_number,
+                expected_label=case.label,
+            )
+        )
 
     return sessions
 
@@ -1120,6 +2409,7 @@ def build_chat_sessions(return_cases: list["ReturnCase"], n_conversations: int) 
 # ---------------------------------------------------------------------------
 # 7. Utilidades SQL
 # ---------------------------------------------------------------------------
+
 
 def esc(value) -> str:
     if value is None:
@@ -1145,6 +2435,7 @@ def load_policy_text(filename: str) -> str:
 # 8. Generación principal
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     n_customers = 320
     n_orders = 1100
@@ -1165,22 +2456,34 @@ def main() -> None:
     policy_ids = {cat: str(uuid.uuid4()) for cat in CATEGORIES}
 
     lines: list[str] = []
-    lines.append("-- =========================================================================")
+    lines.append(
+        "-- ========================================================================="
+    )
     lines.append("-- Dataset sintético de prueba (grande) para ReFlow")
     lines.append("-- Generado por dataset/generate_dataset.py -- NO EDITAR A MANO")
-    lines.append(f"-- Semilla: {SEED} | Clientes: {len(customers)} | Productos: {len(products)} | "
-                  f"Pedidos: {len(orders)} | Devoluciones: {len(return_cases)} | "
-                  f"Conversaciones de chat: {len(chat_sessions)}")
+    lines.append(
+        f"-- Semilla: {SEED} | Clientes: {len(customers)} | Productos: {len(products)} | "
+        f"Pedidos: {len(orders)} | Devoluciones: {len(return_cases)} | "
+        f"Conversaciones de chat: {len(chat_sessions)}"
+    )
     lines.append("--")
-    lines.append("-- Este archivo es ADICIONAL a supabase/seed.sql (no lo sustituye). Pensado para")
+    lines.append(
+        "-- Este archivo es ADICIONAL a supabase/seed.sql (no lo sustituye). Pensado para"
+    )
     lines.append("-- cargarse en una base de datos ya migrada (ver dataset/README.md).")
-    lines.append("-- =========================================================================")
+    lines.append(
+        "-- ========================================================================="
+    )
     lines.append("")
 
     # customers
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- customers")
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("INSERT INTO customers (id, email, full_name, phone, address) VALUES")
     rows = []
     for c in customers:
@@ -1188,15 +2491,23 @@ def main() -> None:
             f'{{"street": "{c.street}", "city": "{c.city}", '
             f'"postal_code": "{c.postal_code}", "country": "ES"}}'
         )
-        rows.append(f"    ({esc(c.id)}, {esc(c.email)}, {esc(c.full_name)}, {esc(c.phone)}, {esc(address)}::jsonb)")
+        rows.append(
+            f"    ({esc(c.id)}, {esc(c.email)}, {esc(c.full_name)}, {esc(c.phone)}, {esc(address)}::jsonb)"
+        )
     lines.append(",\n".join(rows) + ";")
     lines.append("")
 
     # products
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- products")
-    lines.append("-- ---------------------------------------------------------------------------")
-    lines.append("INSERT INTO products (id, sku, name, description, category, price, weight_kg) VALUES")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
+    lines.append(
+        "INSERT INTO products (id, sku, name, description, category, price, weight_kg) VALUES"
+    )
     rows = []
     for p in products:
         rows.append(
@@ -1207,9 +2518,15 @@ def main() -> None:
     lines.append("")
 
     # return_policies
-    lines.append("-- ---------------------------------------------------------------------------")
-    lines.append("-- return_policies (policy_text = documento markdown completo de dataset/policies/)")
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
+    lines.append(
+        "-- return_policies (policy_text = documento markdown completo de dataset/policies/)"
+    )
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append(
         "INSERT INTO return_policies (id, category, max_return_days, requires_original_packaging, "
         "restocking_fee_percent, allowed_conditions, policy_text) VALUES"
@@ -1227,9 +2544,13 @@ def main() -> None:
     lines.append("")
 
     # orders
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- orders")
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append(
         "INSERT INTO orders (id, customer_id, order_number, status, total_amount, "
         "shipping_address, ordered_at, delivered_at) VALUES"
@@ -1248,10 +2569,16 @@ def main() -> None:
     lines.append("")
 
     # order_items
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- order_items")
-    lines.append("-- ---------------------------------------------------------------------------")
-    lines.append("INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price) VALUES")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
+    lines.append(
+        "INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price) VALUES"
+    )
     rows = []
     for o in orders:
         for oi in o.items:
@@ -1263,9 +2590,13 @@ def main() -> None:
     lines.append("")
 
     # return_requests
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- return_requests")
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append(
         "INSERT INTO return_requests (id, order_id, customer_id, status, reason, reason_category, "
         "resolution, refund_amount, tracking_number, notes, created_at, resolved_at) VALUES"
@@ -1283,9 +2614,13 @@ def main() -> None:
     lines.append("")
 
     # return_items
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- return_items")
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append(
         "INSERT INTO return_items (id, return_request_id, order_item_id, quantity, condition) VALUES"
     )
@@ -1299,9 +2634,13 @@ def main() -> None:
     lines.append("")
 
     # chat_sessions
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- chat_sessions")
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append(
         "INSERT INTO chat_sessions (id, customer_id, status, started_at, ended_at, metadata) VALUES"
     )
@@ -1321,9 +2660,13 @@ def main() -> None:
     lines.append("")
 
     # chat_messages
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append("-- chat_messages")
-    lines.append("-- ---------------------------------------------------------------------------")
+    lines.append(
+        "-- ---------------------------------------------------------------------------"
+    )
     lines.append(
         "INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES"
     )
@@ -1350,23 +2693,46 @@ def main() -> None:
         # con el riesgo de reconstruir un caso distinto al que generó la
         # etiqueta original. allowed_conditions se serializa con "|" como
         # separador (son listas cortas de valores sin "|" en su contenido).
-        writer.writerow([
-            "case_id", "order_number", "customer_email", "category", "reason_category",
-            "condition", "max_return_days", "allowed_conditions", "days_since_delivery",
-            "refund_amount", "expected_label", "return_status", "is_frequent_returner",
-            "rationale",
-        ])
+        writer.writerow(
+            [
+                "case_id",
+                "order_number",
+                "customer_email",
+                "category",
+                "reason_category",
+                "condition",
+                "max_return_days",
+                "allowed_conditions",
+                "days_since_delivery",
+                "refund_amount",
+                "expected_label",
+                "return_status",
+                "is_frequent_returner",
+                "rationale",
+            ]
+        )
         for case in return_cases:
             category = case.return_items[0][0].product.category
             condition = case.return_items[0][2]
             allowed_conditions = "|".join(CATEGORIES[category]["allowed_conditions"])
-            writer.writerow([
-                case.id, case.order.order_number, case.customer.email, category,
-                case.reason_category, condition, CATEGORIES[category]["max_return_days"],
-                allowed_conditions, case.days_since_delivery, f"{case.refund_amount:.2f}",
-                case.label, case.status, str(case.customer.id in frequent_customer_ids),
-                case.rationale,
-            ])
+            writer.writerow(
+                [
+                    case.id,
+                    case.order.order_number,
+                    case.customer.email,
+                    category,
+                    case.reason_category,
+                    condition,
+                    CATEGORIES[category]["max_return_days"],
+                    allowed_conditions,
+                    case.days_since_delivery,
+                    f"{case.refund_amount:.2f}",
+                    case.label,
+                    case.status,
+                    str(case.customer.id in frequent_customer_ids),
+                    case.rationale,
+                ]
+            )
 
     # --- estadísticas de generación ---------------------------------------
     label_counts: dict[str, int] = {}
@@ -1400,13 +2766,21 @@ def main() -> None:
         count = label_counts.get(label, 0)
         stats_lines.append(f"| {label} | {count} | {100 * count / total_cases:.1f}% |")
 
-    stats_lines += ["", "## Devoluciones generadas por categoría", "", "| Categoría | Nº devoluciones |", "|---|---|"]
+    stats_lines += [
+        "",
+        "## Devoluciones generadas por categoría",
+        "",
+        "| Categoría | Nº devoluciones |",
+        "|---|---|",
+    ]
     for cat, count in sorted(category_counts.items(), key=lambda kv: -kv[1]):
         stats_lines.append(f"| {cat} | {count} |")
 
     chat_label_counts: dict[str, int] = {}
     for session in chat_sessions:
-        chat_label_counts[session.expected_label] = chat_label_counts.get(session.expected_label, 0) + 1
+        chat_label_counts[session.expected_label] = (
+            chat_label_counts.get(session.expected_label, 0) + 1
+        )
     total_chats = len(chat_sessions) or 1
 
     stats_lines += [
@@ -1429,8 +2803,10 @@ def main() -> None:
     print(f"OK -> {OUT_SQL}")
     print(f"OK -> {OUT_EVAL_CSV}")
     print(f"OK -> {OUT_STATS}")
-    print(f"customers={len(customers)} products={len(products)} orders={len(orders)} "
-          f"returns={len(return_cases)} chat_sessions={len(chat_sessions)}")
+    print(
+        f"customers={len(customers)} products={len(products)} orders={len(orders)} "
+        f"returns={len(return_cases)} chat_sessions={len(chat_sessions)}"
+    )
     print("label distribution:", label_counts)
 
 

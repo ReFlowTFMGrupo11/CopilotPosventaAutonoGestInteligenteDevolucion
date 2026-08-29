@@ -37,7 +37,9 @@ class TestSplitIntoSections:
 class TestChunkMarkdown:
     def test_keeps_oversized_paragraph_as_its_own_chunk(self):
         """Un párrafo que ya por sí solo supera el máximo no se parte a ciegas."""
-        huge_paragraph = "palabra de relleno " * 400  # muy por encima de MAX_CHUNK_TOKENS
+        huge_paragraph = (
+            "palabra de relleno " * 400
+        )  # muy por encima de MAX_CHUNK_TOKENS
         md = "## Grande\n\n" + huge_paragraph
         chunks = chunk_markdown(md)
         assert len(chunks) == 1
@@ -106,16 +108,24 @@ class TestReplaceEmbeddings:
     @pytest.mark.asyncio
     async def test_deletes_by_policy_id_then_inserts(self):
         mock_client = MagicMock()
-        mock_client.table.return_value.delete.return_value.eq.return_value.execute = AsyncMock()
+        mock_client.table.return_value.delete.return_value.eq.return_value.execute = (
+            AsyncMock()
+        )
         mock_client.table.return_value.insert.return_value.execute = AsyncMock()
 
         inserted = await _replace_embeddings(
-            mock_client, "pol-123", ["chunk uno", "chunk dos"], [[0.1, 0.2], [0.3, 0.4]],
-            "01_x.md", category="calzado"
+            mock_client,
+            "pol-123",
+            ["chunk uno", "chunk dos"],
+            [[0.1, 0.2], [0.3, 0.4]],
+            "01_x.md",
+            category="calzado",
         )
 
         assert inserted == 2
-        mock_client.table.return_value.delete.return_value.eq.assert_called_once_with("policy_id", "pol-123")
+        mock_client.table.return_value.delete.return_value.eq.assert_called_once_with(
+            "policy_id", "pol-123"
+        )
         mock_client.table.return_value.delete.return_value.eq.return_value.execute.assert_awaited_once()
         rows = mock_client.table.return_value.insert.call_args[0][0]
         assert len(rows) == 2
@@ -127,8 +137,8 @@ class TestReplaceEmbeddings:
             "metadata": {
                 "source_doc": "01_x.md",
                 "chunk_index": 0,
-                "category": "calzado",          # ← añadido en feat(rag): filter_category
-                "policy_version": "2026-08",    # ← añadido en feat(rag): filter_category
+                "category": "calzado",  # ← añadido en feat(rag): filter_category
+                "policy_version": "2026-08",  # ← añadido en feat(rag): filter_category
             },
         }
 
@@ -137,7 +147,9 @@ class TestReplaceEmbeddings:
         """Sin category explícita, metadata['category'] debe ser 'general'
         (comportamiento del marco general con policy_id=NULL)."""
         mock_client = MagicMock()
-        mock_client.table.return_value.delete.return_value.is_.return_value.execute = AsyncMock()
+        mock_client.table.return_value.delete.return_value.is_.return_value.execute = (
+            AsyncMock()
+        )
         mock_client.table.return_value.insert.return_value.execute = AsyncMock()
 
         await _replace_embeddings(mock_client, None, ["c1"], [[0.1]], "00_marco.md")
@@ -149,17 +161,23 @@ class TestReplaceEmbeddings:
     @pytest.mark.asyncio
     async def test_deletes_by_null_policy_id_for_general_doc(self):
         mock_client = MagicMock()
-        mock_client.table.return_value.delete.return_value.is_.return_value.execute = AsyncMock()
+        mock_client.table.return_value.delete.return_value.is_.return_value.execute = (
+            AsyncMock()
+        )
         mock_client.table.return_value.insert.return_value.execute = AsyncMock()
 
         await _replace_embeddings(mock_client, None, ["c1"], [[0.1]], "00_marco.md")
 
-        mock_client.table.return_value.delete.return_value.is_.assert_called_once_with("policy_id", None)
+        mock_client.table.return_value.delete.return_value.is_.assert_called_once_with(
+            "policy_id", None
+        )
 
     @pytest.mark.asyncio
     async def test_no_insert_call_when_no_chunks(self):
         mock_client = MagicMock()
-        mock_client.table.return_value.delete.return_value.eq.return_value.execute = AsyncMock()
+        mock_client.table.return_value.delete.return_value.eq.return_value.execute = (
+            AsyncMock()
+        )
 
         inserted = await _replace_embeddings(mock_client, "pol-1", [], [], "doc.md")
 
@@ -177,8 +195,14 @@ class TestIngestDryRun:
 
     @pytest.mark.asyncio
     async def test_only_category_still_includes_general_doc(self):
-        general_chunks = len(chunk_markdown((POLICIES_DIR / GENERAL_POLICY_DOC).read_text(encoding="utf-8")))
-        category_chunks = len(chunk_markdown((POLICIES_DIR / "04_calzado.md").read_text(encoding="utf-8")))
+        general_chunks = len(
+            chunk_markdown(
+                (POLICIES_DIR / GENERAL_POLICY_DOC).read_text(encoding="utf-8")
+            )
+        )
+        category_chunks = len(
+            chunk_markdown((POLICIES_DIR / "04_calzado.md").read_text(encoding="utf-8"))
+        )
 
         total = await ingest(dry_run=True, only_category="calzado")
 
@@ -199,21 +223,22 @@ class TestIngestSkipsMissingCategory:
         salta esa categoría (no falla el script entero) y no se le llama a
         embeddings/replace; el marco general sí se procesa (no depende de
         policy_id)."""
-        with patch("data.rag.ingest_policy_embeddings.OpenAI", return_value=MagicMock()), \
-             patch(
-                 "data.rag.ingest_policy_embeddings.get_supabase_client",
-                 new_callable=AsyncMock,
-                 return_value=MagicMock(),
-             ), \
-             patch(
-                 "data.rag.ingest_policy_embeddings._get_active_policy_id",
-                 new_callable=AsyncMock,
-                 return_value=None,
-             ), \
-             patch("data.rag.ingest_policy_embeddings._embed_texts") as mock_embed, \
-             patch(
-                 "data.rag.ingest_policy_embeddings._replace_embeddings", new_callable=AsyncMock
-             ) as mock_replace:
+        with patch(
+            "data.rag.ingest_policy_embeddings.OpenAI", return_value=MagicMock()
+        ), patch(
+            "data.rag.ingest_policy_embeddings.get_supabase_client",
+            new_callable=AsyncMock,
+            return_value=MagicMock(),
+        ), patch(
+            "data.rag.ingest_policy_embeddings._get_active_policy_id",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "data.rag.ingest_policy_embeddings._embed_texts"
+        ) as mock_embed, patch(
+            "data.rag.ingest_policy_embeddings._replace_embeddings",
+            new_callable=AsyncMock,
+        ) as mock_replace:
             await ingest(only_category="calzado")
 
         mock_embed.assert_called_once()  # solo el marco general (policy_id=None)

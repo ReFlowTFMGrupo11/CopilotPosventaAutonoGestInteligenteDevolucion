@@ -57,8 +57,14 @@ def build_chat_llm(
     resolved_max_tokens = getattr(settings, f"{field}_max_tokens", None)
     return ChatOpenAI(
         model=model,
-        temperature=resolved_temperature if resolved_temperature is not None else temperature,
-        max_tokens=resolved_max_tokens if resolved_max_tokens is not None else default_max_tokens,
+        temperature=(
+            resolved_temperature if resolved_temperature is not None else temperature
+        ),
+        max_tokens=(
+            resolved_max_tokens
+            if resolved_max_tokens is not None
+            else default_max_tokens
+        ),
         timeout=settings.llm_timeout_seconds,
     )
 
@@ -77,7 +83,11 @@ def trim_history(messages: list, *, max_messages: int | None = None) -> list:
         max_messages: Tope de mensajes a conservar. Por defecto,
             ``settings.max_history_messages`` (20).
     """
-    limit = max_messages if max_messages is not None else get_settings().max_history_messages
+    limit = (
+        max_messages
+        if max_messages is not None
+        else get_settings().max_history_messages
+    )
     if limit <= 0 or len(messages) <= limit:
         return messages
     return messages[-limit:]

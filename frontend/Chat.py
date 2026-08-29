@@ -10,13 +10,17 @@ import streamlit as st
 
 from lib import api, styles
 
-st.set_page_config(page_title="Chat de devoluciones — ReFlow", page_icon="💬", layout="centered")
+st.set_page_config(
+    page_title="Chat de devoluciones — ReFlow", page_icon="💬", layout="centered"
+)
 styles.inject_css()
 styles.render_header()
 styles.render_backend_banner(api.health())
 
 if "messages" not in st.session_state:
-    st.session_state.messages = []  # cada item: {"kind": "user"|"agent"|"awaiting"|"error", "text": str}
+    st.session_state.messages = (
+        []
+    )  # cada item: {"kind": "user"|"agent"|"awaiting"|"error", "text": str}
 
 # Mensaje/selección ya aceptados pero aún no enviados al backend, y flag de
 # "hay una petición en curso": evita que un segundo envío (input o checkbox)
@@ -24,7 +28,9 @@ if "messages" not in st.session_state:
 if "processing" not in st.session_state:
     st.session_state.processing = False
 if "pending_request" not in st.session_state:
-    st.session_state.pending_request = None  # {"text": str, "selected_item_ids": list[str]}
+    st.session_state.pending_request = (
+        None  # {"text": str, "selected_item_ids": list[str]}
+    )
 
 if "thread_id" not in st.session_state:
     try:
@@ -32,7 +38,10 @@ if "thread_id" not in st.session_state:
     except httpx.HTTPError:
         st.session_state.thread_id = None
         st.session_state.messages.append(
-            {"kind": "error", "text": "No se pudo iniciar la conversación con el backend."}
+            {
+                "kind": "error",
+                "text": "No se pudo iniciar la conversación con el backend.",
+            }
         )
 
 thread_id = st.session_state.thread_id
@@ -58,7 +67,9 @@ def render_bubble(kind: str, text: str) -> None:
         if kind == "agent":
             st.write(text)
         elif kind == "awaiting":
-            st.markdown(f'<div class="reflow-awaiting">{text}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="reflow-awaiting">{text}</div>', unsafe_allow_html=True
+            )
         else:
             st.error(text)
 
@@ -78,7 +89,9 @@ def _render_item_selection(
     for item in items:
         item_id = item.get("id")
         label = f"{item.get('name','Artículo')} · cant: {item.get('quantity',1)} · precio: {item.get('unit_price')}€"
-        if item_id and st.checkbox(label, key=f"item_select_{item_id}", disabled=disabled):
+        if item_id and st.checkbox(
+            label, key=f"item_select_{item_id}", disabled=disabled
+        ):
             selected_ids.append(item_id)
             selected_names.append(item.get("name", "Artículo"))
     st.caption(f"Seleccionados: {len(selected_ids)}")
@@ -108,8 +121,8 @@ selected_item_ids: list[str] = []
 selected_item_names: list[str] = []
 selection_submitted = False
 if order_items and selection_required:
-    selected_item_ids, selected_item_names, selection_submitted = _render_item_selection(
-        order_items, disabled=processing
+    selected_item_ids, selected_item_names, selection_submitted = (
+        _render_item_selection(order_items, disabled=processing)
     )
 
 prompt = st.chat_input(
@@ -156,11 +169,16 @@ if processing and st.session_state.pending_request:
                 etype = event.get("type")
                 content = event.get("content") or ""
                 if etype == "agent_step":
-                    status.caption(f"Agente {event.get('agent', 'desconocido')} procesando...")
+                    status.caption(
+                        f"Agente {event.get('agent', 'desconocido')} procesando..."
+                    )
                 elif etype == "final":
                     kind, text = "agent", content or "(sin contenido)"
                 elif etype == "awaiting_admin":
-                    kind, text = "awaiting", content or "Tu solicitud está pendiente de revisión"
+                    kind, text = (
+                        "awaiting",
+                        content or "Tu solicitud está pendiente de revisión",
+                    )
                 elif etype == "error":
                     kind, text = "error", content or "Se ha producido un error."
         except httpx.HTTPError as exc:
@@ -170,7 +188,9 @@ if processing and st.session_state.pending_request:
         if kind == "agent":
             body.write(text)
         elif kind == "awaiting":
-            body.markdown(f'<div class="reflow-awaiting">{text}</div>', unsafe_allow_html=True)
+            body.markdown(
+                f'<div class="reflow-awaiting">{text}</div>', unsafe_allow_html=True
+            )
         else:
             body.error(text)
 

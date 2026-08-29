@@ -10,7 +10,9 @@ import streamlit as st
 
 from lib import api, styles
 
-st.set_page_config(page_title="Panel de administración — ReFlow", page_icon="🛠️", layout="wide")
+st.set_page_config(
+    page_title="Panel de administración — ReFlow", page_icon="🛠️", layout="wide"
+)
 styles.inject_css()
 styles.render_header()
 styles.render_backend_banner(api.health())
@@ -88,7 +90,19 @@ if not pending:
     st.caption("No hay devoluciones pendientes.")
 else:
     header = st.columns([2, 2, 2.2, 1.3, 3, 2.2, 1, 1])
-    for col, label in zip(header, ["Pedido", "Cliente", "Producto", "Importe", "Motivo", "Motivo decisión", "", ""]):
+    for col, label in zip(
+        header,
+        [
+            "Pedido",
+            "Cliente",
+            "Producto",
+            "Importe",
+            "Motivo",
+            "Motivo decisión",
+            "",
+            "",
+        ],
+    ):
         col.markdown(f"**{label}**")
 
     for row in pending:
@@ -100,7 +114,10 @@ else:
         c4.write(money(row.get("refund_amount")))
         c5.write(row.get("reason", "—"))
         reason = c6.text_input(
-            "Motivo", key=f"reason_{thread_id}", placeholder="Motivo (opcional)", label_visibility="collapsed"
+            "Motivo",
+            key=f"reason_{thread_id}",
+            placeholder="Motivo (opcional)",
+            label_visibility="collapsed",
         )
         if c7.button("Aprobar", key=f"approve_{thread_id}", type="primary"):
             api.approve(thread_id, reason)
@@ -113,8 +130,17 @@ else:
 
 st.markdown("### Todas las devoluciones")
 
-status_options = {"Todas": "", "Aprobadas": "approved", "Rechazadas": "rejected", "Pendientes": "pending_approval"}
-status_label = st.selectbox("Filtrar por estado", options=list(status_options.keys()), label_visibility="collapsed")
+status_options = {
+    "Todas": "",
+    "Aprobadas": "approved",
+    "Rechazadas": "rejected",
+    "Pendientes": "pending_approval",
+}
+status_label = st.selectbox(
+    "Filtrar por estado",
+    options=list(status_options.keys()),
+    label_visibility="collapsed",
+)
 
 try:
     rows = api.list_returns(status_options[status_label])
@@ -145,7 +171,9 @@ st.markdown("### Buscador de pedidos")
 with st.form("buscador_pedidos", border=False):
     col_input, col_button = st.columns([4, 1])
     order_id = col_input.text_input(
-        "order_id", placeholder="order_id (p. ej. ORD-1024)", label_visibility="collapsed"
+        "order_id",
+        placeholder="order_id (p. ej. ORD-1024)",
+        label_visibility="collapsed",
     )
     buscar = col_button.form_submit_button("🔍 Buscar")
 

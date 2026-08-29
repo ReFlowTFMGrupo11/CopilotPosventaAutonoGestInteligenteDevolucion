@@ -84,13 +84,20 @@ async def get_order_details(order_number: str) -> dict:
     """
     client = await get_supabase_client()
 
-    order_resp = await client.table("orders").select(
-        "*, customer:customers(id, email, full_name)"
-    ).eq("order_number", order_number).single().execute()
+    order_resp = (
+        await client.table("orders")
+        .select("*, customer:customers(id, email, full_name)")
+        .eq("order_number", order_number)
+        .single()
+        .execute()
+    )
 
-    items_resp = await client.table("order_items").select(
-        "*, product:products(name, sku, category, price, weight_kg)"
-    ).eq("order_id", order_resp.data["id"]).execute()
+    items_resp = (
+        await client.table("order_items")
+        .select("*, product:products(name, sku, category, price, weight_kg)")
+        .eq("order_id", order_resp.data["id"])
+        .execute()
+    )
 
     return {
         "order": order_resp.data,
@@ -111,9 +118,15 @@ async def get_customer_return_history(customer_id: str) -> dict:
     """
     client = await get_supabase_client()
 
-    returns_resp = await client.table("return_requests").select(
-        "id, order_id, status, reason, reason_category, resolution, refund_amount, created_at, resolved_at"
-    ).eq("customer_id", customer_id).order("created_at", desc=True).execute()
+    returns_resp = (
+        await client.table("return_requests")
+        .select(
+            "id, order_id, status, reason, reason_category, resolution, refund_amount, created_at, resolved_at"
+        )
+        .eq("customer_id", customer_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
 
     total_returns = len(returns_resp.data)
     approved = sum(1 for r in returns_resp.data if r["status"] == "approved")
@@ -146,7 +159,9 @@ async def search_return_policy(query: str, category: str = "") -> dict:
     client = await get_supabase_client()
 
     api_key = get_settings().openai_api_key
-    openai_client = openai.OpenAI(api_key=api_key.get_secret_value() if api_key else None)
+    openai_client = openai.OpenAI(
+        api_key=api_key.get_secret_value() if api_key else None
+    )
     # Debe ser el mismo modelo de embedding usado al indexar las políticas.
     embedding_resp = openai_client.embeddings.create(
         model="text-embedding-3-small",
@@ -169,9 +184,14 @@ async def search_return_policy(query: str, category: str = "") -> dict:
 
     policy_info = None
     if category:
-        policy_resp = await client.table("return_policies").select("*").eq(
-            "category", category
-        ).eq("active", True).single().execute()
+        policy_resp = (
+            await client.table("return_policies")
+            .select("*")
+            .eq("category", category)
+            .eq("active", True)
+            .single()
+            .execute()
+        )
         policy_info = policy_resp.data
 
     return {
@@ -227,8 +247,7 @@ async def create_return_record(
     )
 
     active_returns = [
-        row for row in (existing.data or [])
-        if row.get("status") in active_statuses
+        row for row in (existing.data or []) if row.get("status") in active_statuses
     ]
     if active_returns:
         raise ValueError(
@@ -238,9 +257,7 @@ async def create_return_record(
         )
 
     requested_item_ids = {
-        item.get("order_item_id")
-        for item in items
-        if item.get("order_item_id")
+        item.get("order_item_id") for item in items if item.get("order_item_id")
     }
     previously_returned_item_ids = {
         ret_item.get("order_item_id")
@@ -323,9 +340,12 @@ async def update_return_status(
     if status in ("approved", "rejected", "completed"):
         update_data["resolved_at"] = "now()"
 
-    resp = await client.table("return_requests").update(update_data).eq(
-        "id", return_id
-    ).execute()
+    resp = (
+        await client.table("return_requests")
+        .update(update_data)
+        .eq("id", return_id)
+        .execute()
+    )
 
     return {"updated_return": resp.data[0] if resp.data else None}
 
@@ -435,21 +455,32 @@ def _flatten_admin_row(row: dict) -> dict:
 async def list_pending_approvals() -> list[dict]:
     """Devuelve devoluciones con status pending_approval (HITL)."""
     client = await get_supabase_client()
-    resp = await client.table("return_requests").select(
-        "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, "
-        "created_at, orders(order_number), return_items(order_items(product:products(name)))"
-    ).eq("status", "pending_approval").order("created_at", desc=True).execute()
+    resp = (
+        await client.table("return_requests")
+        .select(
+            "id, thread_id, order_id, customer_id, reason, reason_category, refund_amount, "
+            "created_at, orders(order_number), return_items(order_items(product:products(name)))"
+        )
+        .eq("status", "pending_approval")
+        .order("created_at", desc=True)
+        .execute()
+    )
     return [_flatten_admin_row(row) for row in (resp.data or [])]
 
 
 async def list_returns(status: str | None = None, limit: int = 50) -> list[dict]:
     """Lista devoluciones con filtro opcional por estado."""
     client = await get_supabase_client()
-    query = client.table("return_requests").select(
-        "id, order_id, customer_id, status, reason, reason_category, refund_amount, "
-        "created_at, resolved_at, orders(order_number), "
-        "return_items(order_items(product:products(name)))"
-    ).order("created_at", desc=True).limit(limit)
+    query = (
+        client.table("return_requests")
+        .select(
+            "id, order_id, customer_id, status, reason, reason_category, refund_amount, "
+            "created_at, resolved_at, orders(order_number), "
+            "return_items(order_items(product:products(name)))"
+        )
+        .order("created_at", desc=True)
+        .limit(limit)
+    )
 
     if status:
         query = query.eq("status", status)
@@ -461,9 +492,13 @@ async def list_returns(status: str | None = None, limit: int = 50) -> list[dict]
 async def get_return_detail(return_id: str) -> dict | None:
     """Detalle de una devolución específica con sus items."""
     client = await get_supabase_client()
-    resp = await client.table("return_requests").select(
-        "*, return_items(id, order_item_id, quantity, condition)"
-    ).eq("id", return_id).single().execute()
+    resp = (
+        await client.table("return_requests")
+        .select("*, return_items(id, order_item_id, quantity, condition)")
+        .eq("id", return_id)
+        .single()
+        .execute()
+    )
     return resp.data
 
 

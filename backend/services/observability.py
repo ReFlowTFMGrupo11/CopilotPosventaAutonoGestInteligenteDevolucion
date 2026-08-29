@@ -66,7 +66,11 @@ def _host() -> str:
     con fallback a LANGFUSE_HOST (nombre usado en el resto de la docs del
     repo, p.ej. langfuse_infra/README.md), y por último LangFuse Cloud."""
     settings = get_settings()
-    return settings.langfuse_base_url or settings.langfuse_host or "https://cloud.langfuse.com"
+    return (
+        settings.langfuse_base_url
+        or settings.langfuse_host
+        or "https://cloud.langfuse.com"
+    )
 
 
 def get_langfuse() -> Optional[Any]:
@@ -77,6 +81,7 @@ def get_langfuse() -> Optional[Any]:
     if _langfuse_instance is None:
         try:
             from langfuse import Langfuse
+
             settings = get_settings()
             _langfuse_instance = Langfuse(
                 public_key=settings.langfuse_public_key,
@@ -123,6 +128,7 @@ def get_langfuse_callback() -> Optional[Any]:
             return None
         try:
             from langfuse.langchain import CallbackHandler
+
             _callback_instance = CallbackHandler(
                 public_key=get_settings().langfuse_public_key,
             )
@@ -209,7 +215,12 @@ def langfuse_links() -> dict[str, Any]:
     host = _host()
     project_id = _resolve_project_id()
     if not project_id:
-        return {"configured": True, "host": host, "sessions_url": None, "users_url": None}
+        return {
+            "configured": True,
+            "host": host,
+            "sessions_url": None,
+            "users_url": None,
+        }
 
     base = f"{host}/project/{project_id}"
     return {

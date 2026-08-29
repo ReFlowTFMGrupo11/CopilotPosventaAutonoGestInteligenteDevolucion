@@ -84,7 +84,9 @@ async def generate_shipping_label(
     c.setFont("Helvetica", 8)
     # Limita a los primeros 5 items para que quepan en la etiqueta A6.
     for item in items[:5]:
-        c.drawString(12 * mm, y, f"• {item.get('name', 'Item')} x{item.get('quantity', 1)}")
+        c.drawString(
+            12 * mm, y, f"• {item.get('name', 'Item')} x{item.get('quantity', 1)}"
+        )
         y -= 4 * mm
 
     y -= 5 * mm

@@ -49,7 +49,9 @@ async def approve_return(
             timeout=GRAPH_TURN_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="El grafo tardó demasiado en reanudarse.")
+        raise HTTPException(
+            status_code=504, detail="El grafo tardó demasiado en reanudarse."
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Error reanudando el grafo: {exc}")
 
@@ -79,7 +81,9 @@ async def reject_return(
             timeout=GRAPH_TURN_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="El grafo tardó demasiado en reanudarse.")
+        raise HTTPException(
+            status_code=504, detail="El grafo tardó demasiado en reanudarse."
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Error reanudando el grafo: {exc}")
 
