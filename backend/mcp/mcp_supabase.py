@@ -15,13 +15,6 @@ Tools:
 - update_return_status: Actualiza estado de devolución.
 """
 
-# load_dotenv: search_return_policy (en supabase_service.py) lee OPENAI_API_KEY con
-# os.getenv(), que solo ve variables de entorno reales del proceso, no el fichero
-# .env (a diferencia de SupabaseSettings, que lo lee directamente vía
-# pydantic-settings). Sin esto, el servidor arranca y get_order_details funciona,
-# pero search_return_policy falla con "Missing credentials" en cuanto necesita
-# llamar a la API de embeddings de OpenAI.
-from dotenv import load_dotenv
 # Se usa la serie 1.x del SDK "mcp" (no la 2.x, donde esta clase pasó a
 # llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
 # mcp 2.x (ver requirements.txt).
@@ -30,7 +23,13 @@ from backend.models import ReturnItem
 
 from backend.services import supabase_service
 
-load_dotenv(override=True)
+# Nota: ya no hace falta load_dotenv() aquí. search_return_policy (en
+# supabase_service.py) leía antes OPENAI_API_KEY con os.getenv() suelto, que
+# solo ve variables de entorno reales del proceso, no el fichero .env — por
+# eso este server (lanzado standalone, sin pasar por main.py) necesitaba
+# cargarlo a mano o "Missing credentials" al llamar a la API de embeddings.
+# Ahora ese valor viene de Settings (backend/config.py, pydantic-settings),
+# que lee el .env directamente sin depender de load_dotenv().
 
 mcp = FastMCP("supabase-data-policies", host="0.0.0.0", port=8001)
 

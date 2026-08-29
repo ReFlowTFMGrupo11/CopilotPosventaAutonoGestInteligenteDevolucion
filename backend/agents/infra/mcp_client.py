@@ -15,26 +15,14 @@ Requiere que los MCP servers estén levantados:
 from __future__ import annotations
 
 import json
-import os
 import logging
 from typing import Any
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
+from backend.config import get_settings
+
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Configuración de URLs (por defecto: local)
-# ---------------------------------------------------------------------------
-
-MCP_SUPABASE_URL = os.getenv("MCP_SUPABASE_URL", "http://localhost:8001/mcp")
-MCP_LOGISTICS_URL = os.getenv("MCP_LOGISTICS_URL", "http://localhost:8002/mcp")
-
-# Sin timeout, un MCP server que acepta la conexión pero no responde (o se
-# cae a media respuesta) deja el `await tool.ainvoke()` colgado para siempre,
-# sin lanzar ninguna excepción que un try/except pueda capturar.
-MCP_TIMEOUT_SECONDS = float(os.getenv("MCP_TIMEOUT_SECONDS", "30"))
-MCP_SSE_READ_TIMEOUT_SECONDS = float(os.getenv("MCP_SSE_READ_TIMEOUT_SECONDS", "60"))
 
 # Mapeo de tool → server para saber qué cliente usar
 _TOOL_SERVER_MAP = {
@@ -63,10 +51,11 @@ _tools_cache: dict[str, list[Any]] = {}
 async def _get_server_client(server_name: str) -> MultiServerMCPClient:
     """Devuelve el cliente MCP para un server concreto, creándolo si es necesario."""
     if server_name not in _clients:
+        settings = get_settings()
         if server_name == "supabase":
-            url = MCP_SUPABASE_URL
+            url = settings.mcp_supabase_url
         elif server_name == "logistics":
-            url = MCP_LOGISTICS_URL
+            url = settings.mcp_logistics_url
         else:
             raise ValueError(f"Server MCP desconocido: {server_name}")
 
@@ -74,8 +63,8 @@ async def _get_server_client(server_name: str) -> MultiServerMCPClient:
             server_name: {
                 "transport": "http",
                 "url": url,
-                "timeout": MCP_TIMEOUT_SECONDS,
-                "sse_read_timeout": MCP_SSE_READ_TIMEOUT_SECONDS,
+                "timeout": settings.mcp_timeout_seconds,
+                "sse_read_timeout": settings.mcp_sse_read_timeout_seconds,
             },
         })
         logger.info("Cliente MCP creado para server '%s' en %s", server_name, url)

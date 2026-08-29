@@ -7,7 +7,6 @@ Dos modos de consumo:
 
 import asyncio
 import logging
-import os
 import time
 import uuid
 from typing import AsyncIterator
@@ -23,6 +22,7 @@ from backend.api.schemas import (
     ChatStreamEvent,
     NewChatResponse,
 )
+from backend.config import get_settings
 from backend.services.observability import with_langfuse
 
 logger = logging.getLogger(__name__)
@@ -38,18 +38,23 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 # LangGraph corriera con el `recursion_limit` implícito del SDK (25) en vez
 # de uno explícito y documentado.
 
+# Fuente única: backend/config.py (Settings). Antes, estas tres constantes
+# se definían por duplicado aquí Y en admin.py con el mismo default cada
+# una — cambiar una sin la otra las desincronizaba sin ningún aviso.
+_settings = get_settings()
+
 # Explícito en vez de depender del default implícito de LangGraph (25).
-GRAPH_RECURSION_LIMIT = int(os.getenv("GRAPH_RECURSION_LIMIT", "25"))
+GRAPH_RECURSION_LIMIT = _settings.graph_recursion_limit
 
 # Tiempo máximo para que el grafo complete un turno completo (todas las
 # llamadas a LLM/MCP/BD que ese turno dispare). Si se agota, se cancela la
 # tarea y se informa al cliente en vez de dejar la petición colgada.
-GRAPH_TURN_TIMEOUT_SECONDS = float(os.getenv("GRAPH_TURN_TIMEOUT_SECONDS", "60"))
+GRAPH_TURN_TIMEOUT_SECONDS = _settings.graph_turn_timeout_seconds
 
 # Tope de turnos de usuario por conversación (thread_id). Protege frente a
 # conversaciones sin fin (bug de frontend, o un cliente reenviando el mismo
 # hilo indefinidamente) que harían crecer coste y contexto sin límite.
-MAX_CONVERSATION_TURNS = int(os.getenv("MAX_CONVERSATION_TURNS", "40"))
+MAX_CONVERSATION_TURNS = _settings.max_conversation_turns
 
 _TURN_LIMIT_MSG = (
     "Esta conversación ha alcanzado el número máximo de turnos permitido. "

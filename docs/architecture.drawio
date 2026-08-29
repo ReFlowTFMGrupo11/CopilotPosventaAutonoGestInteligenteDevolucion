@@ -97,7 +97,7 @@
                 <mxCell id="svc_logis" value="logistics_service.py&#xa;(etiquetas PDF)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="1080" y="305" width="130" height="50" as="geometry"/>
                 </mxCell>
-                <mxCell id="llm" value="🧠 OpenAI&#xa;gpt-5-nano" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" parent="1" vertex="1">
+                <mxCell id="llm" value="🧠 OpenAI&#xa;gpt-5-mini" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" parent="1" vertex="1">
                     <mxGeometry x="920" y="510" width="130" height="60" as="geometry"/>
                 </mxCell>
                 <mxCell id="embeddings" value="📐 text-embedding&#xa;-3-small" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
@@ -156,6 +156,11 @@
                 <mxCell id="c12" value="supabase_service&#xa;(consultas admin)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;dashed=1;" edge="1" parent="1" source="admin_api" target="svc_supa">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
+                <mxCell id="c14" value="/api/admin/observability&#xa;(enlaces a coste/sesión)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="admin_api" target="langfuse_group">
+                    <mxGeometry x="-0.2" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
                 <mxCell id="legend" value="&lt;b&gt;Leyenda:&lt;/b&gt;&#xa;── Agentes → MCP → Services → BD&#xa;- - FastAPI → Services → BD&#xa;── FastAPI → LangGraph (resume HITL)" style="shape=note;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
                     <mxGeometry x="40" y="470" width="280" height="70" as="geometry"/>
                 </mxCell>
@@ -176,6 +181,20 @@
                 </mxCell>
                 <mxCell id="langfuse_note" value="&lt;i&gt;Opcional: si LANGFUSE_PUBLIC_KEY/SECRET_KEY&#xa;no están en .env, with_langfuse() devuelve&#xa;el config tal cual — la app funciona igual&#xa;sin trazas (ver langfuse_infra/README.md).&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
                     <mxGeometry x="360" y="650" width="250" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="ingest_rag" value="📥 Ingesta RAG (offline)&#xa;data/rag/ingest_policy_embeddings.py&#xa;(script manual, no forma parte del runtime)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="690" width="260" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="c15" value="popula policy_embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#00994d;dashed=1;" edge="1" parent="1" source="ingest_rag" target="supabase">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="900" y="720"/>
+                            <mxPoint x="900" y="455"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c16" value="genera embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="ingest_rag" target="embeddings">
+                    <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
