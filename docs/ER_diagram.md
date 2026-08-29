@@ -54,6 +54,7 @@ erDiagram
         NUMERIC refund_amount
         TEXT tracking_number
         TEXT notes
+        TEXT thread_id
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
         TIMESTAMPTZ resolved_at
