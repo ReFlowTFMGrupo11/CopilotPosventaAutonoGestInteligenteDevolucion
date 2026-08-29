@@ -182,6 +182,20 @@
                 <mxCell id="langfuse_note" value="&lt;i&gt;Opcional: si LANGFUSE_PUBLIC_KEY/SECRET_KEY&#xa;no están en .env, with_langfuse() devuelve&#xa;el config tal cual — la app funciona igual&#xa;sin trazas (ver langfuse_infra/README.md).&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
                     <mxGeometry x="360" y="650" width="250" height="70" as="geometry"/>
                 </mxCell>
+                <mxCell id="ingest_rag" value="📥 Ingesta RAG (offline)&#xa;data/rag/ingest_policy_embeddings.py&#xa;(script manual, no forma parte del runtime)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=10;" parent="1" vertex="1">
+                    <mxGeometry x="920" y="690" width="260" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="c15" value="popula policy_embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#00994d;dashed=1;" edge="1" parent="1" source="ingest_rag" target="supabase">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="900" y="720"/>
+                            <mxPoint x="900" y="455"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="c16" value="genera embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="ingest_rag" target="embeddings">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
             </root>
         </mxGraphModel>
     </diagram>
