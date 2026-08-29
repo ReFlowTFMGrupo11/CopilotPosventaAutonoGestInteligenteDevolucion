@@ -9,6 +9,14 @@ from backend.models import TriageOutput
 from backend.agents.nodes.triage import triage_agent, fetch_order_data
 
 
+def _structured_result(parsed):
+    """Forma real de with_structured_output(schema, include_raw=True).ainvoke()
+    (ver backend/agents/usage_tracking.py::invoke_structured_tracked) — un
+    dict con el AIMessage crudo (de donde sale usage_metadata) y el objeto
+    Pydantic ya parseado, no el objeto parseado a secas."""
+    return {"raw": AIMessage(content=""), "parsed": parsed, "parsing_error": None}
+
+
 class TestTriageAgent:
     """Tests para el nodo de triaje."""
 
@@ -24,7 +32,9 @@ class TestTriageAgent:
         )
 
         mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(return_value=mock_response)
+        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=_structured_result(mock_response)
+        )
 
         state = {
             "messages": [HumanMessage(content="Quiero devolver un producto")],
@@ -56,7 +66,9 @@ class TestTriageAgent:
         )
 
         mock_llm = MagicMock()
-        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(return_value=triage_out)
+        mock_llm.with_structured_output.return_value.ainvoke = AsyncMock(
+            return_value=_structured_result(triage_out)
+        )
 
         state = {
             "messages": [HumanMessage(content="Mi pedido es ORD-2026-00123, el artículo está roto")],

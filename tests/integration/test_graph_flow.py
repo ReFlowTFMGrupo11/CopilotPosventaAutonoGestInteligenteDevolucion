@@ -61,9 +61,13 @@ class TestGraphCompilation:
 
 
 def _mock_llm_with_structured_output(output) -> MagicMock:
-    """Mock de un ChatOpenAI que usa .with_structured_output(...).ainvoke()."""
+    """Mock de un ChatOpenAI que usa .with_structured_output(..., include_raw=True).ainvoke()
+    (ver backend/agents/usage_tracking.py::invoke_structured_tracked) — la forma real es un
+    dict con "raw"/"parsed"/"parsing_error", no el objeto Pydantic a secas."""
     llm = MagicMock()
-    llm.with_structured_output.return_value.ainvoke = AsyncMock(return_value=output)
+    llm.with_structured_output.return_value.ainvoke = AsyncMock(
+        return_value={"raw": AIMessage(content=""), "parsed": output, "parsing_error": None}
+    )
     return llm
 
 

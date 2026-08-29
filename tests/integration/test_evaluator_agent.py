@@ -3,16 +3,23 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from backend.agents.nodes.evaluator import evaluator_agent
 from backend.models import ItemEligibility, PolicyEvaluationOutput
 
 
 def _mock_llm_with_structured_output(output: PolicyEvaluationOutput | None) -> MagicMock:
-    """Construye un LLM mockeado que imita ``llm.with_structured_output(...).ainvoke``."""
+    """Construye un LLM mockeado que imita ``llm.with_structured_output(...).ainvoke``.
+
+    Devuelve la forma real de ``include_raw=True`` (dict con "raw"/"parsed"/
+    "parsing_error", ver backend/agents/usage_tracking.py::
+    invoke_structured_tracked), no el objeto Pydantic a secas.
+    """
     structured = MagicMock()
-    structured.ainvoke = AsyncMock(return_value=output)
+    structured.ainvoke = AsyncMock(
+        return_value={"raw": AIMessage(content=""), "parsed": output, "parsing_error": None}
+    )
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
     return llm
