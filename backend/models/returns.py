@@ -12,7 +12,6 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-
 # ── Modelos de catálogo / pedido ───────────────────────────────────────────
 
 
@@ -21,8 +20,12 @@ class Product(BaseModel):
 
     name: Optional[str] = Field(default=None, description="Nombre del producto.")
     sku: Optional[str] = Field(default=None, description="SKU único.")
-    category: Optional[str] = Field(default=None, description="Categoría (electronics, moda, etc.).")
-    price: Optional[float] = Field(default=None, description="Precio unitario en euros.")
+    category: Optional[str] = Field(
+        default=None, description="Categoría (electronics, moda, etc.)."
+    )
+    price: Optional[float] = Field(
+        default=None, description="Precio unitario en euros."
+    )
     weight_kg: Optional[float] = Field(default=None, description="Peso en kg.")
 
 
@@ -33,7 +36,9 @@ class OrderItem(BaseModel):
     order_id: Optional[str] = Field(default=None, description="UUID del pedido.")
     quantity: Optional[int] = Field(default=None, description="Unidades compradas.")
     unit_price: Optional[float] = Field(default=None, description="Precio unitario.")
-    total_price: Optional[float] = Field(default=None, description="Precio total de la línea.")
+    total_price: Optional[float] = Field(
+        default=None, description="Precio total de la línea."
+    )
     product: Optional[Product] = Field(default=None, description="Producto asociado.")
 
 
@@ -80,12 +85,15 @@ class ItemEligibility(BaseModel):
     """
 
     order_item_id: str = Field(description="UUID del order_item evaluado.")
-    is_eligible: bool = Field(description="Si este artículo concreto es elegible para devolución.")
+    is_eligible: bool = Field(
+        description="Si este artículo concreto es elegible para devolución."
+    )
     eligibility_reason: str = Field(
         description="Explicación de la decisión para este artículo (criterio de política aplicado)."
     )
     refund_amount: float = Field(
-        default=0.0, description="Importe a reembolsar por este artículo (0 si no es elegible)."
+        default=0.0,
+        description="Importe a reembolsar por este artículo (0 si no es elegible).",
     )
     policy_category: str = Field(
         default="", description="Categoría de política aplicada a este artículo."

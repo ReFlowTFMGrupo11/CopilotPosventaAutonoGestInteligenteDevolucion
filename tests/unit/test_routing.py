@@ -2,7 +2,11 @@
 
 import pytest
 
-from backend.agents.graph import route_after_triage, route_after_fetch, route_after_evaluator
+from backend.agents.graph import (
+    route_after_triage,
+    route_after_fetch,
+    route_after_evaluator,
+)
 
 
 class TestRouteAfterTriage:

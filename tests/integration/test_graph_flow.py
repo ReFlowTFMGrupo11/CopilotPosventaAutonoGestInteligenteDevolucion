@@ -37,7 +37,11 @@ from unittest.mock import AsyncMock, patch, MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from backend.agents.graph import build_return_graph, route_after_triage, route_after_evaluator
+from backend.agents.graph import (
+    build_return_graph,
+    route_after_triage,
+    route_after_evaluator,
+)
 from backend.models import ItemEligibility, PolicyEvaluationOutput, TriageOutput
 
 
@@ -56,7 +60,14 @@ class TestGraphCompilation:
         graph = await build_return_graph()
         # El grafo compilado tiene un atributo con los nodos
         node_names = set(graph.get_graph().nodes.keys())
-        expected = {"triage", "fetch_order_data", "evaluator", "resolver", "reject", "hitl_admin"}
+        expected = {
+            "triage",
+            "fetch_order_data",
+            "evaluator",
+            "resolver",
+            "reject",
+            "hitl_admin",
+        }
         assert expected.issubset(node_names)
 
 
@@ -94,15 +105,17 @@ class TestGraphFlow:
             response_to_customer="Perfecto, tramitando tu devolución.",
             items_confirmed=True,
         )
-        eval_out = PolicyEvaluationOutput(items=[
-            ItemEligibility(
-                order_item_id="oi-001-uuid",
-                is_eligible=True,
-                eligibility_reason="Defectuoso, cumple la política de la categoría.",
-                refund_amount=79.99,
-                policy_category="electronics",
-            ),
-        ])
+        eval_out = PolicyEvaluationOutput(
+            items=[
+                ItemEligibility(
+                    order_item_id="oi-001-uuid",
+                    is_eligible=True,
+                    eligibility_reason="Defectuoso, cumple la política de la categoría.",
+                    refund_amount=79.99,
+                    policy_category="electronics",
+                ),
+            ]
+        )
         resolve_response = AIMessage(
             content="¡Tu devolución ha sido aprobada! Tracking: RF-ABC1234567"
         )
@@ -112,10 +125,12 @@ class TestGraphFlow:
             return_value=_mock_llm_with_structured_output(triage_out),
         ), patch(
             "backend.agents.nodes.triage.get_order_details",
-            new_callable=AsyncMock, return_value=mock_order_details,
+            new_callable=AsyncMock,
+            return_value=mock_order_details,
         ), patch(
             "backend.agents.nodes.triage.get_customer_return_history",
-            new_callable=AsyncMock, return_value=mock_return_history_clean,
+            new_callable=AsyncMock,
+            return_value=mock_return_history_clean,
         ), patch(
             "backend.agents.nodes.evaluator._build_llm",
             return_value=_mock_llm_with_structured_output(eval_out),
@@ -134,23 +149,34 @@ class TestGraphFlow:
             return_value={"return_request": {"id": "ret-1"}, "items_created": 1},
         ), patch(
             "backend.agents.nodes.resolution.generate_shipping_label",
-            new_callable=AsyncMock, return_value=mock_label_result,
+            new_callable=AsyncMock,
+            return_value=mock_label_result,
         ), patch(
             "backend.agents.nodes.resolution.update_return_status",
-            new_callable=AsyncMock, return_value={"updated_return": {"id": "ret-1"}},
+            new_callable=AsyncMock,
+            return_value={"updated_return": {"id": "ret-1"}},
         ), patch(
             "backend.agents.nodes.resolution.send_customer_notification",
-            new_callable=AsyncMock, return_value={"status": "sent_simulated"},
+            new_callable=AsyncMock,
+            return_value={"status": "sent_simulated"},
         ):
             config = {"configurable": {"thread_id": "test-flow-1"}}
             result = await graph.ainvoke(
                 {
-                    "messages": [HumanMessage(content="Sí, confirmo la devolución de los auriculares")],
+                    "messages": [
+                        HumanMessage(
+                            content="Sí, confirmo la devolución de los auriculares"
+                        )
+                    ],
                     "order_number": "ORD-2026-00123",
                     "reason": "Defectuoso",
                     "reason_category": "defective",
                     "items_to_return": [
-                        {"order_item_id": "oi-001-uuid", "quantity": 1, "condition": "defective"}
+                        {
+                            "order_item_id": "oi-001-uuid",
+                            "quantity": 1,
+                            "condition": "defective",
+                        }
                     ],
                     "thread_id": "test-flow-1",
                 },
@@ -171,15 +197,17 @@ class TestGraphFlow:
             response_to_customer="Entendido, reviso tu solicitud.",
             items_confirmed=True,
         )
-        eval_out = PolicyEvaluationOutput(items=[
-            ItemEligibility(
-                order_item_id="oi-001-uuid",
-                is_eligible=False,
-                eligibility_reason="Producto usado; cambio de opinión fuera de plazo.",
-                refund_amount=0.0,
-                policy_category="electronics",
-            ),
-        ])
+        eval_out = PolicyEvaluationOutput(
+            items=[
+                ItemEligibility(
+                    order_item_id="oi-001-uuid",
+                    is_eligible=False,
+                    eligibility_reason="Producto usado; cambio de opinión fuera de plazo.",
+                    refund_amount=0.0,
+                    policy_category="electronics",
+                ),
+            ]
+        )
         reject_response = AIMessage(
             content="Lamentamos informarte que no podemos procesar tu devolución..."
         )
@@ -189,10 +217,12 @@ class TestGraphFlow:
             return_value=_mock_llm_with_structured_output(triage_out),
         ), patch(
             "backend.agents.nodes.triage.get_order_details",
-            new_callable=AsyncMock, return_value=mock_order_details,
+            new_callable=AsyncMock,
+            return_value=mock_order_details,
         ), patch(
             "backend.agents.nodes.triage.get_customer_return_history",
-            new_callable=AsyncMock, return_value=mock_return_history_clean,
+            new_callable=AsyncMock,
+            return_value=mock_return_history_clean,
         ), patch(
             "backend.agents.nodes.evaluator._build_llm",
             return_value=_mock_llm_with_structured_output(eval_out),
@@ -212,7 +242,11 @@ class TestGraphFlow:
                     "reason": "Ya no lo quiero",
                     "reason_category": "no_longer_needed",
                     "items_to_return": [
-                        {"order_item_id": "oi-001-uuid", "quantity": 1, "condition": "used"}
+                        {
+                            "order_item_id": "oi-001-uuid",
+                            "quantity": 1,
+                            "condition": "used",
+                        }
                     ],
                     "thread_id": "test-flow-2",
                 },

@@ -56,7 +56,7 @@ def stream_chat(
             while "\n\n" in buffer:
                 raw, buffer = buffer.split("\n\n", 1)
                 data = "".join(
-                    line[len("data:"):].strip()
+                    line[len("data:") :].strip()
                     for line in raw.splitlines()
                     if line.startswith("data:")
                 )
@@ -84,13 +84,17 @@ def list_returns(status: str = "") -> list[dict]:
 
 
 def approve(thread_id: str, reason: str = "") -> dict:
-    r = httpx.post(f"{API_BASE}/api/admin/{thread_id}/approve", json={"reason": reason}, timeout=30)
+    r = httpx.post(
+        f"{API_BASE}/api/admin/{thread_id}/approve", json={"reason": reason}, timeout=30
+    )
     r.raise_for_status()
     return r.json()
 
 
 def reject(thread_id: str, reason: str = "") -> dict:
-    r = httpx.post(f"{API_BASE}/api/admin/{thread_id}/reject", json={"reason": reason}, timeout=30)
+    r = httpx.post(
+        f"{API_BASE}/api/admin/{thread_id}/reject", json={"reason": reason}, timeout=30
+    )
     r.raise_for_status()
     return r.json()
 

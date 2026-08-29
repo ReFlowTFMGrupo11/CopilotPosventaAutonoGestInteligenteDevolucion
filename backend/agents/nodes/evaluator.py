@@ -70,7 +70,9 @@ def _build_llm() -> ChatOpenAI:
 
     Modelo configurable vía ``EVALUATOR_MODEL``; por defecto ``gpt-5-mini``.
     """
-    return build_chat_llm("EVALUATOR_MODEL", temperature=0.0)  # determinista para auditoría
+    return build_chat_llm(
+        "EVALUATOR_MODEL", temperature=0.0
+    )  # determinista para auditoría
 
 
 def _product_name_by_item_id(order_details: dict[str, Any]) -> dict[str, str]:
@@ -79,7 +81,9 @@ def _product_name_by_item_id(order_details: dict[str, Any]) -> dict[str, str]:
     for raw_item in order_details.get("items", []):
         oi = OrderItem.model_validate(raw_item)
         if oi.id:
-            names[oi.id] = oi.product.name if oi.product and oi.product.name else "Artículo"
+            names[oi.id] = (
+                oi.product.name if oi.product and oi.product.name else "Artículo"
+            )
     return names
 
 
@@ -131,7 +135,11 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
                 try:
                     policy_by_category[category] = json.loads(text)
                 except json.JSONDecodeError:
-                    logger.warning("RAG policy no devolvió JSON válido para '%s': %s", category, text[:200])
+                    logger.warning(
+                        "RAG policy no devolvió JSON válido para '%s': %s",
+                        category,
+                        text[:200],
+                    )
                     policy_by_category[category] = {"error": text}
             else:
                 policy_by_category[category] = raw_policy
@@ -194,7 +202,9 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
     }
 
     if result is None or not result.items:
-        logger.warning("Evaluador: structured output vacío o None; se marca todo como no elegible.")
+        logger.warning(
+            "Evaluador: structured output vacío o None; se marca todo como no elegible."
+        )
         fallback_reason = "No se pudo evaluar la política correctamente."
         updates["items_eligibility"] = [
             {
@@ -202,7 +212,9 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
                 "is_eligible": False,
                 "eligibility_reason": fallback_reason,
                 "refund_amount": 0.0,
-                "policy_category": product_categories.get(item.get("order_item_id"), ""),
+                "policy_category": product_categories.get(
+                    item.get("order_item_id"), ""
+                ),
             }
             for item in items_to_return
         ]
@@ -239,7 +251,9 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
         category = product_categories.get(oid, "")
         policy_info = (policy_by_category.get(category) or {}).get("policy_info") or {}
         restocking_fee = policy_info.get("restocking_fee_percent") or 0.0
-        deterministic_refund = compute_refund(order_items_raw, [matching_item], restocking_fee)
+        deterministic_refund = compute_refund(
+            order_items_raw, [matching_item], restocking_fee
+        )
 
         verdict, reasons = deterministic_check(
             days_since_order=days_since_order,
@@ -264,7 +278,8 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
                 any_needs_review = True
                 logger.info(
                     "Evaluador: artículo %s marcado para revisión humana: %s",
-                    oid, "; ".join(reasons),
+                    oid,
+                    "; ".join(reasons),
                 )
 
     updates["items_eligibility"] = items_eligibility

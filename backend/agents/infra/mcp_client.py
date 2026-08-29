@@ -59,14 +59,16 @@ async def _get_server_client(server_name: str) -> MultiServerMCPClient:
         else:
             raise ValueError(f"Server MCP desconocido: {server_name}")
 
-        _clients[server_name] = MultiServerMCPClient({
-            server_name: {
-                "transport": "http",
-                "url": url,
-                "timeout": settings.mcp_timeout_seconds,
-                "sse_read_timeout": settings.mcp_sse_read_timeout_seconds,
-            },
-        })
+        _clients[server_name] = MultiServerMCPClient(
+            {
+                server_name: {
+                    "transport": "http",
+                    "url": url,
+                    "timeout": settings.mcp_timeout_seconds,
+                    "sse_read_timeout": settings.mcp_sse_read_timeout_seconds,
+                },
+            }
+        )
         logger.info("Cliente MCP creado para server '%s' en %s", server_name, url)
 
     return _clients[server_name]
@@ -155,7 +157,9 @@ async def get_customer_return_history(customer_id: str) -> dict:
 
 async def search_return_policy(query: str, category: str = "") -> dict:
     """Búsqueda RAG de políticas via MCP."""
-    return await call_tool("search_return_policy", {"query": query, "category": category})
+    return await call_tool(
+        "search_return_policy", {"query": query, "category": category}
+    )
 
 
 async def create_return_record(
@@ -169,16 +173,19 @@ async def create_return_record(
     thread_id: str = "",
 ) -> dict:
     """Crea registro de devolución via MCP."""
-    return await call_tool("create_return_record", {
-        "order_id": order_id,
-        "customer_id": customer_id,
-        "reason": reason,
-        "reason_category": reason_category,
-        "refund_amount": refund_amount,
-        "items": items,
-        "notes": notes,
-        "thread_id": thread_id,
-    })
+    return await call_tool(
+        "create_return_record",
+        {
+            "order_id": order_id,
+            "customer_id": customer_id,
+            "reason": reason,
+            "reason_category": reason_category,
+            "refund_amount": refund_amount,
+            "items": items,
+            "notes": notes,
+            "thread_id": thread_id,
+        },
+    )
 
 
 async def update_return_status(
@@ -188,12 +195,15 @@ async def update_return_status(
     notes: str = "",
 ) -> dict:
     """Actualiza estado de devolución via MCP."""
-    return await call_tool("update_return_status", {
-        "return_id": return_id,
-        "status": status,
-        "resolution": resolution,
-        "notes": notes,
-    })
+    return await call_tool(
+        "update_return_status",
+        {
+            "return_id": return_id,
+            "status": status,
+            "resolution": resolution,
+            "notes": notes,
+        },
+    )
 
 
 async def generate_shipping_label(
@@ -203,12 +213,15 @@ async def generate_shipping_label(
     customer_address: str = "",
 ) -> dict:
     """Genera etiqueta de transporte via MCP."""
-    return await call_tool("generate_shipping_label", {
-        "order_id": order_id,
-        "items": items,
-        "customer_name": customer_name,
-        "customer_address": customer_address,
-    })
+    return await call_tool(
+        "generate_shipping_label",
+        {
+            "order_id": order_id,
+            "items": items,
+            "customer_name": customer_name,
+            "customer_address": customer_address,
+        },
+    )
 
 
 async def send_customer_notification(
@@ -218,9 +231,12 @@ async def send_customer_notification(
     attachment_path: str = "",
 ) -> dict:
     """Envía notificación al cliente via MCP."""
-    return await call_tool("send_customer_notification", {
-        "email": email,
-        "message": message,
-        "subject": subject,
-        "attachment_path": attachment_path,
-    })
+    return await call_tool(
+        "send_customer_notification",
+        {
+            "email": email,
+            "message": message,
+            "subject": subject,
+            "attachment_path": attachment_path,
+        },
+    )

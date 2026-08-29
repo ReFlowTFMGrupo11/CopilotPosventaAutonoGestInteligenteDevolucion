@@ -55,18 +55,24 @@ class TestPolicyEvaluatorMixedCategories:
         ``items_to_return`` (electrónica y cosmética), no solo por la
         categoría del primer artículo del pedido.
         """
-        mock_output = PolicyEvaluationOutput(items=[
-            ItemEligibility(
-                order_item_id="oi-electronics-uuid", is_eligible=True,
-                eligibility_reason="Defectuoso, dentro de plazo", refund_amount=79.99,
-                policy_category="electronica_informatica",
-            ),
-            ItemEligibility(
-                order_item_id="oi-cosmetics-uuid", is_eligible=False,
-                eligibility_reason="Precinto de higiene retirado por cambio de opinión",
-                refund_amount=0.0, policy_category="cosmetica_perfumeria",
-            ),
-        ])
+        mock_output = PolicyEvaluationOutput(
+            items=[
+                ItemEligibility(
+                    order_item_id="oi-electronics-uuid",
+                    is_eligible=True,
+                    eligibility_reason="Defectuoso, dentro de plazo",
+                    refund_amount=79.99,
+                    policy_category="electronica_informatica",
+                ),
+                ItemEligibility(
+                    order_item_id="oi-cosmetics-uuid",
+                    is_eligible=False,
+                    eligibility_reason="Precinto de higiene retirado por cambio de opinión",
+                    refund_amount=0.0,
+                    policy_category="cosmetica_perfumeria",
+                ),
+            ]
+        )
         mock_llm = _mock_llm_with_structured_output(mock_output)
 
         async def search_side_effect(query, category):
@@ -86,12 +92,15 @@ class TestPolicyEvaluatorMixedCategories:
             "items_to_return": sample_items_to_return_mixed,
         }
 
-        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.evaluator.search_return_policy", search_mock):
+        with patch(
+            "backend.agents.nodes.evaluator._build_llm", return_value=mock_llm
+        ), patch("backend.agents.nodes.evaluator.search_return_policy", search_mock):
             await evaluator_agent(state)
 
         assert search_mock.await_count == 2
-        queried_categories = {call.kwargs["category"] for call in search_mock.await_args_list}
+        queried_categories = {
+            call.kwargs["category"] for call in search_mock.await_args_list
+        }
         assert queried_categories == {"electronica_informatica", "cosmetica_perfumeria"}
 
     @pytest.mark.asyncio
@@ -107,18 +116,24 @@ class TestPolicyEvaluatorMixedCategories:
         artículo: auriculares elegibles, perfume no elegible. El reembolso
         agregado solo cuenta el artículo elegible.
         """
-        mock_output = PolicyEvaluationOutput(items=[
-            ItemEligibility(
-                order_item_id="oi-electronics-uuid", is_eligible=True,
-                eligibility_reason="Defectuoso, dentro de plazo de 30 días", refund_amount=79.99,
-                policy_category="electronica_informatica",
-            ),
-            ItemEligibility(
-                order_item_id="oi-cosmetics-uuid", is_eligible=False,
-                eligibility_reason="Precinto de higiene retirado por cambio de opinión",
-                refund_amount=0.0, policy_category="cosmetica_perfumeria",
-            ),
-        ])
+        mock_output = PolicyEvaluationOutput(
+            items=[
+                ItemEligibility(
+                    order_item_id="oi-electronics-uuid",
+                    is_eligible=True,
+                    eligibility_reason="Defectuoso, dentro de plazo de 30 días",
+                    refund_amount=79.99,
+                    policy_category="electronica_informatica",
+                ),
+                ItemEligibility(
+                    order_item_id="oi-cosmetics-uuid",
+                    is_eligible=False,
+                    eligibility_reason="Precinto de higiene retirado por cambio de opinión",
+                    refund_amount=0.0,
+                    policy_category="cosmetica_perfumeria",
+                ),
+            ]
+        )
         mock_llm = _mock_llm_with_structured_output(mock_output)
 
         async def search_side_effect(query, category):
@@ -136,8 +151,13 @@ class TestPolicyEvaluatorMixedCategories:
             "items_to_return": sample_items_to_return_mixed,
         }
 
-        with patch("backend.agents.nodes.evaluator._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.evaluator.search_return_policy", new_callable=AsyncMock, side_effect=search_side_effect):
+        with patch(
+            "backend.agents.nodes.evaluator._build_llm", return_value=mock_llm
+        ), patch(
+            "backend.agents.nodes.evaluator.search_return_policy",
+            new_callable=AsyncMock,
+            side_effect=search_side_effect,
+        ):
             result = await evaluator_agent(state)
 
         by_item = {e["order_item_id"]: e for e in result["items_eligibility"]}
@@ -216,11 +236,17 @@ class TestResolutionMixedCategories:
             "order_details": mock_order_details_mixed_categories,
         }
 
-        with patch("backend.agents.nodes.resolution._build_llm", return_value=mock_llm), \
-             patch("backend.agents.nodes.resolution.generate_shipping_label", label_mock), \
-             patch("backend.agents.nodes.resolution.create_return_record", create_return_mock), \
-             patch("backend.agents.nodes.resolution.update_return_status", update_status_mock), \
-             patch("backend.agents.nodes.resolution.send_customer_notification", notify_mock):
+        with patch(
+            "backend.agents.nodes.resolution._build_llm", return_value=mock_llm
+        ), patch(
+            "backend.agents.nodes.resolution.generate_shipping_label", label_mock
+        ), patch(
+            "backend.agents.nodes.resolution.create_return_record", create_return_mock
+        ), patch(
+            "backend.agents.nodes.resolution.update_return_status", update_status_mock
+        ), patch(
+            "backend.agents.nodes.resolution.send_customer_notification", notify_mock
+        ):
             command = await resolution_agent(state)
 
         # La etiqueta de envío SOLO incluye el artículo elegible.

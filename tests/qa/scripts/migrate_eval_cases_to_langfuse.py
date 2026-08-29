@@ -107,14 +107,25 @@ def migrate(limit: int | None = None, force: bool = False) -> None:
     lf.flush()
     logger.info(
         "Listo: %d items nuevos subidos a '%s' (%d ya existían, %d en total en el CSV).",
-        created, DATASET_NAME, len(already), len(rows),
+        created,
+        DATASET_NAME,
+        len(already),
+        len(rows),
     )
 
 
 def _parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--limit", type=int, default=None, help="Subir solo los primeros N casos.")
-    p.add_argument("--force", action="store_true", help="Subir aunque ya existan items con ese case_id.")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--limit", type=int, default=None, help="Subir solo los primeros N casos."
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="Subir aunque ya existan items con ese case_id.",
+    )
     return p.parse_args()
 
 

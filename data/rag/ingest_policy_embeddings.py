@@ -44,7 +44,10 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 from backend.db.supabase_client import get_supabase_client
-from data.generate_dataset import CATEGORIES, POLICIES_DIR  # POLICIES_DIR → dataset/rag/policies/
+from data.generate_dataset import (
+    CATEGORIES,
+    POLICIES_DIR,
+)  # POLICIES_DIR → dataset/rag/policies/
 
 load_dotenv(override=True)
 
@@ -133,7 +136,10 @@ def _chunk_section(header: str, body: str) -> list[str]:
             current, current_tokens = [], 0
             continue
 
-        if current_tokens + paragraph_tokens > MAX_CHUNK_TOKENS and current_tokens >= MIN_CHUNK_TOKENS:
+        if (
+            current_tokens + paragraph_tokens > MAX_CHUNK_TOKENS
+            and current_tokens >= MIN_CHUNK_TOKENS
+        ):
             flush()
             current, current_tokens = [], 0
 
@@ -232,7 +238,9 @@ async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) 
             f"{', '.join(sorted(CATEGORIES))}."
         )
 
-    openai_client: Optional[OpenAI] = None if dry_run else OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    openai_client: Optional[OpenAI] = (
+        None if dry_run else OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    )
     supabase_client = None if dry_run else await get_supabase_client()
 
     # (nombre_de_fichero, categoría) — categoría=None para el marco general,
@@ -260,7 +268,8 @@ async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) 
                 logger.warning(
                     "return_policies no tiene fila activa para la categoría '%s' "
                     "(¿falta cargar supabase/seed_synthetic.sql?) — se omite %s.",
-                    category, policy_doc,
+                    category,
+                    policy_doc,
                 )
                 continue
 
@@ -272,19 +281,24 @@ async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) 
 
     logger.info(
         "Total de chunks %s: %d",
-        "a generar (dry-run)" if dry_run else "insertados", total_chunks,
+        "a generar (dry-run)" if dry_run else "insertados",
+        total_chunks,
     )
     return total_chunks
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Solo trocea y cuenta chunks/tokens; no llama a OpenAI ni a Supabase.",
     )
     parser.add_argument(
-        "--category", default=None,
+        "--category",
+        default=None,
         help="Ingesta solo la política de esta categoría, además del marco general. Por defecto, las 16.",
     )
     return parser.parse_args()

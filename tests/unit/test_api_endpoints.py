@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from backend.api.main import app
 from backend.api.dependencies import get_graph
 
-
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 
@@ -84,7 +83,9 @@ def mock_supabase():
     async def fake_get_client():
         return client
 
-    with patch("backend.services.supabase_service.get_supabase_client", new=fake_get_client):
+    with patch(
+        "backend.services.supabase_service.get_supabase_client", new=fake_get_client
+    ):
         yield client
 
 
@@ -124,10 +125,13 @@ async def test_create_chat(async_client):
 @pytest.mark.asyncio
 async def test_send_message(async_client, mock_graph):
     async with async_client as client:
-        resp = await client.post("/api/chat", json={
-            "thread_id": "test-thread-123",
-            "message": "Quiero devolver mi pedido ORD-001",
-        })
+        resp = await client.post(
+            "/api/chat",
+            json={
+                "thread_id": "test-thread-123",
+                "message": "Quiero devolver mi pedido ORD-001",
+            },
+        )
 
     assert resp.status_code == 200
     data = resp.json()
@@ -146,10 +150,13 @@ async def test_send_message_graph_error(async_client, mock_graph):
     mock_graph.ainvoke.side_effect = Exception("OpenAI timeout")
 
     async with async_client as client:
-        resp = await client.post("/api/chat", json={
-            "thread_id": "test-thread-123",
-            "message": "Hola",
-        })
+        resp = await client.post(
+            "/api/chat",
+            json={
+                "thread_id": "test-thread-123",
+                "message": "Hola",
+            },
+        )
 
     assert resp.status_code == 500
     assert "OpenAI timeout" in resp.json()["detail"]
@@ -192,10 +199,18 @@ async def test_get_chat_state(async_client, mock_graph):
 @pytest.mark.asyncio
 async def test_list_pending_returns(async_client, mock_supabase):
     # Configurar datos de retorno
-    mock_supabase.table.return_value.execute.return_value = MagicMock(data=[
-        {"id": "ret-1", "order_id": "ORD-001", "customer_id": "cust-1",
-         "reason": "Defectuoso", "refund_amount": 150.0, "created_at": "2026-08-01"},
-    ])
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "ret-1",
+                "order_id": "ORD-001",
+                "customer_id": "cust-1",
+                "reason": "Defectuoso",
+                "refund_amount": 150.0,
+                "created_at": "2026-08-01",
+            },
+        ]
+    )
 
     async with async_client as client:
         resp = await client.get("/api/admin/pending")
@@ -214,9 +229,12 @@ async def test_approve_return(async_client, mock_graph):
     }
 
     async with async_client as client:
-        resp = await client.post("/api/admin/test-thread-123/approve", json={
-            "reason": "Cliente VIP",
-        })
+        resp = await client.post(
+            "/api/admin/test-thread-123/approve",
+            json={
+                "reason": "Cliente VIP",
+            },
+        )
 
     assert resp.status_code == 200
     data = resp.json()
@@ -232,9 +250,12 @@ async def test_reject_return(async_client, mock_graph):
     }
 
     async with async_client as client:
-        resp = await client.post("/api/admin/test-thread-123/reject", json={
-            "reason": "Fuera de plazo",
-        })
+        resp = await client.post(
+            "/api/admin/test-thread-123/reject",
+            json={
+                "reason": "Fuera de plazo",
+            },
+        )
 
     assert resp.status_code == 200
     data = resp.json()
@@ -253,10 +274,12 @@ async def test_approve_return_graph_error(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_list_returns(async_client, mock_supabase):
-    mock_supabase.table.return_value.execute.return_value = MagicMock(data=[
-        {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
-        {"id": "ret-2", "status": "rejected", "order_id": "ORD-002"},
-    ])
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
+            {"id": "ret-2", "status": "rejected", "order_id": "ORD-002"},
+        ]
+    )
 
     async with async_client as client:
         resp = await client.get("/api/admin/returns")
@@ -268,9 +291,11 @@ async def test_list_returns(async_client, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_list_returns_with_status_filter(async_client, mock_supabase):
-    mock_supabase.table.return_value.execute.return_value = MagicMock(data=[
-        {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
-    ])
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
+        ]
+    )
 
     async with async_client as client:
         resp = await client.get("/api/admin/returns?status=approved")
@@ -332,12 +357,14 @@ async def test_get_customer_history(async_client):
 
 @pytest.mark.asyncio
 async def test_get_stats(async_client, mock_supabase):
-    mock_supabase.table.return_value.execute.return_value = MagicMock(data=[
-        {"status": "approved"},
-        {"status": "approved"},
-        {"status": "rejected"},
-        {"status": "pending_approval"},
-    ])
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {"status": "approved"},
+            {"status": "approved"},
+            {"status": "rejected"},
+            {"status": "pending_approval"},
+        ]
+    )
 
     async with async_client as client:
         resp = await client.get("/api/stats")

@@ -149,7 +149,9 @@ async def resolution_agent(
     items_eligibility = state.get("items_eligibility", [])
 
     # ── Filtrar: solo se procesan los artículos elegibles ───────────────
-    eligible_ids = {e["order_item_id"] for e in items_eligibility if e.get("is_eligible")}
+    eligible_ids = {
+        e["order_item_id"] for e in items_eligibility if e.get("is_eligible")
+    }
     rejected_items = [e for e in items_eligibility if not e.get("is_eligible")]
     eligible_items_to_return = [
         item for item in items_to_return if item.get("order_item_id") in eligible_ids
@@ -158,7 +160,9 @@ async def resolution_agent(
     # ── HITL: pausar si el importe supera el umbral o si el Evaluador
     #    marcó el caso como "needs_admin_approval" (zona frontera de plazo,
     #    motivo sensible o cliente frecuente, aunque el importe sea bajo) ──
-    needs_admin_approval = state.get("needs_admin_approval", False) or refund_amount > hitl_threshold
+    needs_admin_approval = (
+        state.get("needs_admin_approval", False) or refund_amount > hitl_threshold
+    )
     if needs_admin_approval:
         # Crear registro o reutilizar existente (re-ejecución tras resume).
         thread_id = state.get("thread_id", "")
@@ -192,30 +196,32 @@ async def resolution_agent(
             # Buscar el ID del registro existente via BD
             existing_return_id = await get_pending_return_request_id(order_id)
 
-        admin_response = interrupt({
-            "type": "admin_approval_required",
-            "refund_amount": refund_amount,
-            "order_id": order_id,
-            "order_number": order_number,
-            "customer_id": customer_id,
-            "customer_name": customer_name,
-            "reason": reason,
-            "return_request_id": existing_return_id,
-            "items": [
-                {
-                    "order_item_id": item.get("order_item_id"),
-                    "quantity": item.get("quantity", 1),
-                    "condition": item.get("condition"),
-                }
-                for item in items_to_return
-            ],
-            "message": (
-                f"Pedido {order_number} · Cliente: {customer_name} · "
-                f"Artículos: {len(items_to_return)} · "
-                f"Reembolso: {refund_amount:.2f}€ (umbral: {hitl_threshold:.2f}€) · "
-                f"Motivo: {reason_category} — {reason}"
-            ),
-        })
+        admin_response = interrupt(
+            {
+                "type": "admin_approval_required",
+                "refund_amount": refund_amount,
+                "order_id": order_id,
+                "order_number": order_number,
+                "customer_id": customer_id,
+                "customer_name": customer_name,
+                "reason": reason,
+                "return_request_id": existing_return_id,
+                "items": [
+                    {
+                        "order_item_id": item.get("order_item_id"),
+                        "quantity": item.get("quantity", 1),
+                        "condition": item.get("condition"),
+                    }
+                    for item in items_to_return
+                ],
+                "message": (
+                    f"Pedido {order_number} · Cliente: {customer_name} · "
+                    f"Artículos: {len(items_to_return)} · "
+                    f"Reembolso: {refund_amount:.2f}€ (umbral: {hitl_threshold:.2f}€) · "
+                    f"Motivo: {reason_category} — {reason}"
+                ),
+            }
+        )
 
         if not admin_response.get("approved", False):
             # Admin rechazó: actualizar BD y comunicar al cliente
@@ -257,7 +263,9 @@ async def resolution_agent(
     for raw_oi in order_items:
         oi = OrderItem.model_validate(raw_oi)
         if oi.id:
-            item_names[oi.id] = oi.product.name if oi.product and oi.product.name else "Artículo"
+            item_names[oi.id] = (
+                oi.product.name if oi.product and oi.product.name else "Artículo"
+            )
 
     # ── Generar etiqueta de transporte (solo artículos elegibles) ──────
     label_items = [
@@ -342,7 +350,10 @@ async def resolution_agent(
         return_request_id = return_record["return_request"]["id"]
 
     # ── Notificar al cliente ───────────────────────────────────────────
-    approved_names = [item_names.get(item.get("order_item_id"), "Artículo") for item in eligible_items_to_return]
+    approved_names = [
+        item_names.get(item.get("order_item_id"), "Artículo")
+        for item in eligible_items_to_return
+    ]
     rejected_lines = "\n".join(
         f"- {item_names.get(r['order_item_id'], r['order_item_id'])}: {r['eligibility_reason']}"
         for r in rejected_items
@@ -406,7 +417,9 @@ async def resolution_agent(
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
             "return_request_id": return_request_id,
-            "admin_decision": "auto_approved" if refund_amount <= hitl_threshold else "approved",
+            "admin_decision": (
+                "auto_approved" if refund_amount <= hitl_threshold else "approved"
+            ),
             "resolution": "partially_approved" if rejected_items else "approved",
             "current_agent": "resolver",
         },
@@ -418,7 +431,9 @@ async def rejection_agent(state: ReturnState) -> dict[str, Any]:
     """Nodo que comunica un rechazo empático cuando la devolución no es elegible."""
     llm = _build_llm()
 
-    eligibility_reason = state.get("eligibility_reason", "No se cumple la política de devoluciones.")
+    eligibility_reason = state.get(
+        "eligibility_reason", "No se cumple la política de devoluciones."
+    )
 
     response = await invoke_tracked(
         llm,

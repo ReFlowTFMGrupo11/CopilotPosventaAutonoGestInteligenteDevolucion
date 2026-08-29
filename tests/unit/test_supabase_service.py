@@ -47,14 +47,18 @@ class TestCalculateDaysSinceDelivery:
         from datetime import datetime, timezone, timedelta
 
         five_days_ago = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
-        result = calculate_days_since_delivery({"order": {"delivered_at": five_days_ago}})
+        result = calculate_days_since_delivery(
+            {"order": {"delivered_at": five_days_ago}}
+        )
         assert result == 5
 
     def test_no_delivered_at_uses_created_at(self):
         from datetime import datetime, timezone, timedelta
 
         three_days_ago = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
-        result = calculate_days_since_delivery({"order": {"created_at": three_days_ago}})
+        result = calculate_days_since_delivery(
+            {"order": {"created_at": three_days_ago}}
+        )
         assert result == 3
 
     def test_no_dates_returns_9999(self):
@@ -95,7 +99,10 @@ class TestGetOrderDetails:
         # Configurar la cadena de llamadas
         query.execute = AsyncMock(side_effect=[order_chain, items_chain])
 
-        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
+        with patch(
+            "backend.services.supabase_service.get_supabase_client",
+            return_value=mock_client,
+        ):
             result = await get_order_details("ord-1")
 
         assert "order" in result
@@ -123,7 +130,10 @@ class TestGetCustomerReturnHistory:
 
         query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
+        with patch(
+            "backend.services.supabase_service.get_supabase_client",
+            return_value=mock_client,
+        ):
             result = await get_customer_return_history("cust-1")
 
         assert result["total_returns"] == 3
@@ -139,7 +149,10 @@ class TestGetCustomerReturnHistory:
 
         query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
+        with patch(
+            "backend.services.supabase_service.get_supabase_client",
+            return_value=mock_client,
+        ):
             result = await get_customer_return_history("cust-1")
 
         assert result["total_returns"] == 0
@@ -170,14 +183,19 @@ class TestCreateReturnRecord:
 
         query.execute = AsyncMock(side_effect=[existing_resp, return_resp, items_resp])
 
-        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
+        with patch(
+            "backend.services.supabase_service.get_supabase_client",
+            return_value=mock_client,
+        ):
             result = await create_return_record(
                 order_id="ord-1",
                 customer_id="cust-1",
                 reason="Producto defectuoso",
                 reason_category="defective",
                 refund_amount=79.99,
-                items=[{"order_item_id": "oi-1", "quantity": 1, "condition": "defective"}],
+                items=[
+                    {"order_item_id": "oi-1", "quantity": 1, "condition": "defective"}
+                ],
             )
 
         assert result["return_request"]["id"] == "ret-1"
@@ -198,7 +216,10 @@ class TestCreateReturnRecord:
 
         query.execute = AsyncMock(return_value=existing_resp)
 
-        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
+        with patch(
+            "backend.services.supabase_service.get_supabase_client",
+            return_value=mock_client,
+        ):
             with pytest.raises(ValueError, match="devolución previa"):
                 await create_return_record(
                     order_id="ord-1",
@@ -206,7 +227,13 @@ class TestCreateReturnRecord:
                     reason="Producto defectuoso",
                     reason_category="defective",
                     refund_amount=79.99,
-                    items=[{"order_item_id": "oi-1", "quantity": 1, "condition": "defective"}],
+                    items=[
+                        {
+                            "order_item_id": "oi-1",
+                            "quantity": 1,
+                            "condition": "defective",
+                        }
+                    ],
                 )
 
 
@@ -227,8 +254,13 @@ class TestUpdateReturnStatus:
 
         query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
-            result = await update_return_status("ret-1", "approved", resolution="full_refund")
+        with patch(
+            "backend.services.supabase_service.get_supabase_client",
+            return_value=mock_client,
+        ):
+            result = await update_return_status(
+                "ret-1", "approved", resolution="full_refund"
+            )
 
         assert result["updated_return"]["status"] == "approved"
 
@@ -241,7 +273,10 @@ class TestUpdateReturnStatus:
 
         query.execute = AsyncMock(return_value=resp_mock)
 
-        with patch("backend.services.supabase_service.get_supabase_client", return_value=mock_client):
+        with patch(
+            "backend.services.supabase_service.get_supabase_client",
+            return_value=mock_client,
+        ):
             result = await update_return_status("ret-nonexistent", "approved")
 
         assert result["updated_return"] is None
