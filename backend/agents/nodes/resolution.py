@@ -112,7 +112,7 @@ Motivo del rechazo: {reason}
 def _build_llm() -> ChatOpenAI:
     """Construye el LLM para el agente de resolución.
 
-    Modelo configurable vía ``RESOLVER_MODEL``; por defecto ``gpt-5-nano``.
+    Modelo configurable vía ``RESOLVER_MODEL``; por defecto ``gpt-5-mini``.
     """
     return build_chat_llm("RESOLVER_MODEL", temperature=0.4)
 
