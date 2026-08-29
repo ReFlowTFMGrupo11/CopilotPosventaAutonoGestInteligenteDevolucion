@@ -149,12 +149,18 @@ def with_langfuse(
 
     - Si LangFuse no está configurado, devuelve `config` sin cambios.
     - Si hay `thread_id`, lo añade como `langfuse_session_id` para agrupar
-      toda la conversación en una misma sesión de LangFuse (y así ver coste
-      acumulado por sesión en su dashboard, sin tracking propio).
+      toda la conversación en una misma sesión de LangFuse.
     - Si hay `customer_id` (solo se conoce a partir de que el cliente da su
       order_number, ver fetch_order_data en triage.py), lo añade como
       `langfuse_user_id` para poder agregar coste por cliente en LangFuse.
       Los turnos anteriores a conocer el order_number quedan sin este tag.
+
+    Esto da tracing/debugging por sesión y cliente en LangFuse, pero no
+    agrega por pedido (`order_id`, dimensión de negocio que LangFuse no
+    conoce) ni está garantizado disponible (opcional, fail-open). Para eso
+    existe el dashboard propio de coste (backend/services/usage_service.py,
+    ver docs/defensaTFM/defenderDashboardCostes.md) — no es redundante con
+    esto, responde una pregunta distinta (negocio vs. debugging).
     """
     callback = get_langfuse_callback()
     if callback is None:
