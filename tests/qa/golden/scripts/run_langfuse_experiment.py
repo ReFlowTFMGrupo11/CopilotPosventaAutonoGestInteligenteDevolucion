@@ -2,7 +2,7 @@
 Ejecuta un Experiment de Langfuse sobre el dataset `policy-eval-golden-set`
 (subido antes con migrate_eval_cases_to_langfuse.py).
 
-Reutiliza la misma lógica que tests/qa/scripts/evaluate_rag.py
+Reutiliza la misma lógica que tests/qa/golden/scripts/evaluate_evaluator_agent.py
 (_build_state, _build_mock_policy, _result_to_label, _deterministic_label)
 para no duplicar el mapeo CSV → estado del agente, pero en vez de escribir
 un JSON/MD local, cada caso queda trazado como un run de Langfuse:
@@ -10,10 +10,10 @@ pestaña "Experiments" del dataset → verás precisión por caso, comparable en
 ejecuciones (por versión de prompt, de modelo, etc.) en la UI.
 
 Uso:
-    python -m tests.qa.scripts.run_langfuse_experiment --dry-run          # gratis, sin LLM
-    python -m tests.qa.scripts.run_langfuse_experiment --dry-run --limit 20
-    python -m tests.qa.scripts.run_langfuse_experiment --limit 20         # smoke test con LLM real
-    python -m tests.qa.scripts.run_langfuse_experiment                   # los 480 casos con LLM real
+    python -m tests.qa.golden.scripts.run_langfuse_experiment --dry-run          # gratis, sin LLM
+    python -m tests.qa.golden.scripts.run_langfuse_experiment --dry-run --limit 20
+    python -m tests.qa.golden.scripts.run_langfuse_experiment --limit 20         # smoke test con LLM real
+    python -m tests.qa.golden.scripts.run_langfuse_experiment                   # los 480 casos con LLM real
 
 Requisitos:
     - Haber ejecutado antes migrate_eval_cases_to_langfuse.py
@@ -31,13 +31,13 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-from tests.qa.scripts.evaluate_rag import (
+from tests.qa.golden.scripts.evaluate_evaluator_agent import (
     _build_mock_policy,
     _build_state,
     _deterministic_label,
     _result_to_label,
 )
-from tests.qa.scripts.migrate_eval_cases_to_langfuse import DATASET_NAME
+from tests.qa.golden.scripts.migrate_eval_cases_to_langfuse import DATASET_NAME
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
     if not items:
         raise SystemExit(
             f"El dataset '{DATASET_NAME}' está vacío. "
-            "Ejecuta antes: python -m tests.qa.scripts.migrate_eval_cases_to_langfuse"
+            "Ejecuta antes: python -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse"
         )
 
     logger.info(

@@ -1,31 +1,33 @@
-# tests/qa/scripts — qué hace cada script
+# tests/qa/golden — evaluación automática del Agente Evaluador
 
-Scripts de soporte para QA y evaluación del agente de devoluciones. Se
-ejecutan siempre desde la **raíz del repo** con `python -m`, no directamente
-con `python tests/qa/scripts/archivo.py` (usan imports relativos al paquete
-`backend`).
+Kit de evaluación **100% automático, sin UI**: llama a `evaluator_agent()`
+directamente en Python contra 480 casos golden y calcula precisión/recall/F1.
+Para el kit de pruebas manuales (24 casos, UI de Streamlit), ver
+[`../manual/README.md`](../manual/README.md).
+
+Los scripts se ejecutan siempre desde la **raíz del repo** con `python -m`, no
+directamente con `python tests/qa/golden/scripts/archivo.py` (usan imports
+relativos al paquete `backend`).
 
 ```bash
-.venv/Scripts/python.exe -m tests.qa.scripts.<nombre_del_script> [opciones]
+.venv/Scripts/python.exe -m tests.qa.golden.scripts.<nombre_del_script> [opciones]
 ```
 
 ## Índice de scripts
 
 | Script | Para qué | Requiere LLM/red |
 |---|---|---|
-| `create_qa_testing_excel.py` | Genera el Excel coloreado de los 24 casos manuales (`qa_manual_testing_cases_v2.xlsx`) a partir del CSV curado. | No |
-| `generate_mixed_qa_kit.py` | Genera el kit de pruebas de pedidos **mixtos** (varios productos/categorías en un mismo pedido): un `.xlsx` y un seed `.sql`. | No |
-| `evaluate_rag.py` | Evaluador **local** de `evaluator_agent` contra los 480 casos golden (`data/qa/eval_cases.csv`). Calcula precisión/recall/F1 y escribe el informe en `tests/qa/results/*.json` y `*.md`. | Solo si no usas `--dry-run` |
-| `migrate_eval_cases_to_langfuse.py` | Sube los 480 casos golden a Langfuse como **Dataset** (`policy-eval-golden-set`), reutilizando el mismo CSV que `evaluate_rag.py`. | No (solo escribe en Langfuse) |
-| `run_langfuse_experiment.py` | Ejecuta `evaluator_agent` contra el dataset de Langfuse y sube los resultados como **Experiment Run**, con evaluación automática por item (`label_match`) y agregada (`accuracy`). Es el equivalente a `evaluate_rag.py` pero con historial y comparación entre ejecuciones en la UI de Langfuse en vez de ficheros locales. | Solo si no usas `--dry-run` |
+| `evaluate_evaluator_agent.py` | Evaluador **local** de `evaluator_agent` contra los 480 casos golden (`eval_cases.csv`, en esta misma carpeta). Calcula precisión/recall/F1 y escribe el informe en `results/*.json` y `*.md`. Pese a su nombre histórico ("evaluate_rag"), **no** ejecuta ninguna búsqueda vectorial real — mockea `search_return_policy()` a propósito para aislar la calidad de la decisión (LLM + reglas) de la calidad del retrieval. El test real del RAG (chunking/ingesta) vive en `tests/unit/test_ingest_policy_embeddings.py`. | Solo si no usas `--dry-run` |
+| `migrate_eval_cases_to_langfuse.py` | Sube los 480 casos golden a Langfuse como **Dataset** (`policy-eval-golden-set`), reutilizando el mismo CSV que `evaluate_evaluator_agent.py`. | No (solo escribe en Langfuse) |
+| `run_langfuse_experiment.py` | Ejecuta `evaluator_agent` contra el dataset de Langfuse y sube los resultados como **Experiment Run**, con evaluación automática por item (`label_match`) y agregada (`accuracy`). Es el equivalente a `evaluate_evaluator_agent.py` pero con historial y comparación entre ejecuciones en la UI de Langfuse en vez de ficheros locales. | Solo si no usas `--dry-run` |
 
 ---
 
 ## Guía: golden dataset + experimentos en Langfuse
 
 Esto documenta el flujo que estamos siguiendo para pasar de "evaluación
-local con ficheros JSON/MD" (`evaluate_rag.py`) a "evaluación en Langfuse"
-(dataset + experiment runs comparables en la UI).
+local con ficheros JSON/MD" (`evaluate_evaluator_agent.py`) a "evaluación en
+Langfuse" (dataset + experiment runs comparables en la UI).
 
 ### Requisitos previos
 
@@ -40,14 +42,14 @@ local con ficheros JSON/MD" (`evaluate_rag.py`) a "evaluación en Langfuse"
 
 ```bash
 # Prueba pequeña primero (gratis, no llama al LLM, solo escribe en Langfuse)
-.venv/Scripts/python.exe -m tests.qa.scripts.migrate_eval_cases_to_langfuse --limit 5
+.venv/Scripts/python.exe -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse --limit 5
 
 # Si todo se ve bien en la UI, sube el resto (o usa --force para re-subir)
-.venv/Scripts/python.exe -m tests.qa.scripts.migrate_eval_cases_to_langfuse
+.venv/Scripts/python.exe -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse
 ```
 
-Qué hace: lee `data/qa/eval_cases.csv` (480 filas) y crea, por cada fila, un
-**dataset item** en el dataset `policy-eval-golden-set`:
+Qué hace: lee `eval_cases.csv` (480 filas, en esta misma carpeta) y crea, por
+cada fila, un **dataset item** en el dataset `policy-eval-golden-set`:
 
 - `input` → las columnas que necesita el agente (categoría, plazo, importe,
   motivo, historial de devoluciones, etc.)
@@ -69,8 +71,10 @@ Input / Expected Output / Metadata.
 > script), así que mezclarlo con `migrate_eval_cases_to_langfuse.py`
 > genera items duplicados con dos formas distintas para el mismo
 > `case_id`. Si el número de items del dataset crece por su cuenta entre
-> ejecuciones del script (nos pasó: 5 → 121 → 378), es la señal de que
-> alguien ha usado "Upload CSV" en paralelo. Comprueba el estado real
+> ejecuciones del script (nos pasó: 5 → 121 → 378, y también una vez con
+> 480 items de un CSV desactualizado que no tenía `condition`/
+> `allowed_conditions` — ver git history de este fichero), es la señal de
+> que algo se subió sin pasar por este script. Comprueba el estado real
 > antes de lanzar un Experiment:
 > ```bash
 > .venv/Scripts/python.exe -c "
@@ -90,21 +94,21 @@ Input / Expected Output / Metadata.
 ```bash
 # Dry-run: reglas deterministas, SIN LLM, gratis — valida que el
 # pipeline (dataset → task → evaluador → Langfuse) funciona de punta a punta
-.venv/Scripts/python.exe -m tests.qa.scripts.run_langfuse_experiment --dry-run --limit 5
+.venv/Scripts/python.exe -m tests.qa.golden.scripts.run_langfuse_experiment --dry-run --limit 5
 
 # Smoke test con el LLM real, pocos casos (consume tokens de OpenAI)
-.venv/Scripts/python.exe -m tests.qa.scripts.run_langfuse_experiment --limit 20
+.venv/Scripts/python.exe -m tests.qa.golden.scripts.run_langfuse_experiment --limit 20
 
 # Run completo: los 480 casos con el LLM real (gpt-5-mini) — tiene coste,
 # ejecútalo cuando quieras un número serio de accuracy/F1
-.venv/Scripts/python.exe -m tests.qa.scripts.run_langfuse_experiment
+.venv/Scripts/python.exe -m tests.qa.golden.scripts.run_langfuse_experiment
 ```
 
 Qué hace, por cada item del dataset:
 
 1. Reconstruye el estado mínimo del agente a partir del `input` guardado
-   (misma lógica que `evaluate_rag.py::_build_state` / `_build_mock_policy`,
-   sin necesidad de Supabase real).
+   (misma lógica que `evaluate_evaluator_agent.py::_build_state` /
+   `_build_mock_policy`, sin necesidad de Supabase real).
 2. Ejecuta `evaluator_agent` (o, en `--dry-run`, la réplica
    determinista de las reglas de negocio, sin LLM).
 3. Compara la etiqueta predicha con `expected_output` mediante el evaluator
@@ -126,10 +130,10 @@ para ese caso.
 > `ev.get("name")`. Nos pilló en el primer dry-run (`AttributeError:
 > 'Evaluation' object has no attribute 'get'`).
 
-### Por qué esto y no solo `evaluate_rag.py`
+### Por qué esto y no solo `evaluate_evaluator_agent.py`
 
-`evaluate_rag.py` sigue siendo útil para CI (`--dry-run`, sin red, exit code
-según accuracy). La diferencia de pasar por Langfuse:
+`evaluate_evaluator_agent.py` sigue siendo útil para CI (`--dry-run`, sin red,
+exit code según accuracy). La diferencia de pasar por Langfuse:
 
 - **Historial comparable**: cada run queda guardado; puedes comparar
   accuracy entre una versión del prompt y otra sin diffear ficheros MD.

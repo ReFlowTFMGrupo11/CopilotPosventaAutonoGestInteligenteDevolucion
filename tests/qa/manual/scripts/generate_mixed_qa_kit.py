@@ -22,8 +22,14 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 ROOT = (
-    Path(__file__).resolve().parent.parent.parent.parent
-)  # tests/qa/scripts/ → repo root
+    Path(__file__).resolve().parent.parent.parent.parent.parent
+)  # tests/qa/manual/scripts/ → repo root
+# NOTA: out_path más abajo usa "dataset/" y "supabase/qa_manual_testing_seed_..."
+# — nombres de antes del rename dataset/→data/ y de la reorganización de
+# tests/qa/sql/. No coinciden con ningún fichero real actual (el equivalente
+# vivo es tests/qa/manual/sql/02_seed_pedidos_mixtos.sql). No se ha tocado
+# porque no está claro si este script se sigue ejecutando o quedó obsoleto;
+# revisar antes de volver a correrlo.
 
 # ── UUIDs fijos (generados una vez, no se regeneran en cada ejecucion) ─────
 

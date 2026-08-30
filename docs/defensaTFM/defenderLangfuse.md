@@ -96,7 +96,7 @@ reales?".
 **Por qué no era trivial elegir una y descartar la otra**: la versión
 self-hosted evita sumar un tercer SaaS a la lista de quien ve los datos
 correlacionados por sesión, y la versión Cloud SDK resuelve un problema real
-de evaluación (los scripts de QA en `tests/qa/scripts/` necesitan el cliente
+de evaluación (los scripts de QA en `tests/qa/golden/scripts/` necesitan el cliente
 `Langfuse` crudo para escribir métricas, no solo el callback).
 
 **Decisión final**: mantener **una sola** implementación de código
@@ -184,7 +184,7 @@ dataset?" — eso requiere llamar a `create_score()` sobre el cliente
 directamente, algo que un callback pasivo no ofrece.
 
 ```python
-# tests/qa/scripts/evaluate_rag.py
+# tests/qa/golden/scripts/evaluate_evaluator_agent.py
 obs = lf.start_observation(name=f"eval-case-{cat}", as_type="evaluator", ...)
 lf.create_score(trace_id=run_trace_id, observation_id=obs.id,
                  name="label_match", value=1.0 if match else 0.0, data_type="NUMERIC")
@@ -218,8 +218,8 @@ intervalo de flush automático del SDK.
 
 ## 8. De evaluación local a LangFuse Datasets + Experiments
 
-El proyecto ya tenía `evaluate_rag.py`: lee los 480 casos de
-`data/qa/eval_cases.csv`, corre el agente evaluador y escribe un informe
+El proyecto ya tenía `evaluate_evaluator_agent.py`: lee los 480 casos de
+`tests/qa/golden/eval_cases.csv`, corre el agente evaluador y escribe un informe
 JSON/Markdown local con precisión, recall y F1. Funciona, pero comparar dos
 ejecuciones (por ejemplo, antes/después de cambiar un prompt) significa abrir
 dos ficheros Markdown y comparar tablas a mano.
@@ -231,14 +231,14 @@ migrate_eval_cases_to_langfuse.py   # sube los 480 casos como un Dataset de Lang
 run_langfuse_experiment.py          # corre el agente sobre ese Dataset como un Experiment
 ```
 
-`run_langfuse_experiment.py` reutiliza la lógica de `evaluate_rag.py`
+`run_langfuse_experiment.py` reutiliza la lógica de `evaluate_evaluator_agent.py`
 (`_build_state`, `_build_mock_policy`, `_result_to_label`) — no duplica el
 mapeo CSV → estado del agente — pero en vez de escribir un fichero, cada
 caso queda registrado como parte de un `run_experiment()` de LangFuse, con
 un evaluador por caso (`label_match_evaluator`) y un evaluador de accuracy
 agregado por ejecución (`accuracy_run_evaluator`).
 
-**Decisión**: mantener `evaluate_rag.py` (rápido, sin credenciales de
+**Decisión**: mantener `evaluate_evaluator_agent.py` (rápido, sin credenciales de
 LangFuse, ideal para CI/`--dry-run`) **y** añadir el camino LangFuse
 (visual, comparable entre ejecuciones, mejor para la demo de defensa) en
 vez de sustituir uno por el otro — son complementarios, no redundantes.

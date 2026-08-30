@@ -59,19 +59,19 @@ fallo suyo no impide mergear.
 ### El planteamiento
 `rag-ingest-dry-run` y `qa-golden-dataset-dry-run` validan, respectivamente, el
 chunking de las 17 políticas Markdown y la consistencia de los 480 casos del
-golden dataset (`data/qa/eval_cases.csv`) contra las reglas deterministas de
+golden dataset (`tests/qa/golden/eval_cases.csv`) contra las reglas deterministas de
 `policy_rules.py` — sin ninguna llamada real a OpenAI ni a Supabase.
 
 ### Argumentos para defenderlo
 - **No se construyó nada nuevo para esto:** ambos scripts (`ingest_policy_
-  embeddings.py`, `evaluate_rag.py`) ya tenían su propio flag `--dry-run` pensado
+  embeddings.py`, `evaluate_evaluator_agent.py`) ya tenían su propio flag `--dry-run` pensado
   para exactamente este uso — uno de los dos dice literalmente *"Ideal para CI"*
   en su propio docstring. Simplemente no había ningún workflow que los invocara
   todavía; conectarlos a CI fue coste casi cero.
-- **`evaluate_rag.py --dry-run` valida los 480 casos en menos de 1 segundo** y ya
+- **`evaluate_evaluator_agent.py --dry-run` valida los 480 casos en menos de 1 segundo** y ya
   trae su propio gate de pass/fail (`sys.exit(0 if accuracy >= 0.70 else 1)`),
   reutilizado tal cual — no se inventó un umbral nuevo.
-- **Lo que deliberadamente NO se hizo:** correr `evaluate_rag.py` sin `--dry-run`
+- **Lo que deliberadamente NO se hizo:** correr `evaluate_evaluator_agent.py` sin `--dry-run`
   (el eval real contra `gpt-5-mini`, 480 llamadas de verdad a OpenAI) en cada PR.
   Eso sí sería la prueba de regresión de prompts genuina — pero cuesta dinero por
   ejecución, necesita `OPENAI_API_KEY` como secret del repo, y el resultado varía
@@ -130,7 +130,7 @@ Ni `smoke-boot` ni ningún otro job hacen una petición real de negocio (`POST
   por `test` con mocks, que sí es determinista y gratis.
 - **Lo que sí se propuso** (y queda documentado, no implementado): un workflow
   separado, manual o programado (no en cada PR), para el eval real de
-  `evaluate_rag.py` contra el golden dataset — ahí el no-determinismo se mitiga
+  `evaluate_evaluator_agent.py` contra el golden dataset — ahí el no-determinismo se mitiga
   promediando sobre 480 casos en vez de comparar una sola respuesta.
 
 ## 6. Secret scanning con `trufflehog`, pineado a una versión concreta
