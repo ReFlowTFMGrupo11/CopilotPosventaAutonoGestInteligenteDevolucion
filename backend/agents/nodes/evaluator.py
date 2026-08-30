@@ -22,6 +22,7 @@ from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
 from backend.agents.llm_factory import build_chat_llm, trim_history
+from backend.agents.usage_tracking import invoke_structured_tracked
 from backend.agents.infra.mcp_client import search_return_policy
 from backend.agents.nodes.policy_rules import compute_refund, deterministic_check
 from backend.models import ItemEligibility, OrderItem, PolicyEvaluationOutput
@@ -107,7 +108,6 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
     unos artículos marcados como elegibles y otros como no elegibles.
     """
     llm = _build_llm()
-    llm_structured = llm.with_structured_output(PolicyEvaluationOutput)
 
     order_details = state.get("order_details", {})
     return_history = state.get("return_history", {})
@@ -187,7 +187,15 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
         SystemMessage(content=f"CONTEXTO DE EVALUACIÓN:\n{context}"),
     ]
 
-    result: PolicyEvaluationOutput | None = await llm_structured.ainvoke(messages)
+    result: PolicyEvaluationOutput | None = await invoke_structured_tracked(
+        llm,
+        PolicyEvaluationOutput,
+        messages,
+        node="evaluator",
+        thread_id=state.get("thread_id", ""),
+        customer_id=state.get("customer_id"),
+        order_id=state.get("order_id"),
+    )
 
     updates: dict[str, Any] = {
         "current_agent": "evaluator",

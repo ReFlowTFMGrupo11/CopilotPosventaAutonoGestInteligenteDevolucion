@@ -29,8 +29,15 @@ from backend.models import ItemEligibility, PolicyEvaluationOutput
 
 
 def _mock_llm_with_structured_output(output: PolicyEvaluationOutput) -> MagicMock:
+    """Forma real de include_raw=True (ver usage_tracking.py::invoke_structured_tracked)."""
     structured = MagicMock()
-    structured.ainvoke = AsyncMock(return_value=output)
+    structured.ainvoke = AsyncMock(
+        return_value={
+            "raw": AIMessage(content=""),
+            "parsed": output,
+            "parsing_error": None,
+        }
+    )
     llm = MagicMock()
     llm.with_structured_output.return_value = structured
     return llm

@@ -42,6 +42,7 @@ from langgraph.types import Command, interrupt
 
 from backend.agents.state import ReturnState
 from backend.agents.llm_factory import build_chat_llm
+from backend.agents.usage_tracking import invoke_tracked
 from backend.agents.infra.mcp_client import (
     create_return_record,
     generate_shipping_label,
@@ -230,14 +231,19 @@ async def resolution_agent(
                 resolution="rejected_by_admin",
                 notes=admin_response.get("reason", "Rechazado por administrador."),
             )
-            rejection_msg = await llm.ainvoke(
+            rejection_msg = await invoke_tracked(
+                llm,
                 [
                     SystemMessage(
                         content=REJECTION_SYSTEM_PROMPT.format(
                             reason="El administrador ha rechazado la devolución tras revisión manual."
                         )
                     ),
-                ]
+                ],
+                node="resolution",
+                thread_id=state.get("thread_id", ""),
+                customer_id=customer_id,
+                order_id=order_id,
             )
             return Command(
                 update={
@@ -308,7 +314,8 @@ async def resolution_agent(
             # (p. ej. reintento del cliente o re-ejecución de un caso de QA).
             logger.info("Return record ya existe, informando al cliente: %s", exc)
             existing = await get_latest_return_request(order_id)
-            duplicate_msg = await llm.ainvoke(
+            duplicate_msg = await invoke_tracked(
+                llm,
                 [
                     SystemMessage(
                         content=(
@@ -318,7 +325,11 @@ async def resolution_agent(
                             "No hace falta crear una nueva; nuestro equipo ya la está gestionando."
                         )
                     ),
-                ]
+                ],
+                node="resolution",
+                thread_id=state.get("thread_id", ""),
+                customer_id=customer_id,
+                order_id=order_id,
             )
             return Command(
                 update={
@@ -388,11 +399,16 @@ async def resolution_agent(
     else:
         resolution_context += "No hay artículos rechazados en esta solicitud."
 
-    final_response = await llm.ainvoke(
+    final_response = await invoke_tracked(
+        llm,
         [
             SystemMessage(content=RESOLUTION_SYSTEM_PROMPT),
             SystemMessage(content=f"CONTEXTO: {resolution_context}"),
-        ]
+        ],
+        node="resolution",
+        thread_id=state.get("thread_id", ""),
+        customer_id=customer_id,
+        order_id=order_id,
     )
 
     return Command(
@@ -419,12 +435,17 @@ async def rejection_agent(state: ReturnState) -> dict[str, Any]:
         "eligibility_reason", "No se cumple la política de devoluciones."
     )
 
-    response = await llm.ainvoke(
+    response = await invoke_tracked(
+        llm,
         [
             SystemMessage(
                 content=REJECTION_SYSTEM_PROMPT.format(reason=eligibility_reason)
             ),
-        ]
+        ],
+        node="rejection",
+        thread_id=state.get("thread_id", ""),
+        customer_id=state.get("customer_id"),
+        order_id=state.get("order_id"),
     )
 
     return {

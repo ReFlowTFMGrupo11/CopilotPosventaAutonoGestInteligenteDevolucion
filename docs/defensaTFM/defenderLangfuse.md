@@ -273,6 +273,12 @@ tirar abajo el flujo de un cliente pidiendo una devolución — de ahí que
 todos los `try/except` alrededor de la inicialización sean deliberadamente
 anchos (`except Exception`) y logueen un `warning`, no un `error`.
 
+Precisamente por ser opcional y fail-open, LangFuse no es el sitio adecuado
+para un control de gasto que debe estar siempre disponible — ver
+[`defenderDashboardCostes.md`](defenderDashboardCostes.md) para por qué existe
+además un dashboard propio de coste por pedido/cliente, y cuándo usar cada uno
+de los dos.
+
 ### Las API keys y el host se comprueban por separado — no hay fallback automático
 
 Malentendido habitual: **`LANGFUSE_BASE_URL`/`LANGFUSE_HOST` no es un

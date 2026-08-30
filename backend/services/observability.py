@@ -161,6 +161,13 @@ def with_langfuse(
       vista agregada propia como a sesión/usuario (ver
       docs/defensaTFM/defenderDashboardCostes.md — por eso el coste por
       pedido sigue viviendo en el dashboard propio, no aquí).
+
+    Esto da tracing/debugging por sesión, cliente y pedido en LangFuse, pero
+    no agrega nada (dimensión de negocio que LangFuse no conoce como vista
+    propia) ni está garantizado disponible (opcional, fail-open). Para eso
+    existe el dashboard propio de coste (backend/services/usage_service.py,
+    ver docs/defensaTFM/defenderDashboardCostes.md) — no es redundante con
+    esto, responde una pregunta distinta (negocio vs. debugging).
     """
     callback = get_langfuse_callback()
     if callback is None:

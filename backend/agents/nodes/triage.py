@@ -43,6 +43,7 @@ from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
 from backend.agents.llm_factory import build_chat_llm, trim_history
+from backend.agents.usage_tracking import invoke_structured_tracked
 from backend.agents.infra.mcp_client import (
     get_order_details,
     get_customer_return_history,
@@ -155,7 +156,6 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
     (Pydantic) para garantizar un schema válido en cada respuesta.
     """
     llm = _build_llm()
-    llm_structured = llm.with_structured_output(TriageOutput)
 
     # Construir la lista de mensajes para el LLM
     context = [SystemMessage(content=TRIAGE_SYSTEM_PROMPT)]
@@ -172,7 +172,15 @@ async def triage_agent(state: ReturnState) -> dict[str, Any]:
         )
     llm_messages = [*context, *trim_history(state.get("messages", []))]
 
-    result: TriageOutput | None = await llm_structured.ainvoke(llm_messages)
+    result: TriageOutput | None = await invoke_structured_tracked(
+        llm,
+        TriageOutput,
+        llm_messages,
+        node="triage",
+        thread_id=state.get("thread_id", ""),
+        customer_id=state.get("customer_id"),
+        order_id=state.get("order_id"),
+    )
 
     if result is None:
         # Fallback: el LLM no generó structured output válido
