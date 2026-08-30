@@ -1,0 +1,73 @@
+# Levanta los 4 servicios de ReFlow ya containerizados, en local, para
+# probar las imágenes ANTES de subirlas a ECR — el equivalente en Docker de
+# lo que hace start_all_mac.sh con procesos sueltos. No es lo que se
+# despliega en AWS (en ECS Fargate cada servicio es su propia task
+# definition, ver docs/deployment_aws_ecs_fargate.md); esto es solo un
+# banco de pruebas local, igual que langfuse_infra/docker-compose.yml lo es
+# para Langfuse.
+#
+# Uso (desde la raíz del repo, no desde docker/):
+#   docker compose -f docker/docker-compose.yml up --build
+#
+# Requiere un .env en la raíz del repo (cp .env.example .env) con
+# credenciales reales de Supabase/OpenAI — igual que para correr la app sin
+# Docker.
+#
+# name: fija el nombre del proyecto de Compose a "reflow" en vez del nombre
+# del directorio padre (docker/) — así los contenedores se llaman
+# "reflow-api-1" etc. y no "docker-api-1".
+name: reflow
+
+services:
+  mcp-supabase:
+    build:
+      context: ..
+      dockerfile: docker/mcp_supabase.Dockerfile
+    env_file:
+      - ../.env
+    ports:
+      - "8001:8001"
+
+  mcp-logistics:
+    build:
+      context: ..
+      dockerfile: docker/mcp_logistics.Dockerfile
+    env_file:
+      - ../.env
+    ports:
+      - "8002:8002"
+    # PDFs de etiquetas + notifications_log.jsonl: se pierden al recrear el
+    # contenedor si no se monta un volumen. En local basta con esto para
+    # poder inspeccionarlos desde el host; en AWS el equivalente es EFS
+    # (ver docs/deployment_aws_ecs_fargate.md).
+    volumes:
+      - ../generated_labels:/app/generated_labels
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/api.Dockerfile
+    env_file:
+      - ../.env
+    environment:
+      # Dentro de la red de Compose, cada servicio es resoluble por su
+      # nombre (DNS interno) — no por localhost. Sobreescribe lo que haya
+      # en .env para MCP_SUPABASE_URL/MCP_LOGISTICS_URL.
+      MCP_SUPABASE_URL: http://mcp-supabase:8001/mcp
+      MCP_LOGISTICS_URL: http://mcp-logistics:8002/mcp
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mcp-supabase
+      - mcp-logistics
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api

@@ -1,0 +1,184 @@
+<mxfile host="65bd71144e">
+    <diagram id="aws-architecture" name="Arquitectura AWS (ECS Fargate)">
+        <mxGraphModel dx="1780" dy="648" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1750" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+
+                <mxCell id="title" value="&lt;b&gt;ReFlow — Arquitectura de despliegue en AWS (ECS Fargate)&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;" parent="1" vertex="1">
+                    <mxGeometry x="600" y="10" width="560" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="subtitle" value="Supabase y Langfuse son servicios cloud externos (SaaS) — NO se despliegan dentro de AWS, solo se consumen vía HTTPS/Postgres desde la VPC" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=11;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="42" width="800" height="20" as="geometry"/>
+                </mxCell>
+
+                <!-- Usuarios / Route53 -->
+                <mxCell id="users" value="🧑‍💻 Usuarios&#xa;(navegador)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="110" width="140" height="55" as="geometry"/>
+                </mxCell>
+                <mxCell id="route53" value="🌐 Route 53&#xa;(DNS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="20" y="190" width="140" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- VPC -->
+                <mxCell id="vpc_group" value="VPC 10.0.0.0/16 (recomendado 2 AZs)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#666666;dashed=1;verticalAlign=top;align=left;spacingLeft=10;fontStyle=1;fontSize=13;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="90" width="1180" height="760" as="geometry"/>
+                </mxCell>
+                <mxCell id="igw" value="🌍 Internet Gateway" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="130" width="150" height="40" as="geometry"/>
+                </mxCell>
+
+                <!-- Subredes públicas -->
+                <mxCell id="pub_group" value="Subredes públicas (AZ-A / AZ-B)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="190" width="1140" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="alb" value="⚖️ Application Load Balancer&#xa;HTTPS :443 (cert. ACM)&#xa;→ target group :8501" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" parent="1" vertex="1">
+                    <mxGeometry x="250" y="230" width="220" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nat_a" value="🔁 NAT Gateway&#xa;AZ-A" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="520" y="230" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="nat_b" value="🔁 NAT Gateway&#xa;AZ-B" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="700" y="230" width="150" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="pub_note" value="Solo el frontend recibe tráfico público (listener :443 del ALB). La API y los MCP servers son internos — no tienen listener, solo se alcanzan vía Service Connect dentro de la VPC." style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="880" y="225" width="460" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- Subredes privadas -->
+                <mxCell id="priv_group" value="Subredes privadas (AZ-A / AZ-B)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="390" width="1140" height="420" as="geometry"/>
+                </mxCell>
+                <mxCell id="ecs_group" value="🐳 ECS Cluster (Fargate) — reflow-cluster" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="250" y="430" width="1080" height="300" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_frontend" value="🖥️ Service: frontend&#xa;Streamlit :8501&#xa;(1 task def, 1-N tasks)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="470" width="220" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_api" value="🚀 Service: backend-api&#xa;FastAPI :8000" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="540" y="470" width="220" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_mcp_supabase" value="🗄️ Service: mcp-supabase&#xa;:8001" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="800" y="470" width="220" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="svc_mcp_logistics" value="🚚 Service: mcp-logistics&#xa;:8002" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="470" width="220" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="note_serviceconnect" value="ECS Service Connect / Cloud Map: DNS interno (backend-api.reflow.internal, mcp-supabase.reflow.internal...) — sin IPs fijas ni Elastic IP por task." style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="565" width="1000" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="note_sizing" value="Cada servicio con su propia task definition (CPU/memoria independiente) — no un contenedor único con los 4 procesos." style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="280" y="600" width="1000" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="efs" value="💾 Amazon EFS&#xa;generated_labels/ (PDFs etiquetas +&#xa;notifications_log.jsonl) — persistente" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
+                    <mxGeometry x="1060" y="740" width="220" height="60" as="geometry"/>
+                </mxCell>
+
+                <!-- Servicios externos (fuera de AWS) -->
+                <mxCell id="ext_group" value="☁️ Servicios cloud externos (SaaS, fuera de AWS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1410" y="220" width="270" height="460" as="geometry"/>
+                </mxCell>
+                <mxCell id="supabase_cloud" value="🗄️ Supabase Cloud&#xa;Postgres + pgvector (RAG)&#xa;+ Storage&#xa;(checkpointer LangGraph vía&#xa;SUPABASE_DB_URL)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="1430" y="260" width="230" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="langfuse_cloud" value="📊 Langfuse Cloud&#xa;Observabilidad / tracing LLM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="1430" y="390" width="230" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="openai_cloud" value="🧠 OpenAI API&#xa;LLM (gpt-5-mini) + embeddings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="1430" y="500" width="230" height="80" as="geometry"/>
+                </mxCell>
+
+                <!-- Servicios de soporte AWS -->
+                <mxCell id="support_group" value="Servicios de soporte AWS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="870" width="900" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="ecr" value="📦 Amazon ECR&#xa;4 repositorios:&#xa;api / frontend /&#xa;mcp-supabase / mcp-logistics" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="220" y="910" width="200" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="secrets" value="🔑 AWS Secrets Manager&#xa;OPENAI_API_KEY,&#xa;SUPABASE_SERVICE_KEY,&#xa;SUPABASE_DB_URL,&#xa;LANGFUSE_SECRET_KEY..." style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="910" width="200" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="cw" value="📈 CloudWatch Logs&#xa;+ Container Insights&#xa;(logs y métricas por task)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="660" y="910" width="200" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="iam" value="🛡️ IAM Roles&#xa;Task Execution Role +&#xa;Task Role&#xa;(mínimo privilegio)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
+                    <mxGeometry x="880" y="910" width="200" height="110" as="geometry"/>
+                </mxCell>
+
+                <!-- CI/CD -->
+                <mxCell id="cicd_group" value="CI/CD (fuera de AWS: GitHub)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
+                    <mxGeometry x="1150" y="870" width="460" height="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="github" value="🐙 GitHub&#xa;(este repo, rama main)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="910" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="actions" value="⚙️ GitHub Actions&#xa;build imágenes + docker push" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="1170" y="980" width="200" height="50" as="geometry"/>
+                </mxCell>
+
+                <mxCell id="footer_note" value="Dockerfiles en docker/*.Dockerfile — detalle completo del despliegue en docs/deployment_aws_ecs_fargate.md" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=10;fontStyle=2;fontColor=#666666;" parent="1" vertex="1">
+                    <mxGeometry x="200" y="1050" width="900" height="25" as="geometry"/>
+                </mxCell>
+
+                <!-- Edges -->
+                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="users" target="route53" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="route53" target="alb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="igw" target="alb" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="nat_a" target="igw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="nat_b" target="igw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" value=":8501" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="alb" target="svc_frontend" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" value="Service Connect :8000" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="svc_frontend" target="svc_api" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" value="MCP :8001" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="svc_api" target="svc_mcp_supabase" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" value="MCP :8002" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="svc_api" target="svc_mcp_logistics" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" value="mount /app/generated_labels" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="svc_mcp_logistics" target="efs" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11" value="egress HTTPS" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="ecs_group" target="nat_a" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" value="Internet: Supabase Cloud / OpenAI / Langfuse Cloud" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="igw" target="ext_group" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e13" value="docker pull" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="ecs_group" target="ecr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e14" value="secretos inyectados" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="ecs_group" target="secrets" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e15" value="logs / métricas" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="ecs_group" target="cw" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e16" value="assume role" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="ecs_group" target="iam" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="github" target="actions" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e18" value="push imágenes" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="actions" target="ecr" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e19" value="aws ecs update-service" style="edgeStyle=orthogonalEdgeStyle;dashed=1;fontSize=10;" parent="1" source="actions" target="ecs_group" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

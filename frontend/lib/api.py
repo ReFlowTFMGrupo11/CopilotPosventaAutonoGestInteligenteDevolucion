@@ -5,6 +5,7 @@ extra: si un endpoint cambia, se cambia aquí y ya está.
 """
 
 import json
+import os
 from typing import Iterator
 
 import httpx
@@ -15,7 +16,13 @@ from dotenv import load_dotenv
 # sin override, load_dotenv() no lo sustituiría por el valor bueno de .env.
 load_dotenv(override=True)
 
-API_BASE = "http://localhost:8000"
+# Configurable vía env var (default = localhost, para no romper el flujo de
+# desarrollo local con start_all_mac.sh/start_all.sh). Necesario para
+# contenedores: en Docker/ECS "localhost" dentro del contenedor del frontend
+# NO es el backend (son procesos/tasks distintos) — hay que apuntar a la URL
+# real del servicio backend (DNS interno de ECS Service Connect, o la URL
+# pública del ALB). Ver docs/deployment_aws_ecs_fargate.md.
+API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
 def health() -> bool:

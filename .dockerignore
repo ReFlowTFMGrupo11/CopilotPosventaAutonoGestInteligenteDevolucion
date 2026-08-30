@@ -1,0 +1,30 @@
+# Contexto de build de los Dockerfiles en docker/ (build desde la raíz del
+# repo). Evita mandar al daemon de Docker archivos que ningún Dockerfile
+# necesita copiar — build más rápido y sin riesgo de que un futuro "COPY . ."
+# arrastre secretos o basura al contexto.
+
+.git/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+.env
+.env.*
+.env copy
+
+frontend/node_modules/
+
+generated_labels/
+
+docs/
+supabase/
+data/
+tests/
+langfuse_infra/
+
+*.md
+.DS_Store
