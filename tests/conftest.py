@@ -1,5 +1,7 @@
 """Fixtures compartidos para todos los tests."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -21,13 +23,23 @@ def _no_real_langfuse():
 
 @pytest.fixture
 def mock_order_details():
-    """Pedido de ejemplo con un artículo de electrónica."""
+    """Pedido de ejemplo con un artículo de electrónica.
+
+    Fechas relativas a "ahora" (no absolutas): con fechas fijas, este
+    fixture se convierte en una bomba de relojería que deja de representar
+    "entregado hace pocos días, dentro de plazo" en cuanto pasan suficientes
+    días reales -- nos pasó (delivered_at="2026-07-25" acabó siendo >35 días
+    en el pasado, tumbando test_eligible_return con
+    "assert False is True" sin que nadie tocara evaluator.py).
+    """
+    delivered_at = datetime.now(timezone.utc) - timedelta(days=5)
+    created_at = delivered_at - timedelta(days=5)
     return {
         "order": {
             "id": "ord-001-uuid",
             "status": "delivered",
-            "delivered_at": "2026-07-25T10:00:00Z",
-            "created_at": "2026-07-20T08:00:00Z",
+            "delivered_at": delivered_at.isoformat(),
+            "created_at": created_at.isoformat(),
             "customer": {
                 "id": "cust-001-uuid",
                 "email": "ana.garcia@example.com",
@@ -169,13 +181,21 @@ def sample_items_to_return():
 
 @pytest.fixture
 def mock_order_details_mixed_categories():
-    """Pedido con un artículo elegible (electrónica) y otro no elegible (cosmética)."""
+    """Pedido con un artículo elegible (electrónica) y otro no elegible (cosmética).
+
+    Fechas relativas a "ahora" (ver docstring de mock_order_details más
+    arriba sobre por qué no deben ser absolutas): delivered_at = hace 10
+    días, para que coincida con lo que dice el comentario de más abajo
+    ("entregados hace 10 días, dentro del plazo de 30 días").
+    """
+    delivered_at = datetime.now(timezone.utc) - timedelta(days=10)
+    created_at = delivered_at - timedelta(days=6)
     return {
         "order": {
             "id": "ord-mixed-uuid",
             "status": "delivered",
-            "delivered_at": "2026-08-05T10:00:00Z",
-            "created_at": "2026-07-30T08:00:00Z",
+            "delivered_at": delivered_at.isoformat(),
+            "created_at": created_at.isoformat(),
             "customer": {
                 "id": "cust-mixed-uuid",
                 "email": "laura.perez@example.com",
