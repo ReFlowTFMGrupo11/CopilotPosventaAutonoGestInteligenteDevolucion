@@ -97,6 +97,18 @@ class Settings(BaseSettings):
     # ── HITL ─────────────────────────────────────────────────────────────
     hitl_threshold_eur: float = 100.0
 
+    # ── RAG (búsqueda semántica de políticas) ────────────────────────────
+    # 0.35, no 0.7 (el default anterior, hardcodeado en supabase_service.py):
+    # comprobado contra la BD real que text-embedding-3-small nunca supera
+    # ~0.5-0.6 de similitud coseno entre una consulta conversacional corta
+    # ("devolución defective llegó defectuoso") y un chunk de un documento
+    # de política largo y formal, aunque el contenido sea el correcto. Con
+    # 0.7, match_policy_embeddings devolvía SIEMPRE 0 resultados -- el RAG
+    # llevaba desde su implementación sin devolver un solo chunk en uso
+    # real, enmascarado porque policy_rules.py no depende de ellos para
+    # decidir elegibilidad. Ver docs/defensaTFM/defenderRAG.md.
+    rag_match_threshold: float = 0.35
+
     # ── Langfuse (observabilidad, opcional) ─────────────────────────────
     langfuse_secret_key: SecretStr | None = None
     langfuse_public_key: str | None = None

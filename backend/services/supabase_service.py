@@ -171,7 +171,7 @@ async def search_return_policy(query: str, category: str = "") -> dict:
 
     rpc_params = {
         "query_embedding": query_embedding,
-        "match_threshold": 0.7,
+        "match_threshold": get_settings().rag_match_threshold,
         "match_count": 5,
         # Pass category as filter so the vector search only returns chunks from
         # the relevant policy document (+ marco general). Without this, a query
