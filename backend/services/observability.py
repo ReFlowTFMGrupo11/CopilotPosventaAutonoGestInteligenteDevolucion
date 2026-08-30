@@ -201,6 +201,24 @@ def score_rag_similarity(
     el mismo patrón ya usado y verificado en real por `score_resolution`
     más abajo.
 
+    Efecto secundario aceptado a propósito: el score queda a nivel de
+    SESIÓN, no de trace/turno concreto — si una sesión tiene varias
+    búsquedas RAG (varios turnos, o un pedido con artículos de varias
+    categorías en un mismo turno), todas comparten `session_id` y no hay
+    forma de saber desde LangFuse a qué trace exacto pertenece cada una
+    salvo por su `timestamp` (correlación manual). Se investigó vincular
+    a trace_id exacto y se descartó por desproporcionado: exigiría dejar
+    de reutilizar un único `CallbackHandler` (singleton cacheado en este
+    módulo, compartido entre TODAS las peticiones concurrentes) y crear
+    uno nuevo por turno con `trace_context={"trace_id": ...}` pre-generado
+    — el único mecanismo que soporta el SDK para fijar un trace_id
+    explícito, ya que `config["metadata"]` NO acepta `langfuse_trace_id`
+    (solo reconoce `langfuse_session_id/user_id/tags/trace_name`, ver
+    `CallbackHandler.py`). Cambiar el ciclo de vida del handler afectaría
+    a todo el tracing del grafo, no solo al RAG, para un beneficio menor
+    (el `comment` ya identifica categoría+query; con eso casi nunca hace
+    falta abrir la traza exacta).
+
     Si `semantic_results` viene vacío (ninguna búsqueda por encima de
     `Settings.rag_match_threshold`), se registra value=0.0 en vez de
     hacer no-op — es justo la señal que se quiere poder ver en LangFuse
