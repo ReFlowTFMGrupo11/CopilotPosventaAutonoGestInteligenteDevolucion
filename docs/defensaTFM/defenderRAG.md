@@ -129,9 +129,36 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 
 | Parámetro | Valor | Justificación |
 |-----------|-------|---------------|
-| `match_threshold` | 0.7 | Filtra resultados irrelevantes sin ser demasiado restrictivo |
+| `match_threshold` | 0.35 (`Settings.rag_match_threshold`, configurable vía `RAG_MATCH_THRESHOLD`) | Ver "Bug de calibración" más abajo |
 | `match_count` | 5 | Suficiente contexto sin saturar el prompt del Evaluador |
 | Distancia | Coseno (`<=>`) | Estándar para embeddings de texto, invariante a la magnitud |
+
+El `DEFAULT 0.7` de la firma SQL (arriba) es solo el valor por defecto de la
+función si se llama sin ese parámetro; en runtime siempre se pasa
+explícitamente desde `search_return_policy()`, así que es el de
+`Settings.rag_match_threshold` el que realmente se aplica.
+
+#### Bug de calibración descubierto en producción
+
+Con `match_threshold=0.7` (el valor original, antes de esta corrección),
+`match_policy_embeddings` **nunca devolvía un solo resultado** con tráfico
+real. La razón: `text-embedding-3-small` compara una consulta conversacional
+corta y coloquial (p. ej. *"devolución defective llegó defectuoso"*) contra
+párrafos de un documento de política largo y de registro formal — ese
+contraste de registro limita la similitud coseno máxima observada a
+~0.5-0.6, aunque el chunk recuperado sea el correcto. Verificado
+empíricamente contra la base de datos real en 4 categorías distintas
+(electrónica 0.52, muebles 0.51, cosmética 0.44, calzado 0.51): ninguna
+superó 0.7.
+
+El bug pasó inadvertido porque `policy_rules.py` (capa determinista) no
+depende de los chunks RAG para decidir elegibilidad, y el LLM Evaluador
+seguía redactando respuestas plausibles sin contexto real — no había ningún
+error visible, solo un `semantic_results: []` silencioso en cada traza.
+Se detectó inspeccionando una traza de Langfuse. El nuevo valor (0.35) está
+calibrado contra la similitud real observada, no elegido arbitrariamente;
+además la query ahora incluye la `condition` del artículo
+(`evaluator.py`), lo que sube la mejor similitud típica de ~0.52 a ~0.57.
 
 ---
 
@@ -142,7 +169,7 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 #    — filtra por categoría para evitar cross-contamination entre políticas —
 rpc_params = {
     "query_embedding": query_embedding,
-    "match_threshold": 0.7,
+    "match_threshold": get_settings().rag_match_threshold,  # 0.35 por defecto
     "match_count": 5,
     "filter_category": category or None,
 }
