@@ -195,13 +195,15 @@ principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
 
 ## Cómo cargar el dataset en Supabase
 
-Este fichero es **adicional** a [`supabase/seed.sql`](../supabase/seed.sql)
-(el seed pequeño de 3 clientes / 5 productos que usa
-`tests/manual_checks/check_mcp_supabase.py`), no lo sustituye. Para un entorno de desarrollo
-o de pruebas de RAG dedicado a este dataset grande, se recomienda:
+Es el **único** seed del proyecto: hasta hace poco existía también
+`supabase/seed.sql` (un seed pequeño de 3 clientes / 5 productos), pero se
+eliminó porque duplicaba innecesariamente este dataset y, de hecho, colisionaba
+con él en un `order_number` (`ORD-2026-00142` existía en ambos, violando el
+`UNIQUE` de `orders.order_number` si se cargaban los dos a la vez). Para un
+entorno de desarrollo o de pruebas de RAG, se recomienda:
 
-1. Aplicar las migraciones (`supabase/migrations/*.sql` o `supabase/run_all.sql`
-   sin la sección de seed) sobre una base de datos limpia.
+1. Aplicar las migraciones (`supabase/migrations/*.sql` o `supabase/run_all.sql`)
+   sobre una base de datos limpia.
 2. Cargar `supabase/seed_synthetic.sql` con `psql` o el SQL Editor de Supabase
    (esto crea, entre otras, las 16 filas de `return_policies`, una por categoría).
 3. Trocear los documentos de `data/rag/policies/*.md` y generar sus embeddings
@@ -227,16 +229,6 @@ o de pruebas de RAG dedicado a este dataset grande, se recomienda:
    vez de duplicarlos. `--dry-run` trocea y cuenta sin llamar a OpenAI ni a
    Supabase; `--category <slug>` limita la ingesta a una sola categoría (más
    el marco general).
-
-Si se carga en la misma base que ya tiene `seed.sql`, no hay colisión de
-claves (los emails, SKUs y `order_number` son distintos). `seed.sql` usa la
-misma taxonomía en español que este dataset (`electronica_informatica`,
-`moda_ropa`, `electrodomesticos`, `libros_papeleria`) y su INSERT de
-`return_policies` lleva `ON CONFLICT (category) WHERE active DO NOTHING`:
-si esta base ya tiene una política activa para esa categoría (p. ej. cargada
-desde este dataset o desde la ingesta de `data/rag/policies/`), el INSERT de
-`seed.sql` no hace nada y esos 5 productos quedan cubiertos por la política
-real en vez de por una fila huérfana en inglés sin RAG detrás.
 
 ## Qué queda fuera de este dataset (decisión deliberada)
 

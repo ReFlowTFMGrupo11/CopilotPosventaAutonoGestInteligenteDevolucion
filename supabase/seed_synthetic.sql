@@ -3,8 +3,8 @@
 -- Generado por dataset/generate_dataset.py -- NO EDITAR A MANO
 -- Semilla: 20260730 | Clientes: 320 | Productos: 196 | Pedidos: 1100 | Devoluciones: 480 | Conversaciones de chat: 140
 --
--- Este archivo es ADICIONAL a supabase/seed.sql (no lo sustituye). Pensado para
--- cargarse en una base de datos ya migrada (ver dataset/README.md).
+-- Este archivo es el seed único del proyecto. Pensado para cargarse en
+-- una base de datos ya migrada (ver data/README.md).
 -- =========================================================================
 
 -- ---------------------------------------------------------------------------
