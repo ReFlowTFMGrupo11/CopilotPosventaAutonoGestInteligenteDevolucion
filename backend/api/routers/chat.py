@@ -23,7 +23,7 @@ from backend.api.schemas import (
     NewChatResponse,
 )
 from backend.config import get_settings
-from backend.services.observability import with_langfuse
+from backend.services.observability import score_error, with_langfuse
 
 logger = logging.getLogger(__name__)
 
@@ -182,8 +182,10 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
             timeout=GRAPH_TURN_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:
+        score_error(request.thread_id, "timeout")
         raise HTTPException(status_code=504, detail=_TURN_TIMEOUT_MSG)
     except Exception as exc:
+        score_error(request.thread_id, "exception")
         raise HTTPException(status_code=500, detail=f"Error ejecutando el grafo: {exc}")
 
     last_message = result["messages"][-1]
@@ -337,9 +339,11 @@ async def _stream_chat_events(
             )
         except asyncio.TimeoutError:
             logger.warning("Timeout de turno en streaming (thread_id=%s)", thread_id)
+            score_error(thread_id, "timeout")
             yield ChatStreamEvent(type="error", content=_TURN_TIMEOUT_MSG)
         except Exception as exc:
             logger.exception("Error en streaming (thread_id=%s)", thread_id)
+            score_error(thread_id, "exception")
             yield ChatStreamEvent(
                 type="error", content=f"Error procesando tu solicitud: {exc}"
             )

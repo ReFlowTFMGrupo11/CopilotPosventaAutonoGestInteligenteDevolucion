@@ -262,6 +262,36 @@ def score_rag_similarity(
         logger.warning("No se pudo registrar el score RAG de LangFuse: %s", exc)
 
 
+def score_error(thread_id: str | None, error_type: str) -> None:
+    """Anota en LangFuse que un turno terminó en error (timeout o excepción).
+
+    Sin esto, la única forma de saber si hubo errores es grepear los logs
+    de consola turno a turno. Con esto se puede filtrar/contar en LangFuse
+    "cuántos turnos de esta sesión/proyecto acabaron en error" sin acceso
+    al servidor. Mismo patrón que `score_rag_similarity`
+    (`create_score(session_id=thread_id, ...)`, no `score_current_trace()`
+    — ver su docstring para el porqué).
+
+    No-op silencioso si no hay `thread_id`, LangFuse no está configurado o
+    falla la llamada — esto es solo observabilidad, nunca debe poder
+    romper el turno del cliente (mismo criterio que el resto del módulo).
+    """
+    if not thread_id:
+        return
+    lf = get_langfuse()
+    if lf is None:
+        return
+    try:
+        lf.create_score(
+            name="error",
+            value=error_type,
+            session_id=thread_id,
+            data_type="CATEGORICAL",
+        )
+    except Exception as exc:
+        logger.warning("No se pudo registrar el score de error de LangFuse: %s", exc)
+
+
 def _resolve_project_id() -> Optional[str]:
     """Resuelve el project_id de LangFuse asociado a las API keys configuradas.
 

@@ -1,7 +1,22 @@
 """Fixtures compartidos para todos los tests."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+@pytest.fixture(autouse=True)
+def _no_real_langfuse():
+    """Evita que los tests llamen a LangFuse de verdad.
+
+    Sin esto, cualquier test que ejercite un except real (p. ej.
+    test_send_message_graph_error) hace un create_score/create_event real
+    si el .env local tiene credenciales de LangFuse -- pasó exactamente
+    eso: quedó un score con session_id="test-thread-123" en el proyecto de
+    LangFuse Cloud real. Los tests no deben depender de qué haya (o no)
+    en el .env local para ser deterministas y no ensuciar datos reales.
+    """
+    with patch("backend.services.observability.get_langfuse", return_value=None):
+        yield
 
 
 @pytest.fixture
