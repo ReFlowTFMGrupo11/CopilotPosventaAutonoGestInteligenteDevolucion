@@ -21,6 +21,7 @@ from typing import Any
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from backend.config import get_settings
+from backend.services.observability import score_rag_similarity
 
 logger = logging.getLogger(__name__)
 
@@ -155,11 +156,28 @@ async def get_customer_return_history(customer_id: str) -> dict:
     return await call_tool("get_customer_return_history", {"customer_id": customer_id})
 
 
-async def search_return_policy(query: str, category: str = "") -> dict:
-    """Búsqueda RAG de políticas via MCP."""
-    return await call_tool(
-        "search_return_policy", {"query": query, "category": category}
+async def search_return_policy(
+    query: str, category: str = "", thread_id: str | None = None
+) -> dict:
+    """Búsqueda RAG de políticas via MCP.
+
+    Además de devolver el resultado, registra un score de LangFuse con la
+    mejor similitud coseno obtenida (ver
+    ``backend.services.observability.score_rag_similarity``) para poder
+    ver de un vistazo, sin abrir cada traza, qué búsquedas RAG no están
+    devolviendo nada relevante. `thread_id` viaja también dentro de la
+    llamada MCP (no solo se usa aquí en local) porque el propio embedding
+    de OpenAI se llama en el proceso del MCP server, no en este -- ver
+    ``backend.services.supabase_service.search_return_policy``.
+    """
+    result = await call_tool(
+        "search_return_policy",
+        {"query": query, "category": category, "thread_id": thread_id or ""},
     )
+    score_rag_similarity(
+        thread_id, query, category, result.get("semantic_results") or []
+    )
+    return result
 
 
 async def create_return_record(

@@ -334,4 +334,80 @@ No. Levantar el contenedor no basta: hay que copiar sus
 `LANGFUSE_INIT_PROJECT_PUBLIC_KEY`/`SECRET_KEY` al `.env` de la raíz **y**
 añadir `LANGFUSE_BASE_URL=http://localhost:3000` ahí también. Sin las keys
 en el `.env` de la raíz, la app sigue sin trazar nada, tenga Docker
+levantado o no — los dos pasos son independientes.
+
+---
+
+## 11. Mapa de qué hay implementado, por área
+
+Cuatro áreas típicas de un panel de observabilidad, y qué hay de cada una
+en este proyecto — con nivel de madurez explícito, no solo lo que existe.
+
+### Costes y consumo — nivel medio
+
+- `with_langfuse()` (`observability.py:142-172`) añade `langfuse_session_id`/
+  `langfuse_user_id` a cada invocación del grafo → LangFuse agrega coste por
+  sesión y por cliente sin contador propio en la app.
+- `search_return_policy()` (`supabase_service.py:149-195`) usa
+  `langfuse.openai` (drop-in del SDK de OpenAI) para trazar el embedding de
+  la query RAG como una `GENERATION` con tokens y coste reales — antes de
+  esto, ese embedding era invisible para LangFuse y el RAG aparecía siempre
+  a $0 en el dashboard de coste.
+- **Decisión explícita**: no hay contador de coste propio en la app.
+  `GET /api/admin/observability` (`admin.py:112-122`) solo devuelve enlaces
+  al dashboard de LangFuse; el comentario en el propio código dice por qué
+  no se reimplementa esa agregación.
+
+### Rendimiento técnico (latencias y errores) — la más débil de las cuatro
+
+- La latencia se ve en LangFuse porque el `CallbackHandler` la captura
+  **pasivamente** (viene del SDK, no es instrumentación propia).
+- El código sí tiene timeouts reales (`GRAPH_TURN_TIMEOUT_SECONDS` y
+  `_astream_with_timeout` en `chat.py`, `llm_timeout_seconds` en
+  `llm_factory.py`, `mcp_timeout_seconds` en `mcp_client.py`), pero
+  **ninguno se marca explícitamente hacia LangFuse** — si salta un timeout,
+  solo queda un `logger.warning`/`logger.exception` en el log de consola.
+- Cero usos de `level="ERROR"` o `status_message` de LangFuse en todo el
+  repo. No hay ningún score ni evento de tasa de error, y no hay retries
+  instrumentados en las llamadas a LLM/MCP.
+- Honesto para la defensa: LangFuse ve la traza rota si una excepción de
+  LangChain llega hasta el `CallbackHandler`, pero no hay instrumentación
+  deliberada de errores — es una mejora identificada, no implementada.
+
+### Calidad y evaluación — la más fuerte de las cuatro
+
+- **En producción**: `score_rag_similarity()` (`observability.py:175-262`)
+  anota en LangFuse la mejor similitud coseno de cada búsqueda RAG,
+  incluyendo `value=0.0` explícito cuando no hay resultados — decisión
+  deliberada de no callar los "miss", ver sección 8 más abajo para el
+  contexto de por qué el RAG puede no devolver nada.
+- **Pipeline de evaluación en `tests/qa/scripts/`**, tres piezas que se
+  complementan (ver sección 8):
+  - `evaluate_rag.py`: trace raíz + una observation por caso de los 480 del
+    golden dataset + score `label_match` por caso + scores agregados
+    (`accuracy`, `macro_f1`, `macro_precision`, `macro_recall`).
+  - `migrate_eval_cases_to_langfuse.py`: sube los 480 casos como **LangFuse
+    Dataset**, idempotente por `case_id`.
+  - `run_langfuse_experiment.py`: **LangFuse Experiments** de verdad
+    (`lf.run_experiment(...)`) con evaluador por-item y evaluador agregado
+    a nivel de run.
+
+### Trazas y prompt management — trazas fuertes, prompt management ausente
+
+- Trazas: diseño no invasivo ya cubierto en la sección 2 — ni los tres
+  agentes ni `graph.py` importan LangFuse, todo entra por `config`. Dos
+  procesos distintos generan trazas de forma independiente: el
+  `CallbackHandler` (proceso de la API) y `langfuse.openai` para el
+  embedding (proceso del MCP server, `mcp_supabase.py`) — cada uno necesita
+  su propio cliente LangFuse registrado porque son procesos separados.
+- **Prompt management: no implementado.** Cero usos de
+  `langfuse.get_prompt()`/`create_prompt()` en todo el repo. Los tres
+  prompts de sistema (`TRIAGE_SYSTEM_PROMPT` en `triage.py`,
+  `POLICY_SYSTEM_PROMPT` en `evaluator.py`, `RESOLUTION_SYSTEM_PROMPT` en
+  `resolution.py`) son constantes de Python hardcodeadas. Versionar un
+  prompt hoy es un commit de git, no un cambio gestionado en LangFuse — si
+  preguntan por A/B testing o rollback de prompts, la respuesta honesta es
+  que no existe ese mecanismo todavía.
+
+---
 levantado o no — las keys son las del backend Python, no las del contenedor.
