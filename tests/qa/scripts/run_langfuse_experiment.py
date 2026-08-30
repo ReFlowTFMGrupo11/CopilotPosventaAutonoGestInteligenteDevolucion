@@ -60,7 +60,7 @@ def _make_task(dry_run: bool):
             row["category"], int(row["max_return_days"]), allowed_conditions
         )
 
-        async def _mock_search(query: str, category: str = "") -> dict:
+        async def _mock_search(query: str, category: str = "", thread_id: str = "") -> dict:
             return mock_policy
 
         with patch(
