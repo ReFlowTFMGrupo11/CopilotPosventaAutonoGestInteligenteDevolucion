@@ -66,7 +66,6 @@ class TestGraphCompilation:
             "evaluator",
             "resolver",
             "reject",
-            "hitl_admin",
         }
         assert expected.issubset(node_names)
 

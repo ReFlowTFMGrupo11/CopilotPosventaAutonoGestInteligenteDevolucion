@@ -224,12 +224,14 @@ o de pruebas de RAG dedicado a este dataset grande, se recomienda:
    el marco general).
 
 Si se carga en la misma base que ya tiene `seed.sql`, no hay colisión de
-claves (los emails, SKUs y `order_number` son distintos), pero sí quedarán
-**dos filas activas de `return_policies` por categorías equivalentes** si se
-usan nombres de categoría distintos entre ambos seeds (`electronics` vs.
-`electronica_informatica`, etc.) — es decir, conviven sin conflicto porque
-las categorías de este dataset usan slugs en español más granulares que los
-4 de `seed.sql`.
+claves (los emails, SKUs y `order_number` son distintos). `seed.sql` usa la
+misma taxonomía en español que este dataset (`electronica_informatica`,
+`moda_ropa`, `electrodomesticos`, `libros_papeleria`) y su INSERT de
+`return_policies` lleva `ON CONFLICT (category) WHERE active DO NOTHING`:
+si esta base ya tiene una política activa para esa categoría (p. ej. cargada
+desde este dataset o desde la ingesta de `data/rag/policies/`), el INSERT de
+`seed.sql` no hace nada y esos 5 productos quedan cubiertos por la política
+real en vez de por una fila huérfana en inglés sin RAG detrás.
 
 ## Qué queda fuera de este dataset (decisión deliberada)
 

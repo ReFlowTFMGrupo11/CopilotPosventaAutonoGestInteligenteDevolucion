@@ -41,14 +41,6 @@ graph TD
     REJECT2 --> END_HITL_REJ([END])
 ```
 
-> **Nota — nodo `hitl_admin` sin usar:** `graph.py` sigue declarando un nodo
-> `hitl_admin` (`add_node` + arista a `END`) y `resolution.py` define
-> `hitl_admin_node`, pero ningún camino del código hace `Command(goto="hitl_admin")`.
-> La pausa/reanudación HITL ocurre por `interrupt()`/`Command(resume=...)`
-> **dentro del propio `resolution_agent`** (ver `backend/api/routers/admin.py`),
-> que LangGraph reanuda en el mismo nodo, no en uno distinto. El nodo
-> `hitl_admin` es código muerto a día de hoy — no forma parte del flujo real.
-
 ## Ejemplo de conversación multi-turno
 
 Con la confirmación obligatoria de `items_confirmed` (ver `triage.py`), un
@@ -134,7 +126,6 @@ sequenceDiagram
 | `evaluator` | `nodes/evaluator.py` | Evalúa **cada artículo por separado**: RAG (`search_return_policy`, una vez por categoría distinta) + reglas deterministas de `policy_rules.py` (`deterministic_check`: veto legal, plazo, higiene, condición, importe HITL, plazo frontera, cliente frecuente). El veredicto `invalid` fuerza `is_eligible=False` pase lo que diga el LLM; `refund_amount` siempre sale de `compute_refund()`, nunca del LLM | ✅ supabase:8001 |
 | `resolver` | `nodes/resolution.py` | Nodo `Command`: filtra solo artículos elegibles (`items_eligibility`), decide HITL (`needs_admin_approval` del Evaluador O `refund_amount > HITL_THRESHOLD_EUR`), llama `interrupt()` si aplica, genera etiqueta, registra devolución (con guard de duplicados), notifica al cliente y redacta mensaje final (puede ser mixto: aprobados + rechazados) | ✅ ambos |
 | `reject` | `nodes/resolution.py` | Genera mensaje empático de rechazo cuando **ningún** artículo es elegible | ❌ |
-| `hitl_admin` | `nodes/resolution.py` | Declarado en el grafo pero **no alcanzable**: la reanudación HITL real ocurre dentro de `resolver` vía `interrupt()`/`Command(resume=...)`, no saltando a este nodo | ❌ |
 
 ## Rol del Checkpointer
 

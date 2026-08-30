@@ -144,17 +144,23 @@ def with_langfuse(
     *,
     thread_id: str | None = None,
     customer_id: str | None = None,
+    order_id: str | None = None,
 ) -> dict[str, Any]:
     """Añade callback+metadata de LangFuse a config de LangGraph si aplica.
 
     - Si LangFuse no está configurado, devuelve `config` sin cambios.
     - Si hay `thread_id`, lo añade como `langfuse_session_id` para agrupar
-      toda la conversación en una misma sesión de LangFuse (y así ver coste
-      acumulado por sesión en su dashboard, sin tracking propio).
+      toda la conversación en una misma sesión de LangFuse.
     - Si hay `customer_id` (solo se conoce a partir de que el cliente da su
       order_number, ver fetch_order_data en triage.py), lo añade como
       `langfuse_user_id` para poder agregar coste por cliente en LangFuse.
       Los turnos anteriores a conocer el order_number quedan sin este tag.
+    - Si hay `order_id`, se añade como metadata simple (`order_id`, no un
+      campo reservado de LangFuse como los dos anteriores): permite
+      *filtrar* trazas por pedido en la UI, aunque LangFuse no le dé una
+      vista agregada propia como a sesión/usuario (ver
+      docs/defensaTFM/defenderDashboardCostes.md — por eso el coste por
+      pedido sigue viviendo en el dashboard propio, no aquí).
     """
     callback = get_langfuse_callback()
     if callback is None:
@@ -162,12 +168,14 @@ def with_langfuse(
 
     merged = dict(config)
     merged["callbacks"] = [*merged.get("callbacks", []), callback]
-    if thread_id or customer_id:
+    if thread_id or customer_id or order_id:
         metadata = dict(merged.get("metadata", {}))
         if thread_id:
             metadata["langfuse_session_id"] = thread_id
         if customer_id:
             metadata["langfuse_user_id"] = customer_id
+        if order_id:
+            metadata["order_id"] = order_id
         merged["metadata"] = metadata
     return merged
 
@@ -290,6 +298,38 @@ def score_error(thread_id: str | None, error_type: str) -> None:
         )
     except Exception as exc:
         logger.warning("No se pudo registrar el score de error de LangFuse: %s", exc)
+
+
+def score_resolution(thread_id: str, resolution: str | None) -> None:
+    """Anota en LangFuse el resultado final de un turno (approved/rejected/...).
+
+    A diferencia de `with_langfuse()` (que fija metadata ANTES de invocar el
+    grafo), esto se llama DESPUÉS de que `ainvoke()`/`astream()` termine, una
+    vez se conoce `resolution` — LangFuse no soporta re-etiquetar una traza ya
+    cerrada con metadata nueva, pero sí adjuntarle un *score* (anotación de
+    calidad/resultado) por `session_id`, que es justo para esto. Permite
+    filtrar/agregar en la UI de LangFuse "cuántas devoluciones se aprobaron
+    vs rechazaron", sin depender del dashboard propio para esa vista.
+
+    No-op silencioso si LangFuse no está configurado, si `resolution` es
+    None (turno intermedio, todavía sin resultado) o si falla la llamada —
+    es solo observabilidad, nunca debe poder romper el turno del cliente
+    (mismo criterio que el resto de este módulo).
+    """
+    if not resolution:
+        return
+    lf = get_langfuse()
+    if lf is None:
+        return
+    try:
+        lf.create_score(
+            name="resolution",
+            value=resolution,
+            session_id=thread_id,
+            data_type="CATEGORICAL",
+        )
+    except Exception as exc:
+        logger.warning("No se pudo registrar el score de LangFuse: %s", exc)
 
 
 def _resolve_project_id() -> Optional[str]:
