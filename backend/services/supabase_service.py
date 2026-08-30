@@ -146,15 +146,33 @@ async def get_customer_return_history(customer_id: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-async def search_return_policy(query: str, category: str = "") -> dict:
+async def search_return_policy(
+    query: str, category: str = "", thread_id: str = ""
+) -> dict:
     """Realiza una búsqueda semántica RAG usando pgvector sobre la normativa de la tienda.
 
     Args:
         query: Texto de consulta para buscar en las políticas.
         category: Categoría opcional para filtrar políticas (e.g., "electronics").
+        thread_id: id de conversación, solo para trazabilidad en LangFuse (no
+            afecta a la búsqueda). Este servicio corre en el proceso del MCP
+            server (mcp_supabase.py), no en el de la API, así que se registra
+            el cliente LangFuse aquí explícitamente antes de usar
+            langfuse.openai — si no, no habría ningún cliente autenticado en
+            este proceso y la traza no se enviaría (ver
+            get_langfuse_callback() en observability.py, mismo problema).
     """
-    # Import local para no cargar el SDK de OpenAI si esta función no se invoca.
-    import openai
+    # Import local para no cargar los SDKs si esta función no se invoca.
+    from backend.services.observability import get_langfuse
+
+    lf = get_langfuse()
+    # langfuse.openai es un drop-in de `openai` que traza la llamada
+    # (tokens + coste) como una GENERATION en LangFuse; si no está
+    # configurado, se usa el SDK de OpenAI normal y punto.
+    if lf is not None:
+        import langfuse.openai as openai
+    else:
+        import openai
 
     client = await get_supabase_client()
 
@@ -163,15 +181,22 @@ async def search_return_policy(query: str, category: str = "") -> dict:
         api_key=api_key.get_secret_value() if api_key else None
     )
     # Debe ser el mismo modelo de embedding usado al indexar las políticas.
+    # `session_id` como kwarg rompe esta llamada (Embeddings.create() no lo
+    # acepta y langfuse.openai no lo filtra para el recurso "embedding",
+    # comprobado en real); por eso el thread_id va en `metadata`, que sí
+    # está soportado -- la traza queda suelta (no anidada en el trace de la
+    # conversación), pero es buscable/filtrable por thread_id igualmente.
     embedding_resp = openai_client.embeddings.create(
         model="text-embedding-3-small",
         input=query,
+        name="rag_embedding",
+        metadata={"thread_id": thread_id, "category": category},
     )
     query_embedding = embedding_resp.data[0].embedding
 
     rpc_params = {
         "query_embedding": query_embedding,
-        "match_threshold": 0.7,
+        "match_threshold": get_settings().rag_match_threshold,
         "match_count": 5,
         # Pass category as filter so the vector search only returns chunks from
         # the relevant policy document (+ marco general). Without this, a query

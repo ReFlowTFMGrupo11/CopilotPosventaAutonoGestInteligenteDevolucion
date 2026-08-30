@@ -126,8 +126,9 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
         category = product_categories.get(item.get("order_item_id"), "")
         if category and category not in policy_by_category:
             raw_policy = await search_return_policy(
-                query=f"devolución {reason_category} {reason}",
+                query=f"devolución {reason_category} {item.get('condition', '')} {reason}",
                 category=category,
+                thread_id=state.get("thread_id"),
             )
             # MCP devuelve content blocks: [{"type": "text", "text": "{...}"}]
             if isinstance(raw_policy, list) and raw_policy and "text" in raw_policy[0]:

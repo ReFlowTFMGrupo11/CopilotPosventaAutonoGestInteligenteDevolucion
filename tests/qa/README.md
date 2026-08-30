@@ -19,8 +19,8 @@ tests/qa/
 ├── README.md                          ← Este documento (leer primero)
 ├── cases/
 │   ├── qa_manual_testing_cases_v2.csv ← 24 casos curados — fuente de verdad
-│   ├── qa_manual_testing_cases_v2.xlsx← Excel con colores para pruebas manuales
-│   └── eval_cases.csv                 ← 480 casos golden para evaluación automática
+│   └── qa_manual_testing_cases_v2.xlsx← Excel con colores para pruebas manuales
+│   (480 casos golden de evaluación automática → data/qa/eval_cases.csv, no aquí)
 ├── sql/
 │   ├── 00_reset_and_seed_complete.sql ← Reset total + carga todo desde cero
 │   ├── 01_seed_qa_cases.sql           ← Seed de los 24 casos (aditivo, idempotente)
@@ -211,7 +211,7 @@ Para cada caso marca si el bot:
 
 ## 🤖 Dataset de Evaluación Automática (`eval_cases.csv`)
 
-Además de los 24 casos manuales, `cases/eval_cases.csv` contiene **480 casos** generados sintéticamente con distribución equilibrada:
+Además de los 24 casos manuales, [`data/qa/eval_cases.csv`](../../data/qa/eval_cases.csv) contiene **480 casos** generados sintéticamente con distribución equilibrada:
 
 | Etiqueta | Nº casos | % |
 |----------|----------|---|
@@ -219,7 +219,7 @@ Además de los 24 casos manuales, `cases/eval_cases.csv` contiene **480 casos** 
 | `invalid` | 135 | 28.1% |
 | `human_review` | 214 | 44.6% |
 
-Este fichero se usa para evaluación programática del agente (precisión, recall, F1) y está referenciado desde `data/generate_dataset.py`.
+Este fichero se usa para evaluación programática del agente (precisión, recall, F1) y lo genera `data/generate_dataset.py`. Es la única fuente de verdad para `evaluate_rag.py` y `migrate_eval_cases_to_langfuse.py` (ver `tests/qa/scripts/README.md`) — no existe una copia local en `tests/qa/cases/` a propósito, para evitar que ambos ficheros se desincronicen (pasó: la copia antigua no tenía las columnas `condition`/`allowed_conditions` y provocó `KeyError` al evaluar).
 
 ---
 

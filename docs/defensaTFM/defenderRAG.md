@@ -129,7 +129,7 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 
 | Parámetro | Valor | Justificación |
 |-----------|-------|---------------|
-| `match_threshold` | 0.7 | Filtra resultados irrelevantes sin ser demasiado restrictivo |
+| `match_threshold` | 0.7 (`Settings.rag_match_threshold`, configurable vía `RAG_MATCH_THRESHOLD`) | Filtra resultados irrelevantes sin ser demasiado restrictivo |
 | `match_count` | 5 | Suficiente contexto sin saturar el prompt del Evaluador |
 | Distancia | Coseno (`<=>`) | Estándar para embeddings de texto, invariante a la magnitud |
 
@@ -142,7 +142,7 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 #    — filtra por categoría para evitar cross-contamination entre políticas —
 rpc_params = {
     "query_embedding": query_embedding,
-    "match_threshold": 0.7,
+    "match_threshold": get_settings().rag_match_threshold,  # 0.7 por defecto
     "match_count": 5,
     "filter_category": category or None,
 }

@@ -217,12 +217,25 @@ def _deterministic_label(row: dict) -> str:
 
 
 def _result_to_label(result: dict[str, Any]) -> str:
-    """Convierte la salida de evaluator_agent en una etiqueta comparable."""
-    any_eligible = result.get("any_eligible", False)
-    items = result.get("items_eligibility", [])
+    """Convierte la salida de evaluator_agent en una etiqueta comparable.
 
-    # Si el agente marcó HITL (ningún artículo elegible pero no rechazado explícitamente)
-    # la heurística es: si el refund_amount > umbral → human_review
+    ``needs_admin_approval`` (backend/agents/nodes/evaluator.py) es el
+    veredicto "human_review" de deterministic_check() — 100% determinista,
+    independiente de lo que el LLM haya puesto en ``is_eligible`` para ese
+    item. Debe comprobarse ANTES que ``is_eligible``: un item puede llegar
+    con is_eligible=False y aun así estar en zona de HITL (importe > umbral,
+    zona frontera de plazo, cliente frecuente) — deterministic_check() no
+    toca is_eligible cuando el veredicto es "human_review" (ver comentario
+    en evaluator_agent), así que ese campo no es fiable por sí solo para
+    distinguir "invalid" de "human_review". Antes de este fix, cualquier
+    caso HITL donde el LLM marcara is_eligible=False se contaba como
+    "invalid" — falso negativo sistemático contra el golden dataset, cuyo
+    expected_label sale de la misma lógica determinista (data/generate_dataset.py).
+    """
+    if result.get("needs_admin_approval"):
+        return "human_review"
+
+    items = result.get("items_eligibility", [])
     if not items:
         return "invalid"
 
@@ -230,10 +243,6 @@ def _result_to_label(result: dict[str, Any]) -> str:
     item = items[0]
     if not item.get("is_eligible"):
         return "invalid"
-
-    # is_eligible=True pero importe > umbral → human_review (HITL)
-    if item.get("refund_amount", 0) > HITL_AMOUNT_THRESHOLD:
-        return "human_review"
 
     return "valid"
 
@@ -382,7 +391,7 @@ async def run_evaluation(
             mock_policy = _build_mock_policy(cat, max_days, allowed_conditions)
 
             async def _mock_search(
-                query: str, category: str = ""
+                query: str, category: str = "", thread_id: str = ""
             ) -> dict:  # noqa: E501
                 return mock_policy
 
