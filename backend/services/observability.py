@@ -144,6 +144,7 @@ def with_langfuse(
     *,
     thread_id: str | None = None,
     customer_id: str | None = None,
+    order_id: str | None = None,
 ) -> dict[str, Any]:
     """Añade callback+metadata de LangFuse a config de LangGraph si aplica.
 
@@ -154,10 +155,16 @@ def with_langfuse(
       order_number, ver fetch_order_data en triage.py), lo añade como
       `langfuse_user_id` para poder agregar coste por cliente en LangFuse.
       Los turnos anteriores a conocer el order_number quedan sin este tag.
+    - Si hay `order_id`, se añade como metadata simple (`order_id`, no un
+      campo reservado de LangFuse como los dos anteriores): permite
+      *filtrar* trazas por pedido en la UI, aunque LangFuse no le dé una
+      vista agregada propia como a sesión/usuario (ver
+      docs/defensaTFM/defenderDashboardCostes.md — por eso el coste por
+      pedido sigue viviendo en el dashboard propio, no aquí).
 
-    Esto da tracing/debugging por sesión y cliente en LangFuse, pero no
-    agrega por pedido (`order_id`, dimensión de negocio que LangFuse no
-    conoce) ni está garantizado disponible (opcional, fail-open). Para eso
+    Esto da tracing/debugging por sesión, cliente y pedido en LangFuse, pero
+    no agrega nada (dimensión de negocio que LangFuse no conoce como vista
+    propia) ni está garantizado disponible (opcional, fail-open). Para eso
     existe el dashboard propio de coste (backend/services/usage_service.py,
     ver docs/defensaTFM/defenderDashboardCostes.md) — no es redundante con
     esto, responde una pregunta distinta (negocio vs. debugging).
@@ -168,14 +175,168 @@ def with_langfuse(
 
     merged = dict(config)
     merged["callbacks"] = [*merged.get("callbacks", []), callback]
-    if thread_id or customer_id:
+    if thread_id or customer_id or order_id:
         metadata = dict(merged.get("metadata", {}))
         if thread_id:
             metadata["langfuse_session_id"] = thread_id
         if customer_id:
             metadata["langfuse_user_id"] = customer_id
+        if order_id:
+            metadata["order_id"] = order_id
         merged["metadata"] = metadata
     return merged
+
+
+def score_rag_similarity(
+    thread_id: str | None,
+    query: str,
+    category: str,
+    semantic_results: list[dict[str, Any]],
+) -> None:
+    """Anota en LangFuse la calidad de una búsqueda RAG de políticas.
+
+    Sin esto, saber si una llamada a `search_return_policy` concreta
+    devolvió chunks relevantes exige abrir su traza y leer el Output
+    completo a mano, una por una. El score deja la mejor similitud como
+    valor NUMERIC (filtrable/ordenable/graficable en la tabla de Scores de
+    LangFuse, p.ej. para ver el % de búsquedas sin resultados en el
+    tiempo) y un resumen legible en `comment` — categoría, nº de chunks,
+    un extracto del mejor chunk y la query que entró al RAG — para tener
+    una vista rápida sin abrir la traza. El detalle completo (los 5 chunks
+    íntegros, la respuesta cruda del RPC) sigue estando solo en el
+    Input/Output de la traza; esto es un resumen, no un sustituto.
+
+    Se adjunta con `create_score(session_id=thread_id, ...)`, NO con
+    `score_current_trace()`/`score_current_span()`: probado en real que
+    ambos fallan en silencio aquí ("Context error: No active span in
+    current context") porque el tracing de LangGraph pasa por
+    `langfuse.langchain.CallbackHandler`, que no mantiene el mismo
+    contextvar de OTel que usan esos helpers — solo pasa trace/parent ids
+    explícitos internamente, no vía contexto. `session_id=thread_id` es
+    el mismo patrón ya usado y verificado en real por `score_resolution`
+    más abajo.
+
+    Efecto secundario aceptado a propósito: el score queda a nivel de
+    SESIÓN, no de trace/turno concreto — si una sesión tiene varias
+    búsquedas RAG (varios turnos, o un pedido con artículos de varias
+    categorías en un mismo turno), todas comparten `session_id` y no hay
+    forma de saber desde LangFuse a qué trace exacto pertenece cada una
+    salvo por su `timestamp` (correlación manual). Se investigó vincular
+    a trace_id exacto y se descartó por desproporcionado: exigiría dejar
+    de reutilizar un único `CallbackHandler` (singleton cacheado en este
+    módulo, compartido entre TODAS las peticiones concurrentes) y crear
+    uno nuevo por turno con `trace_context={"trace_id": ...}` pre-generado
+    — el único mecanismo que soporta el SDK para fijar un trace_id
+    explícito, ya que `config["metadata"]` NO acepta `langfuse_trace_id`
+    (solo reconoce `langfuse_session_id/user_id/tags/trace_name`, ver
+    `CallbackHandler.py`). Cambiar el ciclo de vida del handler afectaría
+    a todo el tracing del grafo, no solo al RAG, para un beneficio menor
+    (el `comment` ya identifica categoría+query; con eso casi nunca hace
+    falta abrir la traza exacta).
+
+    Si `semantic_results` viene vacío (ninguna búsqueda por encima de
+    `Settings.rag_match_threshold`), se registra value=0.0 en vez de
+    hacer no-op — es justo la señal que se quiere poder ver en LangFuse
+    (cuántas búsquedas no devuelven nada), no algo a silenciar.
+
+    No-op silencioso si LangFuse no está configurado, si no hay
+    `thread_id` (no hay session a la que adjuntar el score) o si falla la
+    llamada — es solo observabilidad, nunca debe poder romper el turno
+    del cliente (mismo criterio que el resto de este módulo).
+    """
+    if not thread_id:
+        return
+    lf = get_langfuse()
+    if lf is None:
+        return
+
+    if semantic_results:
+        best = max(semantic_results, key=lambda r: r.get("similarity") or 0.0)
+        similarity = round(best.get("similarity") or 0.0, 4)
+        excerpt = (best.get("chunk_text") or "").strip().replace("\n", " ")[:80]
+        comment = (
+            f'categoria={category or "general"} | chunks={len(semantic_results)} | '
+            f'mejor_chunk="{excerpt}..." | query="{query}"'
+        )
+    else:
+        similarity = 0.0
+        comment = (
+            f'categoria={category or "general"} | chunks=0 '
+            f'(ninguno por encima de rag_match_threshold) | query="{query}"'
+        )
+
+    try:
+        lf.create_score(
+            name="rag_similarity",
+            value=similarity,
+            session_id=thread_id,
+            data_type="NUMERIC",
+            comment=comment,
+        )
+    except Exception as exc:
+        logger.warning("No se pudo registrar el score RAG de LangFuse: %s", exc)
+
+
+def score_error(thread_id: str | None, error_type: str) -> None:
+    """Anota en LangFuse que un turno terminó en error (timeout o excepción).
+
+    Sin esto, la única forma de saber si hubo errores es grepear los logs
+    de consola turno a turno. Con esto se puede filtrar/contar en LangFuse
+    "cuántos turnos de esta sesión/proyecto acabaron en error" sin acceso
+    al servidor. Mismo patrón que `score_rag_similarity`
+    (`create_score(session_id=thread_id, ...)`, no `score_current_trace()`
+    — ver su docstring para el porqué).
+
+    No-op silencioso si no hay `thread_id`, LangFuse no está configurado o
+    falla la llamada — esto es solo observabilidad, nunca debe poder
+    romper el turno del cliente (mismo criterio que el resto del módulo).
+    """
+    if not thread_id:
+        return
+    lf = get_langfuse()
+    if lf is None:
+        return
+    try:
+        lf.create_score(
+            name="error",
+            value=error_type,
+            session_id=thread_id,
+            data_type="CATEGORICAL",
+        )
+    except Exception as exc:
+        logger.warning("No se pudo registrar el score de error de LangFuse: %s", exc)
+
+
+def score_resolution(thread_id: str, resolution: str | None) -> None:
+    """Anota en LangFuse el resultado final de un turno (approved/rejected/...).
+
+    A diferencia de `with_langfuse()` (que fija metadata ANTES de invocar el
+    grafo), esto se llama DESPUÉS de que `ainvoke()`/`astream()` termine, una
+    vez se conoce `resolution` — LangFuse no soporta re-etiquetar una traza ya
+    cerrada con metadata nueva, pero sí adjuntarle un *score* (anotación de
+    calidad/resultado) por `session_id`, que es justo para esto. Permite
+    filtrar/agregar en la UI de LangFuse "cuántas devoluciones se aprobaron
+    vs rechazaron", sin depender del dashboard propio para esa vista.
+
+    No-op silencioso si LangFuse no está configurado, si `resolution` es
+    None (turno intermedio, todavía sin resultado) o si falla la llamada —
+    es solo observabilidad, nunca debe poder romper el turno del cliente
+    (mismo criterio que el resto de este módulo).
+    """
+    if not resolution:
+        return
+    lf = get_langfuse()
+    if lf is None:
+        return
+    try:
+        lf.create_score(
+            name="resolution",
+            value=resolution,
+            session_id=thread_id,
+            data_type="CATEGORICAL",
+        )
+    except Exception as exc:
+        logger.warning("No se pudo registrar el score de LangFuse: %s", exc)
 
 
 def _resolve_project_id() -> Optional[str]:

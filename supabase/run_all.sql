@@ -1,6 +1,19 @@
+-- ==============================================================================
+-- run_all.sql — Script de conveniencia: TODAS las migraciones + seed.sql en uno.
+-- ==============================================================================
+-- Generado concatenando, en orden, supabase/migrations/001_*.sql .. 013_*.sql
+-- y supabase/seed.sql. La fuente de verdad de cada pieza son esos ficheros de
+-- origen (migrations/ y seed.sql) — este fichero es una copia derivada para
+-- poder pegar/ejecutar todo de una vez en el SQL Editor de Supabase. Si se
+-- añade una migración nueva o se edita seed.sql, hay que regenerar este
+-- fichero (no editarlo a mano): concatenar de nuevo migrations/*.sql + seed.sql
+-- en orden numérico.
+-- ==============================================================================
+
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "vector";
+
 -- Customers table
 CREATE TABLE IF NOT EXISTS customers (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -13,6 +26,7 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 
 CREATE INDEX idx_customers_email ON customers(email);
+
 -- Products table
 CREATE TABLE IF NOT EXISTS products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -28,6 +42,7 @@ CREATE TABLE IF NOT EXISTS products (
 
 CREATE INDEX idx_products_sku ON products(sku);
 CREATE INDEX idx_products_category ON products(category);
+
 -- Orders table
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -44,6 +59,7 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX idx_orders_customer ON orders(customer_id);
 CREATE INDEX idx_orders_number ON orders(order_number);
 CREATE INDEX idx_orders_status ON orders(status);
+
 -- Order items table
 CREATE TABLE IF NOT EXISTS order_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -56,6 +72,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_order_items_product ON order_items(product_id);
+
 -- Return requests table
 CREATE TABLE IF NOT EXISTS return_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -77,6 +94,7 @@ CREATE TABLE IF NOT EXISTS return_requests (
 CREATE INDEX idx_returns_order ON return_requests(order_id);
 CREATE INDEX idx_returns_customer ON return_requests(customer_id);
 CREATE INDEX idx_returns_status ON return_requests(status);
+
 -- Return items (which products from the order are being returned)
 CREATE TABLE IF NOT EXISTS return_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -87,6 +105,7 @@ CREATE TABLE IF NOT EXISTS return_items (
 );
 
 CREATE INDEX idx_return_items_request ON return_items(return_request_id);
+
 -- Return policies table (used by agent to validate eligibility)
 CREATE TABLE IF NOT EXISTS return_policies (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -101,6 +120,7 @@ CREATE TABLE IF NOT EXISTS return_policies (
 );
 
 CREATE UNIQUE INDEX idx_policies_category ON return_policies(category) WHERE active = TRUE;
+
 -- Policy embeddings for RAG-based policy lookup
 CREATE TABLE IF NOT EXISTS policy_embeddings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -114,6 +134,7 @@ CREATE TABLE IF NOT EXISTS policy_embeddings (
 -- IVFFlat index for fast cosine similarity search
 CREATE INDEX idx_policy_embeddings_vector ON policy_embeddings
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 10);
+
 -- Chat sessions for conversation tracking
 CREATE TABLE IF NOT EXISTS chat_sessions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -136,6 +157,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 
 CREATE INDEX idx_chat_messages_session ON chat_messages(session_id);
 CREATE INDEX idx_chat_sessions_customer ON chat_sessions(customer_id);
+
 -- Function to search policy embeddings by similarity
 CREATE OR REPLACE FUNCTION match_policy_embeddings(
     query_embedding VECTOR(1536),
@@ -180,6 +202,63 @@ CREATE TRIGGER trg_customers_updated_at
 CREATE TRIGGER trg_return_requests_updated_at
     BEFORE UPDATE ON return_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- Añadir thread_id de LangGraph a return_requests para vincular el grafo con la BD.
+ALTER TABLE return_requests ADD COLUMN IF NOT EXISTS thread_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_returns_thread ON return_requests(thread_id);
+
+-- =============================================================================
+-- Migration 013: add optional filter_category parameter to match_policy_embeddings
+-- =============================================================================
+-- Problem: the original function searched ALL chunks across ALL categories.
+-- If two categories have similar policy text, a query for "alimentacion" could
+-- return a high-similarity chunk from "mascotas" or "drogueria_salud".
+--
+-- Fix: add a nullable filter_category parameter.
+--   - NULL (default) → original behaviour, searches all chunks (e.g. marco general)
+--   - "alimentacion"  → restricts to chunks where metadata->>'category' matches,
+--     so the agent only retrieves chunks from the relevant policy document.
+--
+-- The filter uses metadata->>'category' (stored by ingest_policy_embeddings.py)
+-- rather than a JOIN through policy_id → return_policies, so it stays
+-- self-contained and works even for the marco general (policy_id IS NULL).
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION match_policy_embeddings(
+    query_embedding  VECTOR(1536),
+    match_threshold  FLOAT   DEFAULT 0.7,
+    match_count      INT     DEFAULT 5,
+    filter_category  TEXT    DEFAULT NULL
+)
+RETURNS TABLE (
+    id          UUID,
+    policy_id   UUID,
+    chunk_text  TEXT,
+    similarity  FLOAT
+)
+LANGUAGE sql STABLE
+AS $$
+    SELECT
+        pe.id,
+        pe.policy_id,
+        pe.chunk_text,
+        1 - (pe.embedding <=> query_embedding) AS similarity
+    FROM policy_embeddings pe
+    WHERE
+        1 - (pe.embedding <=> query_embedding) > match_threshold
+        AND (
+            filter_category IS NULL
+            OR pe.metadata->>'category' = filter_category
+            -- Always include marco general chunks (category = 'general')
+            -- regardless of the requested category: they contain the legal
+            -- baseline (14-day right of withdrawal, HITL threshold, Art. 103)
+            -- that applies to all categories.
+            OR pe.metadata->>'category' = 'general'
+        )
+    ORDER BY pe.embedding <=> query_embedding
+    LIMIT match_count;
+$$;
+
 -- Seed data for development and demo purposes
 
 -- Sample customers
@@ -189,12 +268,14 @@ INSERT INTO customers (id, email, full_name, phone, address) VALUES
     ('c3d4e5f6-a7b8-9012-cdef-123456789012', 'laura.fernandez@email.com', 'Laura Fernández Soto', '+34634567890', '{"street": "Calle Sierpes 15", "city": "Sevilla", "postal_code": "41004", "country": "ES"}');
 
 -- Sample products
+-- Categorías alineadas con la taxonomía en español de data/rag/policies/
+-- (ver nota equivalente en supabase/seed.sql).
 INSERT INTO products (id, sku, name, description, category, price, weight_kg) VALUES
-    ('d4e5f6a7-b8c9-0123-defa-234567890123', 'ELEC-LAPTOP-001', 'Portátil ProBook 15"', 'Portátil de alto rendimiento con 16GB RAM y 512GB SSD', 'electronics', 899.99, 1.8),
-    ('e5f6a7b8-c9d0-1234-efab-345678901234', 'ELEC-PHONE-001', 'Smartphone Galaxy X12', 'Smartphone 5G con cámara de 108MP', 'electronics', 649.99, 0.19),
-    ('f6a7b8c9-d0e1-2345-fabc-456789012345', 'FASH-JACKET-001', 'Chaqueta de Cuero Premium', 'Chaqueta de cuero auténtico, talla M', 'fashion', 199.99, 1.2),
-    ('a7b8c9d0-e1f2-3456-abcd-567890123456', 'HOME-BLENDER-001', 'Batidora de Vaso 1200W', 'Batidora profesional con 6 velocidades', 'home_appliances', 79.99, 2.5),
-    ('b8c9d0e1-f2a3-4567-bcde-678901234567', 'BOOK-PROG-001', 'Clean Code (Edición Español)', 'Libro sobre buenas prácticas de programación', 'books', 34.99, 0.6);
+    ('d4e5f6a7-b8c9-0123-defa-234567890123', 'ELEC-LAPTOP-001', 'Portátil ProBook 15"', 'Portátil de alto rendimiento con 16GB RAM y 512GB SSD', 'electronica_informatica', 899.99, 1.8),
+    ('e5f6a7b8-c9d0-1234-efab-345678901234', 'ELEC-PHONE-001', 'Smartphone Galaxy X12', 'Smartphone 5G con cámara de 108MP', 'electronica_informatica', 649.99, 0.19),
+    ('f6a7b8c9-d0e1-2345-fabc-456789012345', 'FASH-JACKET-001', 'Chaqueta de Cuero Premium', 'Chaqueta de cuero auténtico, talla M', 'moda_ropa', 199.99, 1.2),
+    ('a7b8c9d0-e1f2-3456-abcd-567890123456', 'HOME-BLENDER-001', 'Batidora de Vaso 1200W', 'Batidora profesional con 6 velocidades', 'electrodomesticos', 79.99, 2.5),
+    ('b8c9d0e1-f2a3-4567-bcde-678901234567', 'BOOK-PROG-001', 'Clean Code (Edición Español)', 'Libro sobre buenas prácticas de programación', 'libros_papeleria', 34.99, 0.6);
 
 -- Sample orders
 INSERT INTO orders (id, customer_id, order_number, status, total_amount, shipping_address, ordered_at, delivered_at) VALUES
@@ -211,8 +292,11 @@ INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_p
     ('d6e7f8a9-b0c1-2345-defa-456789012345', 'e1f2a3b4-c5d6-7890-efab-901234567890', 'b8c9d0e1-f2a3-4567-bcde-678901234567', 1, 34.99, 34.99);
 
 -- Sample return policies
+-- Mismas categorías que products + ON CONFLICT DO NOTHING (ver nota
+-- equivalente en supabase/seed.sql).
 INSERT INTO return_policies (id, category, max_return_days, requires_original_packaging, restocking_fee_percent, allowed_conditions, policy_text) VALUES
-    ('e7f8a9b0-c1d2-3456-efab-567890123456', 'electronics', 15, TRUE, 10.00, ARRAY['unopened', 'defective', 'wrong_item'], 'Los productos electrónicos pueden devolverse en un plazo de 15 días desde la entrega. Deben incluir el embalaje original y todos los accesorios. Se aplica una tarifa de reposición del 10% para productos abiertos no defectuosos. Los productos defectuosos se reembolsan íntegramente.'),
-    ('f8a9b0c1-d2e3-4567-fabc-678901234567', 'fashion', 30, FALSE, 0.00, ARRAY['unopened', 'wrong_size', 'wrong_item', 'not_as_described'], 'Las prendas de moda tienen un plazo de devolución de 30 días. No es necesario el embalaje original pero las prendas deben estar sin usar y con las etiquetas puestas. No se cobra tarifa de reposición. Cambios de talla disponibles según stock.'),
-    ('a9b0c1d2-e3f4-5678-abcd-789012345678', 'home_appliances', 30, TRUE, 5.00, ARRAY['unopened', 'defective', 'wrong_item'], 'Los electrodomésticos pueden devolverse en 30 días. Requieren embalaje original. Tarifa de reposición del 5% para productos abiertos funcionales. Garantía de 2 años para defectos de fabricación.'),
-    ('b0c1d2e3-f4a5-6789-bcde-890123456789', 'books', 14, FALSE, 0.00, ARRAY['wrong_item', 'defective'], 'Los libros solo pueden devolverse en 14 días si se recibió un artículo incorrecto o el producto está defectuoso (páginas faltantes, daño de impresión). No se aceptan devoluciones por cambio de opinión.');
+    ('e7f8a9b0-c1d2-3456-efab-567890123456', 'electronica_informatica', 15, TRUE, 10.00, ARRAY['unopened', 'defective', 'wrong_item'], 'Los productos electrónicos pueden devolverse en un plazo de 15 días desde la entrega. Deben incluir el embalaje original y todos los accesorios. Se aplica una tarifa de reposición del 10% para productos abiertos no defectuosos. Los productos defectuosos se reembolsan íntegramente.'),
+    ('f8a9b0c1-d2e3-4567-fabc-678901234567', 'moda_ropa', 30, FALSE, 0.00, ARRAY['unopened', 'wrong_size', 'wrong_item', 'not_as_described'], 'Las prendas de moda tienen un plazo de devolución de 30 días. No es necesario el embalaje original pero las prendas deben estar sin usar y con las etiquetas puestas. No se cobra tarifa de reposición. Cambios de talla disponibles según stock.'),
+    ('a9b0c1d2-e3f4-5678-abcd-789012345678', 'electrodomesticos', 30, TRUE, 5.00, ARRAY['unopened', 'defective', 'wrong_item'], 'Los electrodomésticos pueden devolverse en 30 días. Requieren embalaje original. Tarifa de reposición del 5% para productos abiertos funcionales. Garantía de 2 años para defectos de fabricación.'),
+    ('b0c1d2e3-f4a5-6789-bcde-890123456789', 'libros_papeleria', 14, FALSE, 0.00, ARRAY['wrong_item', 'defective'], 'Los libros solo pueden devolverse en 14 días si se recibió un artículo incorrecto o el producto está defectuoso (páginas faltantes, daño de impresión). No se aceptan devoluciones por cambio de opinión.')
+ON CONFLICT (category) WHERE active DO NOTHING;

@@ -62,7 +62,6 @@ if sys.platform == "win32":
 
 from backend.agents.nodes.evaluator import evaluator_agent
 from backend.agents.nodes.resolution import (
-    hitl_admin_node,
     rejection_agent,
     resolution_agent,
 )
@@ -210,7 +209,6 @@ async def build_return_graph(checkpointer=None):
     graph.add_node("evaluator", evaluator_agent)
     graph.add_node("resolver", resolution_agent)
     graph.add_node("reject", rejection_agent)
-    graph.add_node("hitl_admin", hitl_admin_node)
 
     # ── Aristas ────────────────────────────────────────────────────────
     # Entrada → Triaje
@@ -225,12 +223,11 @@ async def build_return_graph(checkpointer=None):
     # Evaluador → (resolver | reject)
     graph.add_conditional_edges("evaluator", route_after_evaluator)
 
-    # resolver usa Command() para ir a hitl_admin o __end__
+    # resolver usa Command(goto="__end__") siempre: el HITL (interrupt() +
+    # Command(resume=...)) se resuelve dentro del propio nodo "resolver", no
+    # saltando a otro nodo — no hay arista distinta que declarar aquí.
     # reject → fin
     graph.add_edge("reject", END)
-
-    # hitl_admin → fin
-    graph.add_edge("hitl_admin", END)
 
     # ── Compilar con checkpointer ──────────────────────────────────────
     compiled = graph.compile(checkpointer=checkpointer)

@@ -74,7 +74,9 @@ async def get_customer_return_history(customer_id: str) -> dict:
 
 
 @mcp.tool()
-async def search_return_policy(query: str, category: str = "") -> dict:
+async def search_return_policy(
+    query: str, category: str = "", thread_id: str = ""
+) -> dict:
     """
     Realiza una búsqueda semántica RAG usando pgvector sobre la normativa de la tienda.
     Usado por Agente 2.
@@ -82,8 +84,9 @@ async def search_return_policy(query: str, category: str = "") -> dict:
     Args:
         query: Texto de consulta para buscar en las políticas.
         category: Categoría opcional para filtrar políticas (e.g., "electronics").
+        thread_id: id de conversación, solo para trazabilidad en LangFuse.
     """
-    return await supabase_service.search_return_policy(query, category)
+    return await supabase_service.search_return_policy(query, category, thread_id)
 
 
 # ---------------------------------------------------------------------------

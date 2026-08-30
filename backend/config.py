@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     # ── HITL ─────────────────────────────────────────────────────────────
     hitl_threshold_eur: float = 100.0
 
+    # ── RAG (búsqueda semántica de políticas) ────────────────────────────
+    rag_match_threshold: float = 0.7
+
     # ── Langfuse (observabilidad, opcional) ─────────────────────────────
     langfuse_secret_key: SecretStr | None = None
     langfuse_public_key: str | None = None

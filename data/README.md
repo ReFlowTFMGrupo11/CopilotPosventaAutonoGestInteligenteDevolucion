@@ -1,15 +1,18 @@
 # Dataset sintético de prueba — ReFlow
 
 Este directorio contiene un dataset sintético **grande, variado y realista** para
-iterar con el RAG de políticas de devolución y con el futuro sistema
-multi-agente (Épica 2 de [`doc/guia.md`](../doc/guia.md)), atendiendo a la
-recomendación del profesor en
-[`AnotacionesProfesorSobreTFM.md`](../AnotacionesProfesorSobreTFM.md):
+iterar con el RAG de políticas de devolución y con el sistema multi-agente,
+atendiendo a la recomendación del profesor del TFM:
 
 > "También concretaría pronto el dataset de prueba: pedidos, productos,
 > políticas de devolución, importes, estados logísticos y casos límite. Sería
 > interesante incluir ejemplos donde la devolución sea claramente válida,
 > claramente no válida y casos ambiguos que activen el Human-in-the-Loop."
+
+Este documento es el detalle **técnico** (qué contiene cada fichero, cómo
+regenerarlo). El razonamiento — qué se decidió generar y por qué, pensado
+para la defensa del TFM — está en
+[`docs/defensaTFM/defenderDatos.md`](../docs/defensaTFM/defenderDatos.md).
 
 No se ha usado ningún generador externo de datos sintéticos: se probó a
 conectar el servidor MCP `awslabs.syntheticdata-mcp-server` (AWS Labs), pero
@@ -28,24 +31,31 @@ estándar, sin llamadas a APIs).
 
 ```
 data/
-  policies/                       16 políticas de categoría + 1 marco general (markdown)
   generate_dataset.py             Script generador (reproducible, seed fija)
-  ingest_policy_embeddings.py     Trocea policies/*.md y genera sus embeddings en policy_embeddings (RAG)
-  eval_cases.csv                  Golden dataset etiquetado para evaluar al Agente Evaluador
-  GENERATION_STATS.md             Estadísticas de la última generación (recuento, distribución)
   README.md                       Este documento
+  rag/
+    ingest_policy_embeddings.py   Trocea policies/*.md y genera sus embeddings en policy_embeddings (RAG)
+    policies/                     16 políticas de categoría + 1 marco general (markdown)
 supabase/
   seed_synthetic.sql              INSERTs generados (customers, products, orders, order_items,
                                    return_policies, return_requests, return_items,
                                    chat_sessions, chat_messages)
+tests/qa/golden/
+  eval_cases.csv                   Golden dataset etiquetado para evaluar al Agente Evaluador
+  GENERATION_STATS.md              Estadísticas de la última generación (recuento, distribución)
 ```
 
-### 1. Documentación de políticas (`data/policies/`)
+> El golden dataset (`eval_cases.csv` + `GENERATION_STATS.md`) no vive en `data/`
+> pese a que lo genera `generate_dataset.py`: no tiene ningún consumidor en
+> producción (solo lo leen los scripts de `tests/qa/golden/scripts/`), así que
+> vive junto a ellos — ver `tests/qa/README.md`.
+
+### 1. Documentación de políticas (`data/rag/policies/`)
 
 17 documentos markdown que constituyen la base de conocimiento a vectorizar
 para el RAG (`policy_embeddings` / `match_policy_embeddings`):
 
-- [`00_marco_general_devoluciones.md`](policies/00_marco_general_devoluciones.md):
+- [`00_marco_general_devoluciones.md`](rag/policies/00_marco_general_devoluciones.md):
   marco legal común (derecho de desistimiento de 14 días naturales, TRLGDCU y
   Directiva 2011/83/UE, excepciones legales del art. 103, umbral fijo de
   **100 € para Human-in-the-Loop**, reglas de aprobación/rechazo automático,
@@ -122,14 +132,14 @@ la sección 5 del documento general** (no es una etiqueta aleatoria), en:
   falta de evidencia fotográfica exigible.
 
 Distribución obtenida en la última generación (ver
-[`GENERATION_STATS.md`](GENERATION_STATS.md) para el detalle y el desglose
+[`GENERATION_STATS.md`](../tests/qa/golden/GENERATION_STATS.md) para el detalle y el desglose
 por categoría): **~27% valid / ~28% invalid / ~45% human_review** — un
 resultado deliberadamente realista: con un umbral fijo de 100 € y categorías
 con precio medio alto (electrónica, muebles, electrodomésticos, deportes),
 una parte importante de los casos legítimos igualmente requiere revisión
 humana, que es precisamente el comportamiento que el TFM quiere demostrar.
 
-El fichero [`eval_cases.csv`](eval_cases.csv) es este golden dataset en
+El fichero [`eval_cases.csv`](../tests/qa/golden/eval_cases.csv) es este golden dataset en
 formato tabular (`case_id`, `order_number`, `category`, `reason_category`,
 `days_since_delivery`, `refund_amount`, `expected_label`, `rationale`, ...),
 pensado para:
@@ -176,8 +186,8 @@ distribución de casos (los UUID sí cambian en cada ejecución, ya que se usan
 como claves primarias y no aportan valor fijarlos). Regenera:
 
 - `supabase/seed_synthetic.sql`
-- `data/eval_cases.csv`
-- `data/GENERATION_STATS.md`
+- `tests/qa/golden/eval_cases.csv`
+- `tests/qa/golden/GENERATION_STATS.md`
 
 Para ajustar el volumen o la mezcla de casos, editar las constantes al
 principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
@@ -186,21 +196,21 @@ principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
 ## Cómo cargar el dataset en Supabase
 
 Este fichero es **adicional** a [`supabase/seed.sql`](../supabase/seed.sql)
-(el seed pequeño de 3 clientes / 5 productos que usan los tests de
-`tests/test_mcp_supabase.py`), no lo sustituye. Para un entorno de desarrollo
+(el seed pequeño de 3 clientes / 5 productos que usa
+`tests/manual_checks/check_mcp_supabase.py`), no lo sustituye. Para un entorno de desarrollo
 o de pruebas de RAG dedicado a este dataset grande, se recomienda:
 
 1. Aplicar las migraciones (`supabase/migrations/*.sql` o `supabase/run_all.sql`
    sin la sección de seed) sobre una base de datos limpia.
 2. Cargar `supabase/seed_synthetic.sql` con `psql` o el SQL Editor de Supabase
    (esto crea, entre otras, las 16 filas de `return_policies`, una por categoría).
-3. Trocear los documentos de `data/policies/*.md` y generar sus embeddings
+3. Trocear los documentos de `data/rag/policies/*.md` y generar sus embeddings
    con `text-embedding-3-small` (el mismo modelo que ya usa
    `search_return_policy` en `backend/services/supabase_service.py`) para
    poblar `policy_embeddings`:
 
    ```bash
-   python -m dataset.ingest_policy_embeddings
+   python -m data.rag.ingest_policy_embeddings
    ```
 
    Requiere `OPENAI_API_KEY` y las credenciales de Supabase en `.env`, y que
@@ -219,12 +229,14 @@ o de pruebas de RAG dedicado a este dataset grande, se recomienda:
    el marco general).
 
 Si se carga en la misma base que ya tiene `seed.sql`, no hay colisión de
-claves (los emails, SKUs y `order_number` son distintos), pero sí quedarán
-**dos filas activas de `return_policies` por categorías equivalentes** si se
-usan nombres de categoría distintos entre ambos seeds (`electronics` vs.
-`electronica_informatica`, etc.) — es decir, conviven sin conflicto porque
-las categorías de este dataset usan slugs en español más granulares que los
-4 de `seed.sql`.
+claves (los emails, SKUs y `order_number` son distintos). `seed.sql` usa la
+misma taxonomía en español que este dataset (`electronica_informatica`,
+`moda_ropa`, `electrodomesticos`, `libros_papeleria`) y su INSERT de
+`return_policies` lleva `ON CONFLICT (category) WHERE active DO NOTHING`:
+si esta base ya tiene una política activa para esa categoría (p. ej. cargada
+desde este dataset o desde la ingesta de `data/rag/policies/`), el INSERT de
+`seed.sql` no hace nada y esos 5 productos quedan cubiertos por la política
+real en vez de por una fila huérfana en inglés sin RAG detrás.
 
 ## Qué queda fuera de este dataset (decisión deliberada)
 
@@ -241,7 +253,7 @@ las categorías de este dataset usan slugs en español más granulares que los
   | `human_review` | 65 | 46.4% | 30.4% de las 214 `human_review` |
 
   (cifras exactas de la última ejecución en la tabla correspondiente de
-  [`GENERATION_STATS.md`](GENERATION_STATS.md)). Es decir, aproximadamente
+  [`GENERATION_STATS.md`](../tests/qa/golden/GENERATION_STATS.md)). Es decir, aproximadamente
   **1 de cada 3 devoluciones de cada etiqueta** tiene una conversación
   asociada; las otras ~2 de cada 3 solo existen como fila de
   `return_requests` + `return_items`, sin traza de chat.

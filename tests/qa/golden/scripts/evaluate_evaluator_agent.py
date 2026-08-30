@@ -1,20 +1,27 @@
 """
-Evaluador end-to-end del pipeline RAG + Agente Evaluador de Políticas.
+Evaluador end-to-end del Agente Evaluador de Políticas contra el golden dataset.
 
-Lee los 480 casos de data/qa/eval_cases.csv, construye un estado mínimo
-por caso, mockea el RAG con los chunks REALES del corpus (sin llamadas
-a OpenAI ni a Supabase) y ejecuta evaluator_agent con el LLM real
-(gpt-5-mini). Calcula precisión, recall y F1 por clase y por categoría,
-y vuelca el informe como JSON y tabla Markdown en:
+Pese al nombre histórico ("evaluate_rag"), este script NO ejecuta ninguna
+búsqueda vectorial real: mockea search_return_policy() devolviendo el texto
+de política ya resuelto a mano por categoría (_build_mock_policy), así que
+no mide la calidad del retrieval. Lo que sí mide es si, dado el contexto de
+política correcto, evaluator_agent() decide bien (LLM real o reglas
+deterministas en --dry-run). El test real del RAG (chunking/ingesta) vive en
+tests/unit/test_ingest_policy_embeddings.py.
 
-  tests/qa/results/eval_report_<timestamp>.json
-  tests/qa/results/eval_report_<timestamp>.md
+Lee los 480 casos de tests/qa/golden/eval_cases.csv, construye un estado
+mínimo por caso, y ejecuta evaluator_agent con el LLM real (gpt-5-mini).
+Calcula precisión, recall y F1 por clase y por categoría, y vuelca el
+informe como JSON y tabla Markdown en:
+
+  tests/qa/golden/results/eval_report_<timestamp>.json
+  tests/qa/golden/results/eval_report_<timestamp>.md
 
 Uso:
-    python -m tests.qa.scripts.evaluate_rag                  # todos los casos
-    python -m tests.qa.scripts.evaluate_rag --limit 50       # primeros N casos
-    python -m tests.qa.scripts.evaluate_rag --category calzado
-    python -m tests.qa.scripts.evaluate_rag --dry-run        # lógica determinista, sin LLM
+    python -m tests.qa.golden.scripts.evaluate_evaluator_agent                  # todos los casos
+    python -m tests.qa.golden.scripts.evaluate_evaluator_agent --limit 50       # primeros N casos
+    python -m tests.qa.golden.scripts.evaluate_evaluator_agent --category calzado
+    python -m tests.qa.golden.scripts.evaluate_evaluator_agent --dry-run        # lógica determinista, sin LLM
 
 Modo --dry-run: en vez de llamar al LLM, aplica las reglas deterministas
 directamente sobre las columnas del CSV (plazo, importe HITL, is_frequent_returner)
@@ -44,8 +51,9 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 # ── Rutas ──────────────────────────────────────────────────────────────────
-REPO_ROOT = Path(__file__).resolve().parents[3]
-EVAL_CSV = REPO_ROOT / "data" / "qa" / "eval_cases.csv"
+# parents[4]: scripts/ -> golden/ -> qa/ -> tests/ -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[4]
+EVAL_CSV = REPO_ROOT / "tests" / "qa" / "golden" / "eval_cases.csv"
 POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
 RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 
@@ -217,12 +225,25 @@ def _deterministic_label(row: dict) -> str:
 
 
 def _result_to_label(result: dict[str, Any]) -> str:
-    """Convierte la salida de evaluator_agent en una etiqueta comparable."""
-    any_eligible = result.get("any_eligible", False)
-    items = result.get("items_eligibility", [])
+    """Convierte la salida de evaluator_agent en una etiqueta comparable.
 
-    # Si el agente marcó HITL (ningún artículo elegible pero no rechazado explícitamente)
-    # la heurística es: si el refund_amount > umbral → human_review
+    ``needs_admin_approval`` (backend/agents/nodes/evaluator.py) es el
+    veredicto "human_review" de deterministic_check() — 100% determinista,
+    independiente de lo que el LLM haya puesto en ``is_eligible`` para ese
+    item. Debe comprobarse ANTES que ``is_eligible``: un item puede llegar
+    con is_eligible=False y aun así estar en zona de HITL (importe > umbral,
+    zona frontera de plazo, cliente frecuente) — deterministic_check() no
+    toca is_eligible cuando el veredicto es "human_review" (ver comentario
+    en evaluator_agent), así que ese campo no es fiable por sí solo para
+    distinguir "invalid" de "human_review". Antes de este fix, cualquier
+    caso HITL donde el LLM marcara is_eligible=False se contaba como
+    "invalid" — falso negativo sistemático contra el golden dataset, cuyo
+    expected_label sale de la misma lógica determinista (data/generate_dataset.py).
+    """
+    if result.get("needs_admin_approval"):
+        return "human_review"
+
+    items = result.get("items_eligibility", [])
     if not items:
         return "invalid"
 
@@ -230,10 +251,6 @@ def _result_to_label(result: dict[str, Any]) -> str:
     item = items[0]
     if not item.get("is_eligible"):
         return "invalid"
-
-    # is_eligible=True pero importe > umbral → human_review (HITL)
-    if item.get("refund_amount", 0) > HITL_AMOUNT_THRESHOLD:
-        return "human_review"
 
     return "valid"
 
@@ -382,7 +399,7 @@ async def run_evaluation(
             mock_policy = _build_mock_policy(cat, max_days, allowed_conditions)
 
             async def _mock_search(
-                query: str, category: str = ""
+                query: str, category: str = "", thread_id: str = ""
             ) -> dict:  # noqa: E501
                 return mock_policy
 

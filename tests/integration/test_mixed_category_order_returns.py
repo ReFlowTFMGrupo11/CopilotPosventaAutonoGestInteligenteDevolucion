@@ -79,7 +79,7 @@ class TestPolicyEvaluatorMixedCategories:
         )
         mock_llm = _mock_llm_with_structured_output(mock_output)
 
-        async def search_side_effect(query, category):
+        async def search_side_effect(query, category, thread_id=None):
             return {
                 "electronica_informatica": mock_policy_results_electronics,
                 "cosmetica_perfumeria": mock_policy_results_cosmetics,
@@ -140,7 +140,7 @@ class TestPolicyEvaluatorMixedCategories:
         )
         mock_llm = _mock_llm_with_structured_output(mock_output)
 
-        async def search_side_effect(query, category):
+        async def search_side_effect(query, category, thread_id=None):
             return {
                 "electronica_informatica": mock_policy_results_electronics,
                 "cosmetica_perfumeria": mock_policy_results_cosmetics,
