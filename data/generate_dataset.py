@@ -2471,9 +2471,9 @@ def main() -> None:
     )
     lines.append("--")
     lines.append(
-        "-- Este archivo es ADICIONAL a supabase/seed.sql (no lo sustituye). Pensado para"
+        "-- Este archivo es el seed único del proyecto. Pensado para cargarse en"
     )
-    lines.append("-- cargarse en una base de datos ya migrada (ver dataset/README.md).")
+    lines.append("-- una base de datos ya migrada (ver data/README.md).")
     lines.append(
         "-- ========================================================================="
     )
