@@ -23,7 +23,7 @@ from backend.api.schemas import (
     NewChatResponse,
 )
 from backend.config import get_settings
-from backend.services.observability import with_langfuse
+from backend.services.observability import score_resolution, with_langfuse
 
 logger = logging.getLogger(__name__)
 
@@ -82,15 +82,19 @@ async def _conversation_turn_limit_reached(graph, config: dict) -> bool:
     return human_turns >= MAX_CONVERSATION_TURNS
 
 
-async def _known_customer_id(graph, thread_id: str) -> str | None:
-    """``customer_id`` ya resuelto para este thread_id en un turno anterior.
+async def _known_customer_and_order_id(
+    graph, thread_id: str
+) -> tuple[str | None, str | None]:
+    """``(customer_id, order_id)`` ya resueltos para este thread_id, si los hay.
 
-    Se usa para taggear las trazas de LangFuse por cliente desde el primer
-    nodo del turno; antes de que el cliente dé su order_number todavía no
-    hay customer_id (ver fetch_order_data en triage.py) y se omite el tag.
+    Se usa para taggear las trazas de LangFuse desde el primer nodo del
+    turno; antes de que el cliente dé su order_number todavía no hay ninguno
+    de los dos (ver fetch_order_data en triage.py) y se omiten los tags. Una
+    sola lectura de estado para ambos, en vez de dos `aget_state` separados.
     """
     state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
-    return (state.values or {}).get("customer_id") if state else None
+    values = state.values or {} if state else {}
+    return values.get("customer_id"), values.get("order_id")
 
 
 # Un lock por thread_id: si dos peticiones para el MISMO hilo llegan
@@ -156,13 +160,17 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
 
     Útil para pruebas con curl o clientes que no soportan SSE.
     """
+    known_customer_id, known_order_id = await _known_customer_and_order_id(
+        graph, request.thread_id
+    )
     config = _with_graph_limits(
         with_langfuse(
             {
                 "configurable": {"thread_id": request.thread_id},
             },
             thread_id=request.thread_id,
-            customer_id=await _known_customer_id(graph, request.thread_id),
+            customer_id=known_customer_id,
+            order_id=known_order_id,
         )
     )
 
@@ -187,6 +195,7 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
         raise HTTPException(status_code=500, detail=f"Error ejecutando el grafo: {exc}")
 
     last_message = result["messages"][-1]
+    score_resolution(request.thread_id, result.get("resolution"))
 
     return ChatResponse(
         thread_id=request.thread_id,
@@ -232,13 +241,17 @@ async def _stream_chat_events(
     graph, message: str, thread_id: str, selected_item_ids: list[str] | None = None
 ) -> AsyncIterator[ChatStreamEvent]:
     """Genera eventos SSE conforme cada nodo del grafo termina."""
+    known_customer_id, known_order_id = await _known_customer_and_order_id(
+        graph, thread_id
+    )
     config = _with_graph_limits(
         with_langfuse(
             {
                 "configurable": {"thread_id": thread_id},
             },
             thread_id=thread_id,
-            customer_id=await _known_customer_id(graph, thread_id),
+            customer_id=known_customer_id,
+            order_id=known_order_id,
         )
     )
     lock = _thread_locks.get(thread_id)
@@ -324,6 +337,7 @@ async def _stream_chat_events(
                 if last_message
                 else "No he podido generar una respuesta."
             )
+            score_resolution(thread_id, values.get("resolution"))
 
             yield ChatStreamEvent(
                 type="final",
