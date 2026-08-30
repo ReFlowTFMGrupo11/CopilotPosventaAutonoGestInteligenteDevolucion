@@ -36,14 +36,19 @@ data/
   rag/
     ingest_policy_embeddings.py   Trocea policies/*.md y genera sus embeddings en policy_embeddings (RAG)
     policies/                     16 políticas de categoría + 1 marco general (markdown)
-  qa/
-    eval_cases.csv                Golden dataset etiquetado para evaluar al Agente Evaluador
-    GENERATION_STATS.md           Estadísticas de la última generación (recuento, distribución)
 supabase/
   seed_synthetic.sql              INSERTs generados (customers, products, orders, order_items,
                                    return_policies, return_requests, return_items,
                                    chat_sessions, chat_messages)
+tests/qa/golden/
+  eval_cases.csv                   Golden dataset etiquetado para evaluar al Agente Evaluador
+  GENERATION_STATS.md              Estadísticas de la última generación (recuento, distribución)
 ```
+
+> El golden dataset (`eval_cases.csv` + `GENERATION_STATS.md`) no vive en `data/`
+> pese a que lo genera `generate_dataset.py`: no tiene ningún consumidor en
+> producción (solo lo leen los scripts de `tests/qa/golden/scripts/`), así que
+> vive junto a ellos — ver `tests/qa/README.md`.
 
 ### 1. Documentación de políticas (`data/rag/policies/`)
 
@@ -127,14 +132,14 @@ la sección 5 del documento general** (no es una etiqueta aleatoria), en:
   falta de evidencia fotográfica exigible.
 
 Distribución obtenida en la última generación (ver
-[`GENERATION_STATS.md`](qa/GENERATION_STATS.md) para el detalle y el desglose
+[`GENERATION_STATS.md`](../tests/qa/golden/GENERATION_STATS.md) para el detalle y el desglose
 por categoría): **~27% valid / ~28% invalid / ~45% human_review** — un
 resultado deliberadamente realista: con un umbral fijo de 100 € y categorías
 con precio medio alto (electrónica, muebles, electrodomésticos, deportes),
 una parte importante de los casos legítimos igualmente requiere revisión
 humana, que es precisamente el comportamiento que el TFM quiere demostrar.
 
-El fichero [`eval_cases.csv`](qa/eval_cases.csv) es este golden dataset en
+El fichero [`eval_cases.csv`](../tests/qa/golden/eval_cases.csv) es este golden dataset en
 formato tabular (`case_id`, `order_number`, `category`, `reason_category`,
 `days_since_delivery`, `refund_amount`, `expected_label`, `rationale`, ...),
 pensado para:
@@ -181,8 +186,8 @@ distribución de casos (los UUID sí cambian en cada ejecución, ya que se usan
 como claves primarias y no aportan valor fijarlos). Regenera:
 
 - `supabase/seed_synthetic.sql`
-- `data/qa/eval_cases.csv`
-- `data/qa/GENERATION_STATS.md`
+- `tests/qa/golden/eval_cases.csv`
+- `tests/qa/golden/GENERATION_STATS.md`
 
 Para ajustar el volumen o la mezcla de casos, editar las constantes al
 principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
@@ -191,8 +196,8 @@ principio de `main()` (`n_customers`, `n_orders`, `target_returns`,
 ## Cómo cargar el dataset en Supabase
 
 Este fichero es **adicional** a [`supabase/seed.sql`](../supabase/seed.sql)
-(el seed pequeño de 3 clientes / 5 productos que usan los tests de
-`tests/test_mcp_supabase.py`), no lo sustituye. Para un entorno de desarrollo
+(el seed pequeño de 3 clientes / 5 productos que usa
+`tests/manual_checks/check_mcp_supabase.py`), no lo sustituye. Para un entorno de desarrollo
 o de pruebas de RAG dedicado a este dataset grande, se recomienda:
 
 1. Aplicar las migraciones (`supabase/migrations/*.sql` o `supabase/run_all.sql`
@@ -248,7 +253,7 @@ real en vez de por una fila huérfana en inglés sin RAG detrás.
   | `human_review` | 65 | 46.4% | 30.4% de las 214 `human_review` |
 
   (cifras exactas de la última ejecución en la tabla correspondiente de
-  [`GENERATION_STATS.md`](GENERATION_STATS.md)). Es decir, aproximadamente
+  [`GENERATION_STATS.md`](../tests/qa/golden/GENERATION_STATS.md)). Es decir, aproximadamente
   **1 de cada 3 devoluciones de cada etiqueta** tiene una conversación
   asociada; las otras ~2 de cada 3 solo existen como fila de
   `return_requests` + `return_items`, sin traza de chat.

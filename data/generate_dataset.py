@@ -34,8 +34,11 @@ rng = random.Random(SEED)
 REPO_ROOT = Path(__file__).resolve().parent.parent
 POLICIES_DIR = Path(__file__).resolve().parent / "rag" / "policies"
 OUT_SQL = REPO_ROOT / "supabase" / "seed_synthetic.sql"
-OUT_EVAL_CSV = REPO_ROOT / "data" / "qa" / "eval_cases.csv"
-OUT_STATS = REPO_ROOT / "data" / "qa" / "GENERATION_STATS.md"
+# El golden dataset de evaluación no tiene ningún consumidor en producción —
+# solo lo leen tests/qa/golden/scripts/ — así que vive junto a esos scripts,
+# no en data/ (que sí alimenta producción/dev vía OUT_SQL y rag/policies/).
+OUT_EVAL_CSV = REPO_ROOT / "tests" / "qa" / "golden" / "eval_cases.csv"
+OUT_STATS = REPO_ROOT / "tests" / "qa" / "golden" / "GENERATION_STATS.md"
 
 TODAY = datetime(2026, 7, 30, 12, 0, 0)
 

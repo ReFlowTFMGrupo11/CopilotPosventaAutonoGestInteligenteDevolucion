@@ -10,8 +10,8 @@ Cubre dos piezas relacionadas pero distintas, que conviene no confundir en la de
 
 - **Generación de datos** (`data/generate_dataset.py` → `supabase/seed_synthetic.sql`):
   un mundo ficticio y coherente (clientes, productos, pedidos) para poblar la app.
-- **Evaluación / golden dataset** (`data/qa/eval_cases.csv` + los scripts de
-  `tests/qa/scripts/`): un examen con las respuestas correctas ya puestas, y las
+- **Evaluación / golden dataset** (`tests/qa/golden/eval_cases.csv` + los scripts de
+  `tests/qa/golden/scripts/`): un examen con las respuestas correctas ya puestas, y las
   herramientas que se lo toman al agente real.
 
 ---
@@ -53,12 +53,12 @@ data/generate_dataset.py   (seed fijo: 20260730 — reproducible)
         │                                    140 conversaciones de chat
         │                                    → para poblar Supabase (BD real)
         │
-        ├──► data/qa/eval_cases.csv          480 filas: datos de entrada +
+        ├──► tests/qa/golden/eval_cases.csv          480 filas: datos de entrada +
         │                                    expected_label (valid/invalid/
         │                                    human_review) YA CALCULADO
         │                                    → el "examen con respuestas"
         │
-        └──► data/qa/GENERATION_STATS.md     resumen legible (recuentos,
+        └──► tests/qa/golden/GENERATION_STATS.md     resumen legible (recuentos,
                                               distribución) — solo para que
                                               un humano compruebe de un
                                               vistazo que el dataset generado
@@ -66,12 +66,12 @@ data/generate_dataset.py   (seed fijo: 20260730 — reproducible)
                                               lo consume
 ```
 
-A partir de `eval_cases.csv`, tres scripts en `tests/qa/scripts/` "toman el examen":
+A partir de `eval_cases.csv`, tres scripts en `tests/qa/golden/scripts/` "toman el examen":
 
 ```
 eval_cases.csv
         │
-        ├──► evaluate_rag.py                  local: reconstruye el estado,
+        ├──► evaluate_evaluator_agent.py                  local: reconstruye el estado,
         │                                      llama a evaluator_agent(),
         │                                      compara vs expected_label,
         │                                      escribe un informe JSON/MD
@@ -80,7 +80,7 @@ eval_cases.csv
                        │                          Dataset de Langfuse
                        ▼
              run_langfuse_experiment.py        reutiliza la MISMA lógica
-                                                que evaluate_rag.py, pero
+                                                que evaluate_evaluator_agent.py, pero
                                                 registra cada run en
                                                 Langfuse (historial
                                                 comparable entre ejecuciones,
@@ -130,17 +130,17 @@ solo "el agente aprueba o rechaza automáticamente casi todo".
 
 ## 4. Dos caminos de evaluación: local vs Langfuse
 
-| | `evaluate_rag.py` | `run_langfuse_experiment.py` |
+| | `evaluate_evaluator_agent.py` | `run_langfuse_experiment.py` |
 |---|---|---|
-| Dónde queda el resultado | JSON/MD local en `tests/qa/results/` | Dataset Run en Langfuse (UI) |
+| Dónde queda el resultado | JSON/MD local en `tests/qa/golden/results/` | Dataset Run en Langfuse (UI) |
 | Historial entre ejecuciones | No — cada informe se sustituye | Sí — comparable entre versiones de prompt/modelo |
 | Traza del LLM por caso fallado | No | Sí — abre la traza completa desde la UI |
 | Requiere infraestructura externa | No | Sí — Langfuse corriendo (local o cloud) |
-| Lógica de evaluación | Propia (`_build_state`, `_build_mock_policy`) | **Reutiliza la misma** de `evaluate_rag.py` (importada directamente) |
+| Lógica de evaluación | Propia (`_build_state`, `_build_mock_policy`) | **Reutiliza la misma** de `evaluate_evaluator_agent.py` (importada directamente) |
 
 No son dos implementaciones paralelas que puedan desincronizarse: `run_langfuse_experiment.py`
 importa literalmente `_build_state`/`_build_mock_policy`/`_result_to_label` desde
-`evaluate_rag.py` — un solo punto de verdad para "cómo se reconstruye el caso", con dos
+`evaluate_evaluator_agent.py` — un solo punto de verdad para "cómo se reconstruye el caso", con dos
 formas distintas de registrar el resultado.
 
 ---
@@ -154,15 +154,15 @@ trabajo, no solo construcción de features.
 
 `classify_case()` usa `condition` (¿el artículo está sin abrir? ¿usado? ¿le faltan
 piezas?) como ingrediente para calcular `expected_label` — pero el CSV exportado
-**no incluía esa columna**. `evaluate_rag.py` no podía reconstruir el caso real: en su
+**no incluía esa columna**. `evaluate_evaluator_agent.py` no podía reconstruir el caso real: en su
 lugar, lo **adivinaba** con una regla de solo 2 valores:
 
 ```python
-# Antes del fix — evaluate_rag.py
+# Antes del fix — evaluate_evaluator_agent.py
 "condition": "defective" if row["reason_category"] == "defective" else "unopened"
 ```
 
-Esto significa que, durante un tiempo, el % de accuracy que reportaba `evaluate_rag.py`
+Esto significa que, durante un tiempo, el % de accuracy que reportaba `evaluate_evaluator_agent.py`
 no medía de forma fiable si el agente decidía bien — medía, en parte, si coincidía por
 casualidad con una versión simplificada e inventada del caso.
 
@@ -170,7 +170,7 @@ casualidad con una versión simplificada e inventada del caso.
 
 1. `generate_dataset.py` exporta ahora `condition` y `allowed_conditions` (columnas
    nuevas en `eval_cases.csv`), con los mismos valores que usó `classify_case()`.
-2. `evaluate_rag.py::_build_state` usa la columna real en vez de adivinarla.
+2. `evaluate_evaluator_agent.py::_build_state` usa la columna real en vez de adivinarla.
 3. `_build_mock_policy` recibe `allowed_conditions` específico de cada categoría, en vez
    de una lista fija igual para las 16.
 4. `migrate_eval_cases_to_langfuse.py` sube también estas dos columnas (antes se perdían
@@ -184,11 +184,11 @@ del dataset generado.
 
 ## 6. ¿Por qué no está conectado a CI (todavía)?
 
-`evaluate_rag.py` está **diseñado** para funcionar como gate de CI: en modo `--dry-run`
+`evaluate_evaluator_agent.py` está **diseñado** para funcionar como gate de CI: en modo `--dry-run`
 (sin LLM, sin red) devuelve un exit code según la accuracy obtenida:
 
 ```python
-sys.exit(0 if accuracy >= 0.70 else 1)   # evaluate_rag.py
+sys.exit(0 if accuracy >= 0.70 else 1)   # evaluate_evaluator_agent.py
 ```
 
 Pero un hallazgo relevante para la defensa: **no existe ningún pipeline de CI en el
@@ -212,7 +212,7 @@ casos concretos es una señal real de que ambas capturan la misma intención de 
 documentada en las políticas — no un artefacto circular donde el mismo código se
 autoevalúa. El límite real: si ambas comparten el **mismo error de diseño** (p. ej. una
 mala interpretación de una política legal), el golden dataset no lo detectaría — para eso
-existen los 24 casos manuales curados (`tests/qa/cases/`), revisados por una persona, no
+existen los 24 casos manuales curados (`tests/qa/manual/cases/`), revisados por una persona, no
 generados por ninguna regla.
 
 ### Objeción: "¿Por qué 480 casos y no 15, o 1000?"
