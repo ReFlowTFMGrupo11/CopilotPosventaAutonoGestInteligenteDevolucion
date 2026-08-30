@@ -172,6 +172,78 @@ def with_langfuse(
     return merged
 
 
+def score_rag_similarity(
+    thread_id: str | None,
+    query: str,
+    category: str,
+    semantic_results: list[dict[str, Any]],
+) -> None:
+    """Anota en LangFuse la calidad de una búsqueda RAG de políticas.
+
+    Sin esto, saber si una llamada a `search_return_policy` concreta
+    devolvió chunks relevantes exige abrir su traza y leer el Output
+    completo a mano, una por una. El score deja la mejor similitud como
+    valor NUMERIC (filtrable/ordenable/graficable en la tabla de Scores de
+    LangFuse, p.ej. para ver el % de búsquedas sin resultados en el
+    tiempo) y un resumen legible en `comment` — categoría, nº de chunks,
+    un extracto del mejor chunk y la query que entró al RAG — para tener
+    una vista rápida sin abrir la traza. El detalle completo (los 5 chunks
+    íntegros, la respuesta cruda del RPC) sigue estando solo en el
+    Input/Output de la traza; esto es un resumen, no un sustituto.
+
+    Se adjunta con `create_score(session_id=thread_id, ...)`, NO con
+    `score_current_trace()`/`score_current_span()`: probado en real que
+    ambos fallan en silencio aquí ("Context error: No active span in
+    current context") porque el tracing de LangGraph pasa por
+    `langfuse.langchain.CallbackHandler`, que no mantiene el mismo
+    contextvar de OTel que usan esos helpers — solo pasa trace/parent ids
+    explícitos internamente, no vía contexto. `session_id=thread_id` es
+    el mismo patrón ya usado y verificado en real por `score_resolution`
+    más abajo.
+
+    Si `semantic_results` viene vacío (ninguna búsqueda por encima de
+    `Settings.rag_match_threshold`), se registra value=0.0 en vez de
+    hacer no-op — es justo la señal que se quiere poder ver en LangFuse
+    (cuántas búsquedas no devuelven nada), no algo a silenciar.
+
+    No-op silencioso si LangFuse no está configurado, si no hay
+    `thread_id` (no hay session a la que adjuntar el score) o si falla la
+    llamada — es solo observabilidad, nunca debe poder romper el turno
+    del cliente (mismo criterio que el resto de este módulo).
+    """
+    if not thread_id:
+        return
+    lf = get_langfuse()
+    if lf is None:
+        return
+
+    if semantic_results:
+        best = max(semantic_results, key=lambda r: r.get("similarity") or 0.0)
+        similarity = round(best.get("similarity") or 0.0, 4)
+        excerpt = (best.get("chunk_text") or "").strip().replace("\n", " ")[:80]
+        comment = (
+            f'categoria={category or "general"} | chunks={len(semantic_results)} | '
+            f'mejor_chunk="{excerpt}..." | query="{query}"'
+        )
+    else:
+        similarity = 0.0
+        comment = (
+            f'categoria={category or "general"} | chunks=0 '
+            f'(ninguno por encima de rag_match_threshold) | query="{query}"'
+        )
+
+    try:
+        lf.create_score(
+            name="rag_similarity",
+            value=similarity,
+            session_id=thread_id,
+            data_type="NUMERIC",
+            comment=comment,
+        )
+    except Exception as exc:
+        logger.warning("No se pudo registrar el score RAG de LangFuse: %s", exc)
+
+
 def _resolve_project_id() -> Optional[str]:
     """Resuelve el project_id de LangFuse asociado a las API keys configuradas.
 
