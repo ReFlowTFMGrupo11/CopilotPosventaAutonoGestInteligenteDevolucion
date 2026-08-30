@@ -125,14 +125,6 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
     for item in items_to_return:
         category = product_categories.get(item.get("order_item_id"), "")
         if category and category not in policy_by_category:
-            # `condition` (del artículo, no de la solicitud) mejora la
-            # similitud real contra los chunks RAG: comprobado en producción
-            # que "devolución {reason_category} {reason}" sin condition
-            # rondaba 0.52 de similitud máxima (por debajo del
-            # match_threshold, ver supabase_service.py) para consultas
-            # típicas; añadir condition la sube a ~0.57. Sigue haciendo
-            # falta el fix del umbral en supabase_service.py — esto solo
-            # ayuda a acercarse, no lo sustituye.
             raw_policy = await search_return_policy(
                 query=f"devolución {reason_category} {item.get('condition', '')} {reason}",
                 category=category,
