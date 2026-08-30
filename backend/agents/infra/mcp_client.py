@@ -165,12 +165,14 @@ async def search_return_policy(
     mejor similitud coseno obtenida (ver
     ``backend.services.observability.score_rag_similarity``) para poder
     ver de un vistazo, sin abrir cada traza, qué búsquedas RAG no están
-    devolviendo nada relevante. `thread_id` es opcional (no forma parte
-    de la llamada MCP en sí) porque el score se adjunta por sesión, no
-    por traza — ver docstring de `score_rag_similarity`.
+    devolviendo nada relevante. `thread_id` viaja también dentro de la
+    llamada MCP (no solo se usa aquí en local) porque el propio embedding
+    de OpenAI se llama en el proceso del MCP server, no en este -- ver
+    ``backend.services.supabase_service.search_return_policy``.
     """
     result = await call_tool(
-        "search_return_policy", {"query": query, "category": category}
+        "search_return_policy",
+        {"query": query, "category": category, "thread_id": thread_id or ""},
     )
     score_rag_similarity(
         thread_id, query, category, result.get("semantic_results") or []
