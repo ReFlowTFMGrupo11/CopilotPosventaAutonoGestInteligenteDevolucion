@@ -31,6 +31,22 @@ try:
 except httpx.HTTPError:
     links = {"configured": False}
 
+# ── Aviso de checkpointer no persistente ────────────────────────────────
+#
+# Si el backend cayó a InMemorySaver (ver backend/agents/graph.py), el
+# estado multi-turno y las aprobaciones HITL pendientes se pierden en cada
+# reinicio del proceso. Antes esto solo era visible en los logs de consola
+# del backend; en production el backend ya frena el arranque en este caso
+# (ver ENVIRONMENT en .env.example), así que ver este aviso ahí sería
+# indicio de una configuración incorrecta de ENVIRONMENT.
+checkpointer = links.get("checkpointer") or {}
+if checkpointer.get("persistent") is False:
+    st.warning(
+        "⚠️ El grafo está corriendo sobre **InMemorySaver** (no persistente): "
+        "las conversaciones a medias y las aprobaciones HITL pendientes se "
+        f"perderán si el backend se reinicia. Causa: {checkpointer.get('error') or 'desconocida'}."
+    )
+
 with st.expander("💰 Monitorización de gasto (LangFuse)", expanded=False):
     if not links.get("configured"):
         st.caption(

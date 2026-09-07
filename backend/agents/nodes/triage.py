@@ -38,7 +38,7 @@ import json
 import logging
 from typing import Any
 
-from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
@@ -149,12 +149,79 @@ def _build_llm() -> ChatOpenAI:
     return build_chat_llm("TRIAGE_MODEL", temperature=0)
 
 
+_EMPTY_MESSAGE_RESPONSE = (
+    "No he recibido ningún mensaje. ¿Puedes contarme qué problema tienes con tu pedido?"
+)
+
+
+def _last_ai_message_content(messages: list[Any]) -> str | None:
+    """Contenido del último ``AIMessage`` en el historial, o ``None`` si no hay."""
+    for message in reversed(messages):
+        if isinstance(message, AIMessage):
+            return message.content
+    return None
+
+
+def _is_noop_turn(messages: list[Any]) -> bool:
+    """True si el turno actual no puede aportar NADA nuevo que extraer.
+
+    Casos deterministas y seguros — deliberadamente NO se intenta detectar
+    "el cliente no dijo nada relevante" por semántica/keywords (el propio
+    prompt de este módulo prohíbe ese enfoque para campos como
+    ``items_confirmed``: "NO busques coincidencias literales de palabras
+    clave"). Solo se cubren dos casos sin ambigüedad posible:
+
+    1. Mensaje vacío/solo espacios — no hay texto del que extraer nada.
+    2. El último mensaje humano es un duplicado EXACTO e INMEDIATO del
+       anterior (mismo contenido, sin ningún turno de por medio) — el
+       patrón de un doble-submit del frontend o un reintento del cliente
+       tras un 504 de ``GRAPH_TURN_TIMEOUT_SECONDS`` (chat.py cancela la
+       llamada al LLM en curso, pero el cliente puede reenviar el mismo
+       mensaje creyendo que no llegó).
+
+    Solo se compara el ÚLTIMO PAR consecutivo, nunca cualquier repetición
+    en el historial completo: un cliente que repite la misma frase varios
+    turnos después (p.ej. para insistir) sí puede significar algo distinto
+    en ese punto de la conversación, así que ese caso SÍ se reprocesa con
+    el LLM como siempre.
+    """
+    if not messages:
+        return False
+    last = messages[-1]
+    if not isinstance(last, HumanMessage):
+        return False
+    if not (last.content or "").strip():
+        return True
+    human_messages = [m for m in messages if isinstance(m, HumanMessage)]
+    return len(human_messages) >= 2 and human_messages[-2].content == last.content
+
+
 async def triage_agent(state: ReturnState) -> dict[str, Any]:
     """Nodo del agente de Triaje y Empatía.
 
     Lee los ``messages`` del estado, invoca al LLM con structured output
     (Pydantic) para garantizar un schema válido en cada respuesta.
     """
+    messages = state.get("messages", [])
+
+    # Corte determinista ANTES de pagar una llamada al LLM: sin esto, un
+    # mensaje vacío o un doble-submit/reintento idéntico consecutivo
+    # disparaba una llamada completa al LLM para no extraer nada nuevo — el
+    # propio LLM habría vuelto a pedir lo mismo que ya se sabe. Ver
+    # `_is_noop_turn` para qué casos cubre (y cuáles NO, a propósito).
+    if _is_noop_turn(messages):
+        logger.info(
+            "Triaje: turno sin información nueva (mensaje vacío o duplicado "
+            "inmediato); se omite la llamada al LLM."
+        )
+        previous_response = _last_ai_message_content(messages[:-1])
+        return {
+            "messages": [
+                AIMessage(content=previous_response or _EMPTY_MESSAGE_RESPONSE)
+            ],
+            "current_agent": "triage",
+        }
+
     llm = _build_llm()
 
     # Construir la lista de mensajes para el LLM

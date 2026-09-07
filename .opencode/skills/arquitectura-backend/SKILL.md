@@ -94,7 +94,30 @@ cliente HTTP hacia los MCP servers). No debe contener:
   dentro de `Settings` — no con `load_dotenv()` repetido en módulos
   sueltos.
 
-## 6. Comentarios: concisos y al grano
+## 6. MCP es la frontera de los AGENTES, no de toda la app
+
+`backend/mcp/mcp_*.py` expone `services/` como tools MCP para que los
+**nodos de LangGraph** (y cualquier otro cliente MCP: Claude Desktop,
+Copilot, otro equipo) lo consuman por protocolo estándar. Eso NO significa
+que todo consumidor de `services/` deba pasar por MCP:
+
+- `backend/api/routers/orders.py` y `admin.py` importan `services/`
+  **directamente**, sin pasar por MCP, a propósito: son la UI/dashboard
+  del propio proceso, no un cliente LLM, y el protocolo MCP no aporta nada
+  ahí (solo overhead de red) — ver `docs/defensaTFM/defenderAgentes.md` §4.
+- Esto crea DOS caminos de código hacia la misma lógica de negocio
+  (`agents/nodes/*` → `mcp_client.py` → HTTP → `mcp/mcp_*.py` → `services/`,
+  vs. `api/routers/*` → `services/` directo). Cada tool en `mcp/mcp_*.py`
+  debe seguir siendo un wrapper fino de una sola línea (traducir tipos
+  Pydantic → dict cuando aplique, nada más) para que ambos caminos no
+  puedan divergir en silencio.
+- `tests/unit/test_mcp_service_parity.py` es un test de contrato: verifica
+  que cada tool MCP delega 1:1 en su función de `services/` equivalente.
+  Si una tool empieza a transformar/filtrar el resultado, este test debe
+  romperse — es la señal de que ese wrapper dejó de ser fino y hace falta
+  documentar por qué.
+
+## 7. Comentarios: concisos y al grano
 
 Ni `black` ni `flake8` (ver `README.md` → "Linting y formato") juzgan la
 verbosidad de un comentario: `black` no reescribe texto, y `flake8` solo

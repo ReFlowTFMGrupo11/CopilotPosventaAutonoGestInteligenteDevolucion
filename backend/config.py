@@ -48,6 +48,14 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
+    # ── Entorno ──────────────────────────────────────────────────────────
+    # Usado por build_return_graph() (backend/agents/graph.py) para decidir
+    # si un fallo al conectar con el checkpointer persistente (Postgres) debe
+    # frenar el arranque (production) o degradar a InMemorySaver con un aviso
+    # (development/staging/cualquier otro valor). "development" por defecto
+    # para no romper tests/scripts locales que no fijan esta variable.
+    environment: str = "development"
+
     # ── Supabase ─────────────────────────────────────────────────────────
     # Opcionales aquí (a diferencia de antes): la validación "falla rápido
     # si faltan" vive en get_supabase_client(), que es el único sitio que de
