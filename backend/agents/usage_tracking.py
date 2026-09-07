@@ -60,6 +60,15 @@ async def _log_usage(
     latency_ms: int,
     tokens: tuple[int, int, int],
 ) -> None:
+    """Registra una fila de uso en ``llm_usage`` vía ``usage_service.log_llm_usage``.
+
+    No-op silencioso si falta ``thread_id`` o si la escritura falla: es solo
+    observabilidad, nunca debe romper el turno del cliente.
+
+    Args:
+        tokens: Tupla ``(input_tokens, output_tokens, total_tokens)``, tal
+            como la devuelve ``_usage_from_message``.
+    """
     if not thread_id:
         # Sin thread_id no hay sesión a la que atribuir el gasto (p. ej.
         # scripts/tests que invocan un nodo suelto sin pasar por el grafo).

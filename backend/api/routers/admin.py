@@ -36,7 +36,12 @@ async def approve_return(
     body: AdminDecisionRequest = AdminDecisionRequest(),
     graph=Depends(get_graph),
 ):
-    """Admin aprueba una devolución pendiente. Reanuda el grafo."""
+    """Admin aprueba una devolución pendiente. Reanuda el grafo.
+
+    Returns:
+        Dict con `thread_id`, `resolution` y `tracking_number` (la
+        etiqueta de envío ya generada tras la aprobación).
+    """
     try:
         result = await asyncio.wait_for(
             graph.ainvoke(
@@ -68,7 +73,11 @@ async def reject_return(
     body: AdminDecisionRequest = AdminDecisionRequest(),
     graph=Depends(get_graph),
 ):
-    """Admin rechaza una devolución pendiente. Reanuda el grafo."""
+    """Admin rechaza una devolución pendiente. Reanuda el grafo.
+
+    Returns:
+        Dict con `thread_id` y `resolution`.
+    """
     try:
         result = await asyncio.wait_for(
             graph.ainvoke(

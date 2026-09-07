@@ -57,6 +57,7 @@ _project_id: Optional[str] = None
 
 
 def _is_configured() -> bool:
+    """True si hay credenciales de LangFuse (pública y secreta) en el entorno."""
     settings = get_settings()
     return bool(settings.langfuse_secret_key and settings.langfuse_public_key)
 

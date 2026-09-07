@@ -132,10 +132,12 @@ STATUS_BADGE_CLASS = {
 
 
 def inject_css() -> None:
+    """Inyecta el bloque `<style>` compartido de ReFlow en la página actual."""
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
 def render_header() -> None:
+    """Pinta la cabecera con el logo y el título "ReFlow"."""
     st.markdown(
         '<div class="reflow-header">'
         '<span class="reflow-logo">R</span>'
@@ -146,6 +148,7 @@ def render_header() -> None:
 
 
 def render_backend_banner(is_up: bool) -> None:
+    """Pinta un aviso si el backend está caído; no hace nada si está arriba."""
     if is_up:
         return
     st.markdown(
@@ -157,10 +160,12 @@ def render_backend_banner(is_up: bool) -> None:
 
 
 def kpi_card(label: str, value: str) -> str:
+    """Devuelve el HTML de una tarjeta de KPI (etiqueta + valor)."""
     return f'<div class="kpi-card"><p class="kpi-label">{label}</p><p class="kpi-value">{value}</p></div>'
 
 
 def status_badge(status: str | None) -> str:
+    """Devuelve el HTML de la insignia de color según el estado de la devolución."""
     cls = STATUS_BADGE_CLASS.get(status or "", "badge-pending")
     label = STATUS_LABEL.get(status or "", status or "—")
     return f'<span class="badge {cls}">{label}</span>'

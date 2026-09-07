@@ -253,6 +253,9 @@ async def create_return_record(
         items: Lista de items a devolver, cada uno con "order_item_id", "quantity"
             y opcionalmente "condition".
         notes: Notas adicionales opcionales.
+        thread_id: id de conversación, para poder recuperar la devolución
+            creada en un turno posterior (resume tras interrupt). Se omite
+            de la fila si viene vacío.
     """
     client = await get_supabase_client()
 
@@ -474,6 +477,7 @@ def _flatten_product_names(row: dict) -> dict:
 
 
 def _flatten_admin_row(row: dict) -> dict:
+    """Aplica ambos aplanados (`order_number` y `product_names`) a una fila del panel admin."""
     return _flatten_product_names(_flatten_order_number(row))
 
 

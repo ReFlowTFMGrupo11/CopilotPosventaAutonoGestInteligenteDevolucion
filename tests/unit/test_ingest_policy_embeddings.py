@@ -23,18 +23,24 @@ from data.rag.ingest_policy_embeddings import (
 
 
 class TestSplitIntoSections:
+    """Tests para el troceado de un markdown en secciones por encabezado ##."""
+
     def test_splits_by_level_two_headers(self):
+        """Verifica que el markdown se divide en secciones por cada encabezado ##."""
         md = "Título\n\nIntro.\n\n## Uno\n\nTexto uno.\n\n## Dos\n\nTexto dos.\n"
         sections = _split_into_sections(md)
         assert [header for header, _ in sections] == ["", "Uno", "Dos"]
 
     def test_drops_empty_sections(self):
+        """Verifica que las secciones sin contenido se descartan."""
         md = "## Vacía\n\n## Con contenido\n\nAlgo.\n"
         sections = _split_into_sections(md)
         assert [header for header, _ in sections] == ["Con contenido"]
 
 
 class TestChunkMarkdown:
+    """Tests para el chunking de markdown en fragmentos aptos para embeddings."""
+
     def test_keeps_oversized_paragraph_as_its_own_chunk(self):
         """Un párrafo que ya por sí solo supera el máximo no se parte a ciegas."""
         huge_paragraph = (
@@ -46,16 +52,19 @@ class TestChunkMarkdown:
         assert huge_paragraph.strip() in chunks[0]
 
     def test_each_chunk_is_prefixed_with_its_section_header(self):
+        """Verifica que cada chunk incluye el encabezado de su sección como prefijo."""
         md = "## Mi Sección\n\nPárrafo corto.\n"
         chunks = chunk_markdown(md)
         assert all(chunk.startswith("## Mi Sección") for chunk in chunks)
 
     def test_section_without_header_has_no_prefix(self):
+        """Verifica que el texto previo al primer encabezado no lleva prefijo."""
         md = "Texto suelto antes de cualquier encabezado.\n"
         chunks = chunk_markdown(md)
         assert chunks == ["Texto suelto antes de cualquier encabezado."]
 
     def test_never_splits_a_paragraph_across_chunks(self):
+        """Verifica que ningún párrafo queda partido entre dos chunks distintos."""
         p1 = "Primer párrafo relevante. " * 10
         p2 = "Segundo párrafo relevante. " * 10
         md = f"## S\n\n{p1}\n\n{p2}"
@@ -79,8 +88,11 @@ class TestChunkMarkdown:
 
 
 class TestGetActivePolicyId:
+    """Tests para la resolución del policy_id activo de una categoría."""
+
     @pytest.mark.asyncio
     async def test_returns_id_when_found(self):
+        """Verifica que se devuelve el id cuando existe una política activa para la categoría."""
         mock_client = MagicMock()
         resp = MagicMock(data=[{"id": "pol-123"}])
         mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(
@@ -93,6 +105,7 @@ class TestGetActivePolicyId:
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self):
+        """Verifica que se devuelve None cuando no hay política activa para la categoría."""
         mock_client = MagicMock()
         resp = MagicMock(data=[])
         mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.execute = AsyncMock(
@@ -105,8 +118,11 @@ class TestGetActivePolicyId:
 
 
 class TestReplaceEmbeddings:
+    """Tests para el reemplazo (delete + insert) de embeddings de una política."""
+
     @pytest.mark.asyncio
     async def test_deletes_by_policy_id_then_inserts(self):
+        """Verifica que se borran los embeddings previos por policy_id y se insertan los nuevos con su metadata."""
         mock_client = MagicMock()
         mock_client.table.return_value.delete.return_value.eq.return_value.execute = (
             AsyncMock()
@@ -160,6 +176,7 @@ class TestReplaceEmbeddings:
 
     @pytest.mark.asyncio
     async def test_deletes_by_null_policy_id_for_general_doc(self):
+        """Verifica que el marco general (sin policy_id) se borra filtrando por policy_id NULL."""
         mock_client = MagicMock()
         mock_client.table.return_value.delete.return_value.is_.return_value.execute = (
             AsyncMock()
@@ -174,6 +191,7 @@ class TestReplaceEmbeddings:
 
     @pytest.mark.asyncio
     async def test_no_insert_call_when_no_chunks(self):
+        """Verifica que no se llama a insert cuando no hay chunks que insertar."""
         mock_client = MagicMock()
         mock_client.table.return_value.delete.return_value.eq.return_value.execute = (
             AsyncMock()
@@ -190,11 +208,13 @@ class TestIngestDryRun:
 
     @pytest.mark.asyncio
     async def test_dry_run_counts_without_network(self):
+        """Verifica que dry_run cuenta chunks sin hacer llamadas de red."""
         total = await ingest(dry_run=True, only_category="calzado")
         assert total > 0
 
     @pytest.mark.asyncio
     async def test_only_category_still_includes_general_doc(self):
+        """Verifica que filtrar por una categoría concreta sigue incluyendo el marco general."""
         general_chunks = len(
             chunk_markdown(
                 (POLICIES_DIR / GENERAL_POLICY_DOC).read_text(encoding="utf-8")
@@ -217,6 +237,8 @@ class TestIngestDryRun:
 
 
 class TestIngestSkipsMissingCategory:
+    """Tests para el comportamiento de ingest() cuando falta la política activa de una categoría."""
+
     @pytest.mark.asyncio
     async def test_skips_category_without_active_policy_row(self):
         """Si return_policies no tiene fila activa para una categoría, se

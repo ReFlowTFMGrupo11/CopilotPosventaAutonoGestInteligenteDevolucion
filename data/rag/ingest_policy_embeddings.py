@@ -78,6 +78,7 @@ _encoding = tiktoken.get_encoding("cl100k_base")
 
 
 def _count_tokens(text: str) -> int:
+    """Cuenta los tokens de `text` según el encoding `cl100k_base` (solo para medir tamaño de chunk)."""
     return len(_encoding.encode(text))
 
 
@@ -118,6 +119,7 @@ def _chunk_section(header: str, body: str) -> list[str]:
     current_tokens = 0
 
     def flush() -> None:
+        """Cierra el chunk acumulado en `current` y lo añade a `chunks`, si no está vacío."""
         if current:
             chunks.append(prefix + "\n\n".join(current))
 
@@ -171,7 +173,15 @@ def _embed_texts(openai_client: OpenAI, texts: list[str]) -> list[list[float]]:
 async def _get_active_policy_id(supabase_client: Any, category: str) -> Optional[str]:
     """Busca el id de la fila activa de ``return_policies`` para una
     categoría. Devuelve ``None`` si no existe (el caller decide si eso es
-    motivo para saltarse el documento, no para fallar todo el script)."""
+    motivo para saltarse el documento, no para fallar todo el script).
+
+    Args:
+        supabase_client: Cliente Supabase ya autenticado.
+        category: Categoría cuya política activa se busca.
+
+    Returns:
+        El id de la política activa, o ``None`` si no hay ninguna.
+    """
     resp = (
         await supabase_client.table("return_policies")
         .select("id")
@@ -196,6 +206,19 @@ async def _replace_embeddings(
     ``policy_id IS NULL`` para el marco general) y los reemplaza por los
     nuevos, para que ejecutar el script más de una vez no acumule
     duplicados en ``policy_embeddings``.
+
+    Args:
+        supabase_client: Cliente Supabase ya autenticado.
+        policy_id: Id de la política de categoría, o ``None`` para el marco
+            general (que se ingesta con ``policy_id IS NULL``).
+        chunks: Textos de los chunks a insertar, en orden.
+        embeddings: Embeddings correspondientes a cada chunk, en el mismo orden.
+        source_doc: Nombre del fichero markdown de origen, guardado en los metadatos.
+        category: Categoría de la política (o ``None`` para el marco general),
+            guardada en los metadatos para filtrar sin JOIN.
+
+    Returns:
+        Número de filas insertadas.
     """
     delete_query = supabase_client.table("policy_embeddings").delete()
     delete_query = (
@@ -229,8 +252,16 @@ async def _replace_embeddings(
 
 async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) -> int:
     """Trocea y (salvo ``dry_run``) vectoriza + inserta en ``policy_embeddings``
-    el marco general y cada política de categoría. Devuelve el nº total de
-    chunks generados (o insertados, si no es ``dry_run``).
+    el marco general y cada política de categoría.
+
+    Args:
+        only_category: Si se indica, ingesta solo esa categoría (además del
+            marco general) en vez de las 16. Debe existir en ``CATEGORIES``.
+        dry_run: Si es ``True``, solo trocea y cuenta chunks/tokens, sin
+            llamar a OpenAI ni a Supabase.
+
+    Returns:
+        Nº total de chunks generados (o insertados, si no es ``dry_run``).
     """
     if only_category is not None and only_category not in CATEGORIES:
         raise ValueError(
@@ -288,6 +319,7 @@ async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) 
 
 
 def _parse_args() -> argparse.Namespace:
+    """Define y parsea los argumentos de línea de comandos del script (`--dry-run`, `--category`)."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )

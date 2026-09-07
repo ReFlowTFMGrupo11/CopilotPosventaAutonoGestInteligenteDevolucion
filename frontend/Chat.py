@@ -59,6 +59,7 @@ if thread_id:
 
 
 def render_bubble(kind: str, text: str) -> None:
+    """Pinta una burbuja de chat según su tipo (usuario, agente, HITL o error)."""
     if kind == "user":
         with st.chat_message("user"):
             st.write(text)

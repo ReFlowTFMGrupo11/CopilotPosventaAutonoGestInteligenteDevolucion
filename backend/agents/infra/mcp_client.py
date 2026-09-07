@@ -99,6 +99,11 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
 
     Determina automáticamente qué server contiene la tool y solo
     conecta con ese server (no requiere que todos estén levantados).
+
+    Returns:
+        El resultado ya parseado a ``dict``/``list`` si la respuesta MCP
+        era JSON serializado (caso normal); si no se pudo parsear, se
+        devuelve tal cual (str, list de content blocks, etc.).
     """
     server_name = _TOOL_SERVER_MAP.get(tool_name)
     if server_name is None:

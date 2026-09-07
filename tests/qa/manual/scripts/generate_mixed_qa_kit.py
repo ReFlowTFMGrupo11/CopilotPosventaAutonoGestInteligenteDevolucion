@@ -1396,14 +1396,17 @@ CATEGORY_LABEL = {
 
 
 def eligible_amount(items):
+    """Suma el importe de los artículos elegibles (aprobados) de un caso."""
     return round(sum(p for _, _, _, _, p, ok, _ in items if ok), 2)
 
 
 def total_amount(items):
+    """Suma el importe de todos los artículos del caso, elegibles o no."""
     return round(sum(p for _, _, _, _, p, ok, _ in items if True), 2)
 
 
 def build_message(case):
+    """Construye el mensaje de chat (con nº de pedido y motivo de cada artículo) para pegar en la prueba manual."""
     order_number = case["order_number"]
     parts = []
     for cat, name, motivo, _plazo, _precio, ok, _just in case["items"]:
@@ -1426,6 +1429,7 @@ def build_message(case):
 
 
 def build_keywords(case):
+    """Construye las palabras clave esperadas en la respuesta del bot: artículos aprobados/rechazados y aviso de HITL si aplica."""
     aprobados = [n for _, n, _, _, _, ok, _ in case["items"] if ok]
     rechazados = [n for _, n, _, _, _, ok, _ in case["items"] if not ok]
     kw = []
@@ -1443,6 +1447,7 @@ def build_keywords(case):
 
 
 def build_notas(case):
+    """Construye el texto de notas del caso: detalle de cada artículo (motivo, plazo, importe, elegibilidad) e importe total a reembolsar."""
     lines = []
     for cat, name, motivo, plazo, precio, ok, just in case["items"]:
         estado = "VALIDO" if ok else "INVALIDO"
@@ -1461,6 +1466,15 @@ def build_notas(case):
 
 
 def generate_excel():
+    """Genera el Excel de casos de pedidos mixtos (dataset/qa_manual_testing_casos_pedidos_mixtos.xlsx).
+
+    Crea una fila por cada caso de ``CASES`` (más el caso especial
+    ``CASE_008``, un pedido inexistente) con las columnas necesarias para
+    ejecutar la prueba manualmente en el chat: categorías, productos,
+    mensaje a pegar, palabras clave esperadas y criterios de validación.
+    Aplica estilos (colores de cabecera, ancho de columnas, wrap de texto)
+    y escribe el fichero final en disco.
+    """
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Casos de prueba"
@@ -1580,6 +1594,7 @@ def generate_excel():
 
 
 def sql_escape(s: str) -> str:
+    """Escapa comillas simples para insertarlas de forma segura en literales SQL."""
     return s.replace("'", "''")
 
 
@@ -1592,6 +1607,15 @@ versiones anteriores del script los habria dejado igualmente intactos."""
 
 
 def generate_sql():
+    """Genera el SQL de siembra de los casos de pedidos mixtos aún no sembrados.
+
+    Excluye los casos en ``ALREADY_SEEDED_CASES`` (ya insertados previamente
+    en la BBDD) y, para el resto, genera los INSERT idempotentes (``ON
+    CONFLICT DO NOTHING``) de customers, products, orders y order_items
+    necesarios para reproducir cada pedido mixto, más una consulta SELECT
+    de verificación. Escribe el resultado en
+    ``supabase/qa_manual_testing_seed_pedidos_mixtos.sql``.
+    """
     sql_cases = [c for c in CASES if c["num"] not in ALREADY_SEEDED_CASES]
 
     lines = []

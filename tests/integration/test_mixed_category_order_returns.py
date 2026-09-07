@@ -80,6 +80,16 @@ class TestPolicyEvaluatorMixedCategories:
         mock_llm = _mock_llm_with_structured_output(mock_output)
 
         async def search_side_effect(query, category, thread_id=None):
+            """Simula search_return_policy devolviendo resultados RAG distintos según la categoría.
+
+            Args:
+                query: Consulta de búsqueda (ignorada, no afecta al resultado simulado).
+                category: Categoría de política por la que se filtra el resultado.
+                thread_id: Id del thread (ignorado en la simulación).
+
+            Returns:
+                Los resultados de política mockeados para esa categoría.
+            """
             return {
                 "electronica_informatica": mock_policy_results_electronics,
                 "cosmetica_perfumeria": mock_policy_results_cosmetics,
@@ -141,6 +151,16 @@ class TestPolicyEvaluatorMixedCategories:
         mock_llm = _mock_llm_with_structured_output(mock_output)
 
         async def search_side_effect(query, category, thread_id=None):
+            """Simula search_return_policy devolviendo resultados RAG distintos según la categoría.
+
+            Args:
+                query: Consulta de búsqueda (ignorada, no afecta al resultado simulado).
+                category: Categoría de política por la que se filtra el resultado.
+                thread_id: Id del thread (ignorado en la simulación).
+
+            Returns:
+                Los resultados de política mockeados para esa categoría.
+            """
             return {
                 "electronica_informatica": mock_policy_results_electronics,
                 "cosmetica_perfumeria": mock_policy_results_cosmetics,

@@ -55,6 +55,8 @@ import uvicorn
 
 
 def main() -> None:
+    """Parsea los argumentos CLI y arranca uvicorn con ``loop="none"`` (ver
+    cabecera del módulo para el porqué)."""
     parser = argparse.ArgumentParser(description="Arranca la API FastAPI de ReFlow.")
     parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=8000)

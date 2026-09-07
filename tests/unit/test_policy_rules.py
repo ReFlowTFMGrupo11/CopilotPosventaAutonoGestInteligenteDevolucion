@@ -15,6 +15,7 @@ class TestDeterministicCheck:
     """Tests de la cadena de reglas orquestada por deterministic_check()."""
 
     def test_valid_within_deadline_and_allowed_condition(self):
+        """Verifica que un caso dentro de plazo y con condición permitida da veredicto 'valid'."""
         verdict, reasons = deterministic_check(
             days_since_order=10,
             max_return_days=30,
@@ -124,6 +125,7 @@ class TestDeterministicCheck:
             assert verdict == "valid", f"condition={condition} debería pasar el bypass"
 
     def test_invalid_condition_not_allowed_and_not_mercadia_fault(self):
+        """Verifica que una condición sí permitida ('wrong_item') no veta el caso aunque el motivo sea 'other'."""
         verdict, reasons = deterministic_check(
             days_since_order=5,
             max_return_days=30,
@@ -137,6 +139,7 @@ class TestDeterministicCheck:
         assert verdict == "valid"
 
     def test_human_review_high_amount(self):
+        """Verifica que un reembolso por encima del umbral (100€) fuerza revisión humana."""
         verdict, reasons = deterministic_check(
             days_since_order=5,
             max_return_days=30,
@@ -151,6 +154,7 @@ class TestDeterministicCheck:
         assert any("100" in r or "umbral" in r for r in reasons)
 
     def test_human_review_frequent_returner(self):
+        """Verifica que un cliente con muchas devoluciones aprobadas fuerza revisión humana por posible abuso."""
         verdict, reasons = deterministic_check(
             days_since_order=5,
             max_return_days=30,
@@ -189,6 +193,7 @@ class TestComputeRefund:
     ]
 
     def test_single_item_no_restocking_fee(self):
+        """Verifica que sin recargo de reposición el reembolso es igual al precio unitario."""
         refund = compute_refund(
             self.ORDER_ITEMS,
             [{"order_item_id": "oi-1", "quantity": 1}],
@@ -197,6 +202,7 @@ class TestComputeRefund:
         assert refund == 79.99
 
     def test_applies_restocking_fee_percent(self):
+        """Verifica que el recargo de reposición se descuenta del reembolso, redondeado a 2 decimales."""
         refund = compute_refund(
             self.ORDER_ITEMS,
             [{"order_item_id": "oi-1", "quantity": 1}],
@@ -205,6 +211,7 @@ class TestComputeRefund:
         assert refund == 71.99  # 79.99 * 0.9, redondeado a 2 decimales
 
     def test_multiplies_by_quantity(self):
+        """Verifica que el reembolso se multiplica por la cantidad de unidades devueltas."""
         refund = compute_refund(
             self.ORDER_ITEMS,
             [{"order_item_id": "oi-2", "quantity": 2}],

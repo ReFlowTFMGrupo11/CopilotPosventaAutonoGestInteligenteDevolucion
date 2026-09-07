@@ -37,6 +37,7 @@ class TestCalculateDaysSinceDelivery:
     """Tests para la función de cálculo de días desde entrega."""
 
     def test_delivered_today_returns_zero(self):
+        """Verifica que una entrega con fecha de hoy da 0 días transcurridos."""
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc).isoformat()
@@ -44,6 +45,7 @@ class TestCalculateDaysSinceDelivery:
         assert result == 0
 
     def test_delivered_five_days_ago(self):
+        """Verifica que una entrega de hace 5 días da 5 días transcurridos."""
         from datetime import datetime, timezone, timedelta
 
         five_days_ago = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
@@ -53,6 +55,7 @@ class TestCalculateDaysSinceDelivery:
         assert result == 5
 
     def test_no_delivered_at_uses_created_at(self):
+        """Verifica que sin delivered_at se usa created_at como fecha de referencia."""
         from datetime import datetime, timezone, timedelta
 
         three_days_ago = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
@@ -62,14 +65,17 @@ class TestCalculateDaysSinceDelivery:
         assert result == 3
 
     def test_no_dates_returns_9999(self):
+        """Verifica que sin ninguna fecha disponible se devuelve el centinela 9999."""
         result = calculate_days_since_delivery({"order": {}})
         assert result == 9999
 
     def test_empty_order_returns_9999(self):
+        """Verifica que un order vacío también devuelve el centinela 9999."""
         result = calculate_days_since_delivery({})
         assert result == 9999
 
     def test_handles_z_suffix(self):
+        """Verifica que se parsean correctamente fechas ISO con sufijo 'Z' (UTC)."""
         from datetime import datetime, timezone
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -87,6 +93,7 @@ class TestGetOrderDetails:
 
     @pytest.mark.asyncio
     async def test_returns_order_and_items(self):
+        """Verifica que se devuelven tanto el pedido como sus artículos."""
         mock_client, query = _make_sync_supabase_client()
 
         # Mock para order query
@@ -119,6 +126,7 @@ class TestGetCustomerReturnHistory:
 
     @pytest.mark.asyncio
     async def test_counts_approved_and_rejected(self):
+        """Verifica que el historial cuenta correctamente devoluciones aprobadas y rechazadas."""
         mock_client, query = _make_sync_supabase_client()
 
         resp_mock = MagicMock()
@@ -142,6 +150,7 @@ class TestGetCustomerReturnHistory:
 
     @pytest.mark.asyncio
     async def test_empty_history(self):
+        """Verifica que un cliente sin devoluciones previas devuelve contadores a cero."""
         mock_client, query = _make_sync_supabase_client()
 
         resp_mock = MagicMock()
@@ -170,6 +179,7 @@ class TestCreateReturnRecord:
 
     @pytest.mark.asyncio
     async def test_creates_return_and_items(self):
+        """Verifica que se crea el registro de devolución junto con sus artículos."""
         mock_client, query = _make_sync_supabase_client()
 
         existing_resp = MagicMock()
@@ -203,6 +213,7 @@ class TestCreateReturnRecord:
 
     @pytest.mark.asyncio
     async def test_rejects_duplicate_order_item_already_returned(self):
+        """Verifica que no se puede crear una devolución duplicada del mismo order_item."""
         mock_client, query = _make_sync_supabase_client()
 
         existing_resp = MagicMock()
@@ -247,6 +258,7 @@ class TestUpdateReturnStatus:
 
     @pytest.mark.asyncio
     async def test_updates_status(self):
+        """Verifica que se actualiza el estado y la resolución de una devolución existente."""
         mock_client, query = _make_sync_supabase_client()
 
         resp_mock = MagicMock()
@@ -266,6 +278,7 @@ class TestUpdateReturnStatus:
 
     @pytest.mark.asyncio
     async def test_returns_none_when_not_found(self):
+        """Verifica que actualizar una devolución inexistente devuelve updated_return=None."""
         mock_client, query = _make_sync_supabase_client()
 
         resp_mock = MagicMock()
