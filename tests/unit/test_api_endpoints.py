@@ -68,6 +68,11 @@ def mock_graph():
     graph = _make_mock_graph()
 
     async def override():
+        """Sustituye a get_graph: devuelve el grafo mock en vez del real.
+
+        Returns:
+            El grafo mock (AsyncMock) creado por _make_mock_graph().
+        """
         return graph
 
     app.dependency_overrides[get_graph] = override
@@ -81,6 +86,11 @@ def mock_supabase():
     client = _make_mock_supabase()
 
     async def fake_get_client():
+        """Sustituye a get_supabase_client: devuelve el cliente mock.
+
+        Returns:
+            El cliente Supabase mock creado por _make_mock_supabase().
+        """
         return client
 
     with patch(
@@ -101,6 +111,7 @@ def async_client():
 
 @pytest.mark.asyncio
 async def test_health_check(async_client):
+    """Verifica que /health responde 200 con el estado del servicio."""
     async with async_client as client:
         resp = await client.get("/health")
 
@@ -113,6 +124,7 @@ async def test_health_check(async_client):
 
 @pytest.mark.asyncio
 async def test_create_chat(async_client):
+    """Verifica que crear un chat nuevo devuelve un thread_id con formato UUID."""
     async with async_client as client:
         resp = await client.post("/api/chat/new")
 
@@ -124,6 +136,7 @@ async def test_create_chat(async_client):
 
 @pytest.mark.asyncio
 async def test_send_message(async_client, mock_graph):
+    """Verifica que enviar un mensaje invoca al grafo y devuelve su respuesta."""
     async with async_client as client:
         resp = await client.post(
             "/api/chat",
@@ -147,6 +160,7 @@ async def test_send_message(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_send_message_graph_error(async_client, mock_graph):
+    """Verifica que un error del grafo se propaga como 500 con el detalle del error."""
     mock_graph.ainvoke.side_effect = Exception("OpenAI timeout")
 
     async with async_client as client:
@@ -164,6 +178,7 @@ async def test_send_message_graph_error(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_send_message_missing_fields(async_client, mock_graph):
+    """Verifica que falta el campo thread_id produce un 422 de validación."""
     async with async_client as client:
         resp = await client.post("/api/chat", json={"message": "Hola"})
 
@@ -172,6 +187,7 @@ async def test_send_message_missing_fields(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_get_chat_state(async_client, mock_graph):
+    """Verifica que se puede consultar el estado actual de un thread del grafo."""
     state = MagicMock()
     state.values = {
         "current_agent": "triage",
@@ -198,6 +214,7 @@ async def test_get_chat_state(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_list_pending_returns(async_client, mock_supabase):
+    """Verifica que se listan las devoluciones pendientes de aprobación."""
     # Configurar datos de retorno
     mock_supabase.table.return_value.execute.return_value = MagicMock(
         data=[
@@ -223,6 +240,7 @@ async def test_list_pending_returns(async_client, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_approve_return(async_client, mock_graph):
+    """Verifica que aprobar una devolución vía HITL devuelve el número de seguimiento."""
     mock_graph.ainvoke.return_value = {
         "resolution": "approved",
         "tracking_number": "TRK-12345",
@@ -245,6 +263,7 @@ async def test_approve_return(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_reject_return(async_client, mock_graph):
+    """Verifica que rechazar una devolución vía HITL devuelve resolution='rejected'."""
     mock_graph.ainvoke.return_value = {
         "resolution": "rejected",
     }
@@ -264,6 +283,7 @@ async def test_reject_return(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_approve_return_graph_error(async_client, mock_graph):
+    """Verifica que aprobar un thread sin HITL pendiente devuelve un 400."""
     mock_graph.ainvoke.side_effect = Exception("No hay thread pausado")
 
     async with async_client as client:
@@ -274,6 +294,7 @@ async def test_approve_return_graph_error(async_client, mock_graph):
 
 @pytest.mark.asyncio
 async def test_list_returns(async_client, mock_supabase):
+    """Verifica que se listan todas las devoluciones sin filtrar por estado."""
     mock_supabase.table.return_value.execute.return_value = MagicMock(
         data=[
             {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
@@ -291,6 +312,7 @@ async def test_list_returns(async_client, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_list_returns_with_status_filter(async_client, mock_supabase):
+    """Verifica que el filtro por status en la query param se acepta y responde 200."""
     mock_supabase.table.return_value.execute.return_value = MagicMock(
         data=[
             {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
@@ -308,6 +330,7 @@ async def test_list_returns_with_status_filter(async_client, mock_supabase):
 
 @pytest.mark.asyncio
 async def test_get_order(async_client):
+    """Verifica que se devuelven los detalles de un pedido existente."""
     mock_result = {
         "order": {"id": "ORD-001", "status": "delivered"},
         "items": [{"name": "Auriculares", "quantity": 1}],
@@ -325,6 +348,7 @@ async def test_get_order(async_client):
 
 @pytest.mark.asyncio
 async def test_get_order_not_found(async_client):
+    """Verifica que un pedido inexistente devuelve un 404."""
     with patch("backend.api.routers.orders.supabase_service") as mock_svc:
         mock_svc.get_order_details = AsyncMock(side_effect=Exception("Not found"))
 
@@ -336,6 +360,7 @@ async def test_get_order_not_found(async_client):
 
 @pytest.mark.asyncio
 async def test_get_customer_history(async_client):
+    """Verifica que se devuelve el historial de devoluciones de un cliente."""
     mock_result = {
         "customer_id": "cust-001",
         "total_returns": 2,
@@ -357,6 +382,7 @@ async def test_get_customer_history(async_client):
 
 @pytest.mark.asyncio
 async def test_get_stats(async_client, mock_supabase):
+    """Verifica que las estadísticas agregadas se calculan correctamente por estado."""
     mock_supabase.table.return_value.execute.return_value = MagicMock(
         data=[
             {"status": "approved"},

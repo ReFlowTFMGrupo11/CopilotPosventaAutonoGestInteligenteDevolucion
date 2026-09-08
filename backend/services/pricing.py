@@ -26,6 +26,11 @@ _DEFAULT_PRICES_USD_PER_MILLION: dict[str, tuple[float, float]] = {
 
 
 def _env_key(model: str) -> str:
+    """Normaliza el nombre de un modelo al formato usado en las env vars de precio.
+
+    Ej. ``gpt-5-mini`` → ``GPT_5_MINI`` (para componer
+    ``LLM_PRICE_GPT_5_MINI_INPUT_PER_1M``).
+    """
     return model.upper().replace("-", "_").replace(".", "_")
 
 
@@ -47,6 +52,7 @@ def price_per_million_usd(model: str) -> tuple[float, float] | None:
 
 
 def usd_to_eur_rate() -> float:
+    """Tipo de cambio USD→EUR, fijo (``USD_TO_EUR_RATE``) o el default aproximado."""
     return float(os.getenv("USD_TO_EUR_RATE", "0.86"))
 
 

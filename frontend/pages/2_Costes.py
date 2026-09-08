@@ -30,6 +30,7 @@ st.caption(
 
 
 def money(value) -> str:
+    """Formatea un importe como euros con 4 decimales, o "—" si no es numérico."""
     try:
         return f"{float(value):.4f} €"
     except (TypeError, ValueError):

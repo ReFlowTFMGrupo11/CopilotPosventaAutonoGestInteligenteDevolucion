@@ -1550,6 +1550,8 @@ EMAIL_DOMAINS = ["gmail.com", "hotmail.com", "outlook.com", "yahoo.es", "mail.co
 
 @dataclass
 class Customer:
+    """Cliente ficticio del dataset sintético."""
+
     id: str
     email: str
     full_name: str
@@ -1560,6 +1562,7 @@ class Customer:
 
 
 def build_customers(n: int) -> list[Customer]:
+    """Genera `n` clientes ficticios con nombre completo y email únicos."""
     used_names: set[str] = set()
     used_emails: set[str] = set()
     customers = []
@@ -1611,6 +1614,8 @@ def build_customers(n: int) -> list[Customer]:
 
 @dataclass
 class Product:
+    """Producto ficticio del catálogo sintético."""
+
     id: str
     sku: str
     name: str
@@ -1621,6 +1626,7 @@ class Product:
 
 
 def build_products() -> list[Product]:
+    """Construye la lista completa de productos a partir de `PRODUCT_CATALOG`."""
     products = []
     for category, items in PRODUCT_CATALOG.items():
         prefix = CATEGORIES[category]["prefix"]
@@ -1646,6 +1652,8 @@ def build_products() -> list[Product]:
 
 @dataclass
 class OrderItem:
+    """Línea de un pedido: producto, cantidad y precios."""
+
     id: str
     order_id: str
     product: Product
@@ -1656,6 +1664,8 @@ class OrderItem:
 
 @dataclass
 class Order:
+    """Pedido ficticio con sus líneas de artículo asociadas."""
+
     id: str
     customer: Customer
     order_number: str
@@ -1676,6 +1686,16 @@ ORDER_STATUS_WEIGHTS = [
 
 
 def weighted_choice(pairs, rng_local):
+    """Elige un valor al azar respetando los pesos indicados.
+
+    Args:
+        pairs: Lista de tuplas `(valor, peso)` entre las que elegir.
+        rng_local: Instancia de `random.Random` a usar (permite generadores
+            independientes del `rng` global del módulo).
+
+    Returns:
+        El valor elegido según los pesos relativos.
+    """
     total = sum(w for _, w in pairs)
     r = rng_local.uniform(0, total)
     upto = 0
@@ -1687,6 +1707,11 @@ def weighted_choice(pairs, rng_local):
 
 
 def shipping_days_for_category(category: str, rng_local) -> int:
+    """Simula los días de envío según si la categoría es de artículos pesados.
+
+    Returns:
+        Días de envío simulados (rango mayor para categorías pesadas).
+    """
     heavy = {
         "electrodomesticos",
         "muebles",
@@ -1702,6 +1727,7 @@ _order_counters: dict[int, int] = {}
 
 
 def next_order_number(ordered_at: datetime) -> str:
+    """Genera el siguiente número de pedido correlativo para el año de `ordered_at`."""
     year = ordered_at.year
     _order_counters[year] = _order_counters.get(year, 0) + 1
     return f"ORD-{year}-{_order_counters[year]:05d}"
@@ -1713,6 +1739,18 @@ def build_orders(
     n_orders: int,
     frequent_customer_ids: set[str],
 ) -> list[Order]:
+    """Genera pedidos sintéticos repartidos entre clientes y categorías.
+
+    Args:
+        customers: Clientes disponibles para asignar como comprador.
+        products: Catálogo de productos entre los que elegir líneas de pedido.
+        n_orders: Número total de pedidos a generar.
+        frequent_customer_ids: IDs de clientes marcados como devolvedores
+            frecuentes, sobrerrepresentados en los pedidos generados.
+
+    Returns:
+        Lista de pedidos con sus líneas, estado y fechas de envío simulados.
+    """
     by_category: dict[str, list[Product]] = {}
     for p in products:
         by_category.setdefault(p.category, []).append(p)
@@ -1953,6 +1991,12 @@ REASON_TEXT_VARIANTS = {
 
 
 def render_reason_text(case: "ReturnCase") -> str:
+    """Genera el texto libre del motivo de un caso a partir de `REASON_TEXT_VARIANTS`.
+
+    Returns:
+        Una redacción aleatoria del motivo, con el nombre del producto
+        sustituido cuando la plantilla lo incluye.
+    """
     variants = REASON_TEXT_VARIANTS[case.reason_category]
     template = rng.choice(variants)
     if "{product}" in template:
@@ -1971,6 +2015,8 @@ DAY_BUCKETS = [
 
 @dataclass
 class ReturnCase:
+    """Caso de devolución sintético, con su etiqueta de evaluación (valid/invalid/human_review)."""
+
     id: str
     order: Order
     customer: Customer
@@ -1989,6 +2035,13 @@ class ReturnCase:
 
 
 def sample_days(cfg_max_days: int) -> tuple[int, str]:
+    """Muestrea días transcurridos desde la entrega según un bucket ponderado del plazo.
+
+    Returns:
+        Tupla `(días, bucket)`, donde `bucket` indica la franja simulada
+        respecto al plazo (dentro de plazo, cerca del límite, justo
+        excedido o muy tardía).
+    """
     bucket = weighted_choice(DAY_BUCKETS, rng)
     if bucket == "deep_inside_window":
         days = rng.randint(1, max(1, cfg_max_days - 6))
@@ -2012,6 +2065,23 @@ def classify_case(
     is_frequent_returner: bool,
     missing_evidence: bool,
 ) -> tuple[str, str]:
+    """Clasifica un caso de devolución como valid/invalid/human_review según la política.
+
+    Args:
+        cfg_max_days: Plazo máximo de devolución (días) de la categoría.
+        days: Días transcurridos desde la entrega hasta la solicitud.
+        condition: Estado declarado del artículo devuelto.
+        allowed_conditions: Estados admitidos por la política de la categoría.
+        reason: Motivo de la devolución declarado por el cliente.
+        category: Categoría del producto devuelto.
+        refund_amount: Importe a reembolsar.
+        is_frequent_returner: Si el cliente está marcado como devolvedor frecuente.
+        missing_evidence: Si falta evidencia fotográfica exigible para el motivo.
+
+    Returns:
+        Tupla `(label, rationale)` con la etiqueta de evaluación y la
+        justificación textual de la decisión.
+    """
     diff = days - cfg_max_days
     reasons: list[str] = []
 
@@ -2082,6 +2152,16 @@ def classify_case(
 def pick_reason_and_condition(
     category: str, allowed_conditions: list[str]
 ) -> tuple[str, str]:
+    """Elige aleatoriamente un motivo de devolución y una condición de artículo coherentes.
+
+    Args:
+        category: Categoría del producto devuelto.
+        allowed_conditions: Estados de artículo admitidos por la política de
+            la categoría (sesga la elección de condición).
+
+    Returns:
+        Tupla `(reason, condition)`.
+    """
     roll = rng.random()
     if roll < 0.07:
         reason = rng.choice(SPECIAL_REASONS)
@@ -2110,6 +2190,18 @@ def pick_reason_and_condition(
 def build_return_cases(
     orders: list[Order], target_count: int, frequent_customer_ids: set[str]
 ) -> list[ReturnCase]:
+    """Genera casos de devolución sintéticos a partir de los pedidos entregados.
+
+    Args:
+        orders: Pedidos entre los que elegir candidatos a devolución (deben
+            estar entregados y tener líneas).
+        target_count: Número objetivo de casos de devolución a generar.
+        frequent_customer_ids: IDs de clientes devolvedores frecuentes,
+            priorizados para simular patrones de abuso.
+
+    Returns:
+        Lista de casos de devolución con su etiqueta y justificación.
+    """
     eligible_orders = [
         o
         for o in orders
@@ -2300,6 +2392,8 @@ CLOSING_BY_LABEL = {
 
 @dataclass
 class ChatMessage:
+    """Mensaje individual de una conversación de chat sintética."""
+
     id: str
     session_id: str
     role: str
@@ -2309,6 +2403,8 @@ class ChatMessage:
 
 @dataclass
 class ChatSession:
+    """Conversación de chat sintética asociada a un caso de devolución."""
+
     id: str
     customer_id: str
     status: str
@@ -2323,6 +2419,16 @@ class ChatSession:
 def build_chat_sessions(
     return_cases: list["ReturnCase"], n_conversations: int
 ) -> list[ChatSession]:
+    """Genera conversaciones de chat sintéticas que ilustran una muestra de casos de devolución.
+
+    Args:
+        return_cases: Casos de devolución disponibles para generar conversación.
+        n_conversations: Número de conversaciones a generar (se muestrean sin
+            repetición sobre `return_cases`).
+
+    Returns:
+        Lista de sesiones de chat con sus mensajes de usuario/asistente/sistema.
+    """
     sample = rng.sample(return_cases, min(n_conversations, len(return_cases)))
     sessions: list[ChatSession] = []
 
@@ -2415,22 +2521,26 @@ def build_chat_sessions(
 
 
 def esc(value) -> str:
+    """Escapa un valor como literal SQL de texto (o `NULL` si es `None`)."""
     if value is None:
         return "NULL"
     return "'" + str(value).replace("'", "''") + "'"
 
 
 def ts(dt: datetime | None) -> str:
+    """Formatea una fecha/hora como literal SQL `timestamptz`, o `NULL` si es `None`."""
     if dt is None:
         return "NULL"
     return esc(dt.strftime("%Y-%m-%d %H:%M:%S+02"))
 
 
 def sql_array(values: list[str]) -> str:
+    """Formatea una lista de strings como literal SQL `ARRAY[...]`."""
     return "ARRAY[" + ", ".join(esc(v) for v in values) + "]"
 
 
 def load_policy_text(filename: str) -> str:
+    """Lee el texto completo del documento de política `filename` desde `POLICIES_DIR`."""
     return (POLICIES_DIR / filename).read_text(encoding="utf-8")
 
 
@@ -2440,6 +2550,13 @@ def load_policy_text(filename: str) -> str:
 
 
 def main() -> None:
+    """Genera el dataset sintético completo y escribe los ficheros de salida.
+
+    Construye clientes, productos, pedidos, casos de devolución y
+    conversaciones de chat, y escribe el seed SQL (`OUT_SQL`), el golden
+    dataset de evaluación (`OUT_EVAL_CSV`) y un resumen de estadísticas de
+    generación (`OUT_STATS`).
+    """
     n_customers = 320
     n_orders = 1100
     target_returns = 480

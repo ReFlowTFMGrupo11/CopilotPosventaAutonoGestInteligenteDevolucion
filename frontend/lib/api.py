@@ -19,7 +19,7 @@ API_BASE = "http://localhost:8000"
 
 
 def health() -> bool:
-    """True si el backend responde a /health."""
+    """True si el backend responde a GET /health."""
     try:
         return httpx.get(f"{API_BASE}/health", timeout=3).status_code == 200
     except httpx.RequestError:
@@ -27,7 +27,11 @@ def health() -> bool:
 
 
 def new_chat() -> str:
-    """Crea una sesión de chat y devuelve su thread_id."""
+    """Llama a POST /api/chat/new para abrir una sesión de conversación nueva.
+
+    Returns:
+        El ``thread_id`` (str) generado para esta sesión.
+    """
     r = httpx.post(f"{API_BASE}/api/chat/new", timeout=10)
     r.raise_for_status()
     return r.json()["thread_id"]
@@ -38,7 +42,18 @@ def stream_chat(
     message: str,
     selected_item_ids: list[str] | None = None,
 ) -> Iterator[dict]:
-    """Envía un mensaje y cede (yield) cada evento SSE tal como llega."""
+    """Llama a POST /api/chat/stream y cede (yield) cada evento SSE tal como llega.
+
+    Args:
+        thread_id: Sesión de chat sobre la que se envía el mensaje.
+        message: Texto del mensaje del usuario.
+        selected_item_ids: Ids de los artículos del pedido seleccionados
+            para devolver, si el usuario ya los ha elegido.
+
+    Returns:
+        Iterador de eventos (dict con al menos ``type`` y ``content``,
+        p. ej. ``agent_step``, ``final``, ``awaiting_admin`` o ``error``).
+    """
     with httpx.stream(
         "POST",
         f"{API_BASE}/api/chat/stream",
@@ -65,18 +80,38 @@ def stream_chat(
 
 
 def stats() -> dict:
+    """Llama a GET /api/stats para obtener los KPIs generales de devoluciones.
+
+    Returns:
+        Dict con totales/tasa de aprobación (``total_returns``, ``approved``,
+        ``rejected``, ``pending``, ``approval_rate``).
+    """
     r = httpx.get(f"{API_BASE}/api/stats", timeout=10)
     r.raise_for_status()
     return r.json()
 
 
 def pending_returns() -> list[dict]:
+    """Llama a GET /api/admin/pending para listar devoluciones a la espera de aprobación HITL.
+
+    Returns:
+        Lista de devoluciones pendientes (dict por fila).
+    """
     r = httpx.get(f"{API_BASE}/api/admin/pending", timeout=10)
     r.raise_for_status()
     return r.json().get("pending", [])
 
 
 def list_returns(status: str = "") -> list[dict]:
+    """Llama a GET /api/admin/returns para listar devoluciones, opcionalmente filtradas.
+
+    Args:
+        status: Estado por el que filtrar (``approved``, ``rejected``,
+            ``pending_approval``). Vacío para no filtrar.
+
+    Returns:
+        Lista de devoluciones que cumplen el filtro (dict por fila).
+    """
     params = {"status": status} if status else {}
     r = httpx.get(f"{API_BASE}/api/admin/returns", params=params, timeout=10)
     r.raise_for_status()
@@ -84,6 +119,16 @@ def list_returns(status: str = "") -> list[dict]:
 
 
 def approve(thread_id: str, reason: str = "") -> dict:
+    """Llama a POST /api/admin/{thread_id}/approve para aprobar una devolución pendiente y reanudar el grafo.
+
+    Args:
+        thread_id: Sesión de chat cuya devolución se aprueba.
+        reason: Motivo opcional que registra el administrador.
+
+    Returns:
+        Dict con el resultado tras reanudar el grafo (``thread_id``,
+        ``resolution``, ``tracking_number``).
+    """
     r = httpx.post(
         f"{API_BASE}/api/admin/{thread_id}/approve", json={"reason": reason}, timeout=30
     )
@@ -92,6 +137,16 @@ def approve(thread_id: str, reason: str = "") -> dict:
 
 
 def reject(thread_id: str, reason: str = "") -> dict:
+    """Llama a POST /api/admin/{thread_id}/reject para rechazar una devolución pendiente y reanudar el grafo.
+
+    Args:
+        thread_id: Sesión de chat cuya devolución se rechaza.
+        reason: Motivo opcional que registra el administrador.
+
+    Returns:
+        Dict con el resultado tras reanudar el grafo (``thread_id``,
+        ``resolution``).
+    """
     r = httpx.post(
         f"{API_BASE}/api/admin/{thread_id}/reject", json={"reason": reason}, timeout=30
     )
@@ -100,18 +155,43 @@ def reject(thread_id: str, reason: str = "") -> dict:
 
 
 def get_order(order_id: str) -> dict:
+    """Llama a GET /api/orders/{order_id} para obtener el detalle de un pedido.
+
+    Args:
+        order_id: Identificador del pedido a consultar.
+
+    Returns:
+        Dict con los datos del pedido (productos, cliente, fechas).
+    """
     r = httpx.get(f"{API_BASE}/api/orders/{order_id}", timeout=10)
     r.raise_for_status()
     return r.json()
 
 
 def chat_state(thread_id: str) -> dict:
+    """Llama a GET /api/chat/{thread_id}/state para leer el estado actual del grafo.
+
+    Args:
+        thread_id: Sesión de chat cuyo estado se consulta.
+
+    Returns:
+        Dict con el estado del grafo (agente actual, pedido, elegibilidad,
+        resolución, artículos del pedido y si falta selección del cliente).
+    """
     r = httpx.get(f"{API_BASE}/api/chat/{thread_id}/state", timeout=10)
     r.raise_for_status()
     return r.json()
 
 
 def usage_sessions(limit: int = 100) -> list[dict]:
+    """Llama a GET /api/admin/usage/sessions para listar el coste/latencia agregado por sesión.
+
+    Args:
+        limit: Número máximo de sesiones a devolver.
+
+    Returns:
+        Lista de sesiones con tokens, coste estimado y latencia agregados.
+    """
     r = httpx.get(
         f"{API_BASE}/api/admin/usage/sessions", params={"limit": limit}, timeout=10
     )
@@ -120,12 +200,26 @@ def usage_sessions(limit: int = 100) -> list[dict]:
 
 
 def usage_session_detail(thread_id: str) -> list[dict]:
+    """Llama a GET /api/admin/usage/sessions/{thread_id} para el detalle petición a petición.
+
+    Args:
+        thread_id: Sesión de chat de la que se quiere el detalle de uso.
+
+    Returns:
+        Lista de peticiones al LLM (nodo, modelo, tokens, coste, latencia).
+    """
     r = httpx.get(f"{API_BASE}/api/admin/usage/sessions/{thread_id}", timeout=10)
     r.raise_for_status()
     return r.json().get("requests", [])
 
 
 def observability_links() -> dict:
+    """Llama a GET /api/admin/observability para obtener los enlaces al dashboard de LangFuse.
+
+    Returns:
+        Dict con si LangFuse está configurado y, si lo está, las URLs a
+        las vistas de sesiones/usuarios.
+    """
     r = httpx.get(f"{API_BASE}/api/admin/observability", timeout=10)
     r.raise_for_status()
     return r.json()

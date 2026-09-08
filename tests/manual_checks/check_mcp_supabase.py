@@ -40,6 +40,14 @@ async def _pick_any_customer_id() -> str:
 
 
 async def test():
+    """Ejecuta un smoke test manual contra el MCP de Supabase en ejecución.
+
+    No es un test de pytest (el nombre es engañoso, ver `if __name__ ==
+    "__main__"` al final del fichero): conecta por Streamable HTTP a un
+    servidor MCP de Supabase real y ejercita a mano la tool
+    `get_customer_return_history` con un customer_id real de la BD,
+    imprimiendo el resultado por consola en vez de hacer asserts.
+    """
     customer_id = await _pick_any_customer_id()
 
     async with streamablehttp_client(MCP_SUPABASE_URL) as (read, write, _):

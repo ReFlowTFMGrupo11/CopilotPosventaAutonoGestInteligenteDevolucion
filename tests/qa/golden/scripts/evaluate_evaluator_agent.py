@@ -72,6 +72,13 @@ logger = logging.getLogger(__name__)
 
 
 def _load_cases(csv_path: Path, limit: int | None, category: str | None) -> list[dict]:
+    """Carga los casos del CSV, filtrando opcionalmente por categoría y limitando el número de filas.
+
+    Args:
+        csv_path: Ruta al CSV de casos golden.
+        limit: Si se indica, se queda solo con los primeros N casos (tras filtrar).
+        category: Si se indica, se queda solo con las filas de esa categoría.
+    """
     with csv_path.open(encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     if category:
@@ -309,6 +316,7 @@ def _compute_metrics(results: list[dict]) -> dict:
 
 
 def _metrics_by_category(results: list[dict]) -> dict[str, dict]:
+    """Agrupa los resultados por categoría y calcula las métricas de cada grupo."""
     by_cat: dict[str, list] = defaultdict(list)
     for r in results:
         by_cat[r["category"]].append(r)
@@ -321,6 +329,14 @@ def _metrics_by_category(results: list[dict]) -> dict[str, dict]:
 def _render_markdown(
     overall: dict, by_cat: dict[str, dict], timestamp: str, mode: str
 ) -> str:
+    """Renderiza el informe de evaluación (métricas globales y por categoría) como tabla Markdown.
+
+    Args:
+        overall: Métricas globales, tal como las devuelve ``_compute_metrics``.
+        by_cat: Métricas por categoría, tal como las devuelve ``_metrics_by_category``.
+        timestamp: Marca de tiempo a mostrar en la cabecera del informe.
+        mode: Modo de ejecución ("dry-run" o "llm") a mostrar en la cabecera.
+    """
     lines = [
         f"# Informe de Evaluación RAG — ReFlow",
         f"",
@@ -363,6 +379,19 @@ async def run_evaluation(
     category: str | None = None,
     dry_run: bool = False,
 ) -> dict:
+    """Ejecuta la evaluación completa del golden dataset y genera el informe.
+
+    Carga los casos filtrados y, por cada uno, obtiene la etiqueta predicha
+    (reglas deterministas en ``dry_run``, o ``evaluator_agent`` con el LLM
+    real y ``search_return_policy`` mockeado en caso contrario), comparándola
+    con la etiqueta esperada del CSV. Si LangFuse está configurado, registra
+    un span y un score por caso, además de las métricas agregadas en la traza
+    raíz. Al final calcula precisión/recall/F1 globales y por categoría, y
+    escribe el informe como JSON y Markdown en ``tests/qa/golden/results/``.
+
+    Returns:
+        El informe completo (métricas, casos fallidos y metadatos de la ejecución).
+    """
     from backend.agents.nodes.evaluator import evaluator_agent
     from backend.services.observability import get_langfuse, flush as langfuse_flush
 
@@ -401,6 +430,7 @@ async def run_evaluation(
             async def _mock_search(
                 query: str, category: str = "", thread_id: str = ""
             ) -> dict:  # noqa: E501
+                """Sustituye a search_return_policy() devolviendo la policy mockeada de este caso."""
                 return mock_policy
 
             try:

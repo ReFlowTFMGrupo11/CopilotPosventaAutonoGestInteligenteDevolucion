@@ -53,6 +53,7 @@ with st.expander("💰 Monitorización de gasto (LangFuse)", expanded=False):
 
 
 def money(value) -> str:
+    """Formatea un importe como euros con 2 decimales, o "—" si no es numérico."""
     try:
         return f"{float(value):.2f} €"
     except (TypeError, ValueError):

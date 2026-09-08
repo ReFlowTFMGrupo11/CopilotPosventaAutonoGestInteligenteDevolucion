@@ -47,6 +47,7 @@ def _make_task(dry_run: bool):
     """Construye la función task() que Langfuse ejecuta por cada item del dataset."""
 
     async def task(*, item, **kwargs) -> str:
+        """Evalúa un item del dataset (LLM real o reglas deterministas) y devuelve la etiqueta predicha."""
         row = item.input  # dict subido por migrate_eval_cases_to_langfuse.py
 
         if dry_run:
@@ -63,6 +64,7 @@ def _make_task(dry_run: bool):
         async def _mock_search(
             query: str, category: str = "", thread_id: str = ""
         ) -> dict:
+            """Sustituye a search_return_policy() devolviendo la policy mockeada de este item."""
             return mock_policy
 
         with patch(
@@ -108,6 +110,20 @@ def accuracy_run_evaluator(*, item_results, **kwargs):
 
 
 def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
+    """Lanza un Experiment de Langfuse contra el dataset `policy-eval-golden-set`.
+
+    Recupera el dataset ya subido por ``migrate_eval_cases_to_langfuse.py`` y,
+    para cada item, ejecuta la tarea de evaluación (LLM real o reglas
+    deterministas en ``dry_run``), comparando la etiqueta predicha con la
+    esperada mediante ``label_match_evaluator`` y agregando la accuracy del
+    run con ``accuracy_run_evaluator``. El resultado queda registrado como un
+    Dataset Run visible en la UI de Langfuse.
+
+    Args:
+        limit: Si se indica, usa solo los primeros N items del dataset.
+        dry_run: Si es True, usa las reglas deterministas en vez del LLM real.
+        run_name: Nombre opcional para identificar este run en Langfuse.
+    """
     from langfuse import Langfuse
 
     lf = Langfuse()

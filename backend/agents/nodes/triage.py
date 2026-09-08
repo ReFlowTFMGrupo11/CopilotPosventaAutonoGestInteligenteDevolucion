@@ -291,6 +291,12 @@ def _apply_deterministic_selection(
     Si el cliente marcó checkboxes (`selected_item_ids`), se usa esa lista
     en vez de la inferencia del LLM. Si la condición aún no es conocida,
     pide al usuario que la indique.
+
+    Args:
+        result: Salida estructurada del LLM de triaje (``TriageOutput``),
+            de donde se toma la condición ya inferida (si la hay).
+        updates: Dict de actualizaciones del nodo; se modifica in-place
+            para añadir `items_to_return`/`items_confirmed`/`messages`.
     """
     selected_item_ids = state.get("selected_item_ids") or []
     order_items = (state.get("order_details") or {}).get("items", [])
@@ -346,7 +352,17 @@ def _parse_mcp_response(raw: Any) -> dict:
 def _check_existing_return(
     return_history: dict, order_id: str, order_number: str
 ) -> dict[str, Any] | None:
-    """Si ya existe una devolución activa para el pedido, devuelve error+mensaje."""
+    """Si ya existe una devolución activa para el pedido, devuelve error+mensaje.
+
+    Args:
+        return_history: Salida de ``get_customer_return_history`` (contiene
+            la lista `returns` con `order_id`/`status` de cada devolución
+            previa del cliente).
+
+    Returns:
+        Dict con `error` y `messages` si hay una devolución activa para
+        `order_id`, o ``None`` si no hay ninguna.
+    """
     active_statuses = {"pending", "pending_approval", "processing"}
     existing = [
         r
@@ -410,8 +426,10 @@ def _auto_select_single_item(
 ) -> dict[str, Any] | None:
     """Si hay 1 artículo y el reason_category es conocido, auto-selecciona con condición.
 
-    Returns dict con 'items_to_return' y 'messages' listo para mezclar en updates,
-    o None si no se puede auto-seleccionar (varios artículos o categoría desconocida).
+    Returns:
+        Dict con `items_to_return` y `messages` listo para mezclar en
+        updates, o ``None`` si no se puede auto-seleccionar (varios
+        artículos o categoría desconocida).
     """
     _CONDITION_MAP = {
         "defective": "defective",

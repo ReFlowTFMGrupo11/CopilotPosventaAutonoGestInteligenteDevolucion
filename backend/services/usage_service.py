@@ -51,6 +51,16 @@ async def get_usage_by_session(limit: int = 100) -> list[dict]:
 
     Se agrega en Python en vez de una vista SQL: el volumen esperado (uso
     interno de un panel admin) no lo justifica y evita otra migración.
+
+    Args:
+        limit: Número máximo de sesiones a devolver (las más recientes
+            primero). Se agregan hasta 2000 filas de `llm_usage` antes de
+            aplicar este límite sobre las sesiones ya agrupadas.
+
+    Returns:
+        Lista de dicts, uno por sesión, con tokens/coste/latencia
+        agregados y `cost_complete=False` si algún modelo de la sesión no
+        tiene precio configurado (ver pricing.py).
     """
     client = await get_supabase_client()
     resp = await (
@@ -126,7 +136,13 @@ async def get_usage_by_session(limit: int = 100) -> list[dict]:
 
 
 async def get_usage_detail(thread_id: str) -> list[dict]:
-    """Detalle de cada petición individual (una fila por llamada al LLM) de una sesión."""
+    """Detalle de cada petición individual (una fila por llamada al LLM) de una sesión.
+
+    Returns:
+        Filas de `llm_usage` ordenadas cronológicamente, cada una con un
+        `cost_eur` añadido (``None`` si el modelo no tiene precio
+        configurado, ver pricing.py).
+    """
     client = await get_supabase_client()
     resp = await (
         client.table("llm_usage")

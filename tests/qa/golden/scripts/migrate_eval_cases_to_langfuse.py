@@ -46,12 +46,14 @@ logger = logging.getLogger(__name__)
 
 
 def _load_rows(csv_path: Path, limit: int | None) -> list[dict]:
+    """Lee las filas del CSV de casos golden, limitando opcionalmente a las primeras N."""
     with csv_path.open(encoding="utf-8", newline="") as f:
         rows = list(csv.DictReader(f))
     return rows[:limit] if limit else rows
 
 
 def _existing_case_ids(dataset) -> set[str]:
+    """Devuelve el conjunto de ``case_id`` ya presentes en la metadata de los items del dataset."""
     return {
         item.metadata["case_id"]
         for item in dataset.items
@@ -60,6 +62,18 @@ def _existing_case_ids(dataset) -> set[str]:
 
 
 def migrate(limit: int | None = None, force: bool = False) -> None:
+    """Sube los casos del golden dataset como items del dataset de Langfuse.
+
+    Crea (o reutiliza) el dataset ``policy-eval-golden-set`` y, por cada fila
+    del CSV, crea un dataset item con las columnas necesarias para reconstruir
+    el estado del agente (``input``), la etiqueta esperada (``expected_output``)
+    y metadatos de trazabilidad (``metadata``). Es idempotente: salta los
+    ``case_id`` que ya existen en el dataset, salvo que se indique ``force=True``.
+
+    Args:
+        limit: Si se indica, sube solo los primeros N casos del CSV.
+        force: Si es True, sube también los casos cuyo ``case_id`` ya exista en el dataset.
+    """
     from langfuse import Langfuse
 
     lf = Langfuse()

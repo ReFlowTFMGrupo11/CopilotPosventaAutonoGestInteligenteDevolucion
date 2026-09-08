@@ -1,15 +1,16 @@
 """
 Instrumentación de coste (tokens) y latencia por llamada a LLM.
 
-Contexto: la nota de alcance de la PR de controles de terminación dejaba
-fuera a propósito un contador de coste acumulado por sesión, por requerir
-tocar state.py, un tracker nuevo y parsear ``usage_metadata`` de cada
-respuesta. Este módulo es justo eso, aislado en dos wrappers finos
-alrededor de ``ainvoke()`` que cada nodo (triage/evaluator/resolution) usa
-en el punto exacto donde ya llamaba al LLM, sin cambiar su lógica de
-negocio. Cada llamada se registra como una fila en ``llm_usage`` (ver
-supabase/migrations/014_create_llm_usage.sql), consultable por sesión en
-backend/services/usage_service.py y visible en frontend/pages/2_Costes.py.
+Dos wrappers finos alrededor de ``ainvoke()`` que cada nodo
+(triage/evaluator/resolution) usa en el punto exacto donde ya llamaba al
+LLM, sin cambiar su lógica de negocio. Cada llamada se registra como una
+fila en ``llm_usage`` (ver supabase/migrations/014_create_llm_usage.sql),
+consultable por sesión en backend/services/usage_service.py y visible en
+frontend/pages/2_Costes.py.
+
+Alcance descartado deliberadamente en la PR #32 (controles de terminación
+de agentes) por requerir tocar state.py y un tracker nuevo; implementado
+aquí aparte.
 
 Un fallo al registrar el uso (BD caída, etc.) se loguea pero JAMÁS rompe el
 turno del cliente: es solo observabilidad, no debe convertirse en un punto
@@ -60,6 +61,15 @@ async def _log_usage(
     latency_ms: int,
     tokens: tuple[int, int, int],
 ) -> None:
+    """Registra una fila de uso en ``llm_usage`` vía ``usage_service.log_llm_usage``.
+
+    No-op silencioso si falta ``thread_id`` o si la escritura falla: es solo
+    observabilidad, nunca debe romper el turno del cliente.
+
+    Args:
+        tokens: Tupla ``(input_tokens, output_tokens, total_tokens)``, tal
+            como la devuelve ``_usage_from_message``.
+    """
     if not thread_id:
         # Sin thread_id no hay sesión a la que atribuir el gasto (p. ej.
         # scripts/tests que invocan un nodo suelto sin pasar por el grafo).

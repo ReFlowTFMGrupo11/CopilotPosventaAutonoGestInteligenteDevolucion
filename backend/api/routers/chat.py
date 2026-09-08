@@ -118,11 +118,21 @@ class _ThreadLockRegistry:
     duración."""
 
     def __init__(self, ttl_seconds: float = _THREAD_LOCK_TTL_SECONDS) -> None:
+        """Inicializa el registro vacío.
+
+        Args:
+            ttl_seconds: Tiempo de inactividad tras el cual una entrada
+                (lock no adquirido) se considera obsoleta y se expulsa.
+        """
         self._ttl = ttl_seconds
         self._locks: dict[str, asyncio.Lock] = {}
         self._last_used: dict[str, float] = {}
 
     def get(self, thread_id: str) -> asyncio.Lock:
+        """Devuelve el lock de ``thread_id``, creándolo si es la primera vez.
+
+        De paso, expulsa entradas obsoletas del registro (ver `_evict_stale`).
+        """
         self._evict_stale()
         self._last_used[thread_id] = time.monotonic()
         if thread_id not in self._locks:
@@ -130,6 +140,7 @@ class _ThreadLockRegistry:
         return self._locks[thread_id]
 
     def _evict_stale(self) -> None:
+        """Elimina del registro los locks sin actividad reciente y no adquiridos."""
         now = time.monotonic()
         stale = [
             tid
@@ -393,7 +404,15 @@ async def chat_stream(
 
 @router.get("/{thread_id}/state")
 async def get_chat_state(thread_id: str, graph=Depends(get_graph)):
-    """Devuelve el estado actual del grafo para un thread_id."""
+    """Devuelve el estado actual del grafo para un thread_id.
+
+    Returns:
+        Dict con los campos de negocio relevantes del estado (pedido,
+        cliente, resolución...) más `order_items` (artículos del pedido
+        aplanados para el frontend) y `selection_required` (True si hay
+        más de un artículo y el cliente todavía no ha seleccionado cuál
+        devolver).
+    """
     try:
         state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
     except Exception as exc:

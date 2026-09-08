@@ -18,6 +18,14 @@ MCP_LOGISTICS_URL = "http://localhost:8002/mcp"
 
 
 async def test():
+    """Ejecuta un smoke test manual contra el MCP de logística en ejecución.
+
+    No es un test de pytest (el nombre es engañoso, ver `if __name__ ==
+    "__main__"` al final del fichero): conecta por Streamable HTTP a un
+    servidor MCP de logística real y ejercita a mano las tools
+    `generate_shipping_label` y `send_customer_notification`, imprimiendo
+    sus resultados por consola en vez de hacer asserts.
+    """
     async with streamablehttp_client(MCP_LOGISTICS_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
