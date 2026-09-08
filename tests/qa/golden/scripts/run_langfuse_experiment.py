@@ -161,7 +161,6 @@ def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
 
 
 def _parse_args() -> argparse.Namespace:
-    """Define y parsea los argumentos de línea de comandos del script."""
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )

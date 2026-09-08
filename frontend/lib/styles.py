@@ -137,7 +137,6 @@ def inject_css() -> None:
 
 
 def render_header() -> None:
-    """Pinta la cabecera con el logo y el título "ReFlow"."""
     st.markdown(
         '<div class="reflow-header">'
         '<span class="reflow-logo">R</span>'

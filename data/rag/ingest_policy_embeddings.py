@@ -319,7 +319,6 @@ async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) 
 
 
 def _parse_args() -> argparse.Namespace:
-    """Define y parsea los argumentos de línea de comandos del script (`--dry-run`, `--category`)."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
