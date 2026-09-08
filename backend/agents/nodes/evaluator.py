@@ -21,7 +21,7 @@ from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 from backend.agents.state import ReturnState
-from backend.agents.llm_factory import build_chat_llm, trim_history
+from backend.agents.llm_factory import build_chat_llm
 from backend.agents.usage_tracking import invoke_structured_tracked
 from backend.agents.infra.mcp_client import search_return_policy
 from backend.agents.nodes.policy_rules import compute_refund, deterministic_check
@@ -181,9 +181,16 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
 {json.dumps(items_context, default=str, ensure_ascii=False, indent=2)}
 """
 
+    # NO se incluye el historial de chat (state["messages"]): el Evaluador
+    # es un subagente de auditoría, no "quien habla con el usuario" (ese es
+    # triage.py, que sí necesita el hilo — ver backend/agents/llm_factory.py
+    # trim_history). El `context` de arriba ya es autosuficiente (pedido,
+    # motivo, historial de devoluciones, artículos con su política); pasar
+    # además el chat crudo sería contexto redundante que solo añade tokens
+    # sin aportar nada a la decisión de política. Contexto aislado por
+    # subtarea (ver session_4/README.md, "Por qué aislar el contexto").
     messages = [
         SystemMessage(content=POLICY_SYSTEM_PROMPT),
-        *trim_history(state.get("messages", [])),
         SystemMessage(content=f"CONTEXTO DE EVALUACIÓN:\n{context}"),
     ]
 
