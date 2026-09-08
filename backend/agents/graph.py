@@ -214,7 +214,9 @@ def _fail_or_degrade(message: str, *, error: str, is_production: bool) -> None:
                 metadata={"error": error, "environment": get_settings().environment},
             )
         except Exception as exc:  # observabilidad nunca debe tirar abajo el arranque
-            logger.warning("No se pudo registrar checkpointer_degraded en LangFuse: %s", exc)
+            logger.warning(
+                "No se pudo registrar checkpointer_degraded en LangFuse: %s", exc
+            )
 
     if is_production:
         raise RuntimeError(
