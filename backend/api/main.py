@@ -35,7 +35,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.agents.graph import get_return_graph
+from backend.agents.graph import get_checkpointer_status, get_return_graph
 from backend.api.routers import admin, chat, orders
 from backend.services.observability import flush as langfuse_flush, get_langfuse
 
@@ -93,5 +93,17 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/health")
 async def health_check():
-    """Verifica que el backend está vivo."""
-    return {"status": "ok", "service": "reflow-api"}
+    """Verifica que el backend está vivo.
+
+    Incluye el estado del checkpointer (ver backend/agents/graph.py):
+    ``persistent=False`` significa que el grafo está corriendo sobre
+    ``InMemorySaver`` — el estado multi-turno y las pausas HITL no
+    sobreviven a un reinicio del proceso. En development esto es normal
+    sin Postgres levantado; en production nunca debería verse (el arranque
+    falla antes de llegar aquí si ocurre, ver `_fail_or_degrade`).
+    """
+    return {
+        "status": "ok",
+        "service": "reflow-api",
+        "checkpointer": get_checkpointer_status(),
+    }

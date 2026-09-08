@@ -37,7 +37,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from typing import Literal
+from typing import Any, Literal
 
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -67,8 +67,32 @@ from backend.agents.nodes.resolution import (
 )
 from backend.agents.state import ReturnState
 from backend.agents.nodes.triage import fetch_order_data, triage_agent
+from backend.services import observability
 
 logger = logging.getLogger(__name__)
+
+# ── Estado del checkpointer (para /health y /api/admin/observability) ──────
+#
+# build_return_graph() puede degradar en silencio a InMemorySaver si Postgres
+# no está disponible o SUPABASE_DB_URL no está configurada. Antes, la única
+# señal de esa degradación era un logger.warning en consola — invisible fuera
+# de los logs del proceso, y grave porque el checkpointer sostiene el estado
+# multi-turno y las pausas HITL (interrupt()). Este módulo guarda el último
+# resultado para que main.py/admin.py puedan exponerlo.
+_checkpointer_status: dict[str, Any] = {
+    "backend": None,
+    "persistent": None,
+    "error": None,
+}
+
+
+def get_checkpointer_status() -> dict[str, Any]:
+    """Último estado conocido del checkpointer (ver `_checkpointer_status`).
+
+    Devuelve valores ``None`` si todavía no se ha llamado a
+    ``build_return_graph()`` en este proceso.
+    """
+    return dict(_checkpointer_status)
 
 
 # ── Funciones de enrutamiento (aristas condicionales) ──────────────────────
@@ -159,6 +183,50 @@ def route_after_evaluator(state: ReturnState) -> Literal["resolver", "reject"]:
 # ── Construcción del grafo ─────────────────────────────────────────────────
 
 
+def _fail_or_degrade(message: str, *, error: str, is_production: bool) -> None:
+    """Decide qué hacer cuando el checkpointer persistente no está disponible.
+
+    - En production: RIESGO REAL, no solo un warning de consola. El
+      checkpointer sostiene el estado multi-turno Y las pausas HITL
+      (interrupt() en resolution.py) — perderlo en producción significa que
+      un reinicio del proceso borra conversaciones a medias y aprobaciones
+      de reembolso pendientes sin ningún aviso al admin. Por eso aquí se
+      frena el arranque con una excepción explícita en vez de degradar en
+      silencio (mismo criterio "fail-open solo si es seguro" que
+      observability.py aplica a LangFuse — pero el checkpointer NO es
+      opcional como LangFuse, es el sustento del propio flujo de negocio).
+    - Fuera de production (development/staging/tests): se mantiene el
+      comportamiento anterior (degradar a InMemorySaver con un warning),
+      para no romper el flujo local sin Postgres levantado.
+
+    En ambos casos se registra el estado en `_checkpointer_status` (para
+    `/health` y `/api/admin/observability`) y, si LangFuse está configurado,
+    un evento `level="ERROR"` — antes este módulo no emitía ningún evento de
+    error hacia LangFuse, solo hacia el log de consola.
+    """
+    _checkpointer_status.update(backend="memory", persistent=False, error=error)
+    lf = observability.get_langfuse()
+    if lf is not None:
+        try:
+            lf.create_event(
+                name="checkpointer_degraded",
+                level="ERROR",
+                metadata={"error": error, "environment": get_settings().environment},
+            )
+        except Exception as exc:  # observabilidad nunca debe tirar abajo el arranque
+            logger.warning(
+                "No se pudo registrar checkpointer_degraded en LangFuse: %s", exc
+            )
+
+    if is_production:
+        raise RuntimeError(
+            f"{message} Checkpointer persistente requerido en production "
+            "(ENVIRONMENT=production) — no se degrada a InMemorySaver. "
+            "Configura SUPABASE_DB_URL o revisa la conectividad a Postgres."
+        )
+    logger.warning("%s Usando InMemorySaver (no persistente).", message)
+
+
 async def build_return_graph(checkpointer=None):
     """Construye y compila el grafo de devoluciones.
 
@@ -171,7 +239,9 @@ async def build_return_graph(checkpointer=None):
         El grafo compilado, listo para ``ainvoke()`` o ``astream()``.
     """
     if checkpointer is None:
-        db_url = get_settings().supabase_db_url
+        settings = get_settings()
+        is_production = settings.environment == "production"
+        db_url = settings.supabase_db_url
         if db_url:
             try:
                 # autocommit=True y prepare_threshold=0: mismo patrón que usa
@@ -190,14 +260,21 @@ async def build_return_graph(checkpointer=None):
                 checkpointer = AsyncPostgresSaver(pool)
                 await checkpointer.setup()
                 logger.info("Checkpointer: AsyncPostgresSaver (persistente).")
+                _checkpointer_status.update(
+                    backend="postgres", persistent=True, error=None
+                )
             except Exception as exc:
-                logger.warning(
-                    "No se pudo conectar a PostgreSQL (%s). Usando InMemorySaver.", exc
+                _fail_or_degrade(
+                    f"No se pudo conectar a PostgreSQL ({exc}).",
+                    error=str(exc),
+                    is_production=is_production,
                 )
                 checkpointer = InMemorySaver()
         else:
-            logger.warning(
-                "SUPABASE_DB_URL no configurada. Usando InMemorySaver (no persistente)."
+            _fail_or_degrade(
+                "SUPABASE_DB_URL no configurada.",
+                error="SUPABASE_DB_URL no configurada.",
+                is_production=is_production,
             )
             checkpointer = InMemorySaver()
 

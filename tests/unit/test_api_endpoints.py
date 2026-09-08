@@ -116,7 +116,13 @@ async def test_health_check(async_client):
         resp = await client.get("/health")
 
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ok", "service": "reflow-api"}
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert body["service"] == "reflow-api"
+    # checkpointer: ver backend/agents/graph.py::get_checkpointer_status.
+    # Sin build_return_graph() invocado en este proceso de test, viene a
+    # None (no se ha construido ningún grafo todavía).
+    assert "checkpointer" in body
 
 
 # ── Tests: Chat ────────────────────────────────────────────────────────────

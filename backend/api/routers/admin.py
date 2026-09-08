@@ -5,6 +5,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 from langgraph.types import Command
 
+from backend.agents.graph import get_checkpointer_status
 from backend.api.dependencies import get_graph
 from backend.api.schemas import AdminDecisionRequest
 from backend.config import get_settings
@@ -137,11 +138,20 @@ async def get_usage_session_detail(thread_id: str):
 
 @router.get("/observability")
 async def get_observability_links():
-    """Enlaces al dashboard de LangFuse para monitorizar gasto por sesión/cliente.
+    """Enlaces al dashboard de LangFuse + estado del checkpointer del grafo.
 
-    Complementa el dashboard propio (usage/sessions arriba): LangFuse ya
-    trackea tokens/coste por `langfuse_session_id` y `langfuse_user_id`
-    (ver with_langfuse en backend/services/observability.py), así que este
-    endpoint enlaza a su dashboard en vez de reimplementar esa agregación.
+    Los enlaces de LangFuse complementan el dashboard propio (usage/sessions
+    arriba): LangFuse ya trackea tokens/coste por `langfuse_session_id` y
+    `langfuse_user_id` (ver with_langfuse en backend/services/observability.py),
+    así que este endpoint enlaza a su dashboard en vez de reimplementar esa
+    agregación.
+
+    `checkpointer` (ver backend/agents/graph.py) se incluye aquí, no solo en
+    `/health`, para que el panel de admin pueda mostrar un aviso visible si
+    el grafo está corriendo sobre InMemorySaver — antes esa degradación solo
+    se veía en los logs de consola del proceso.
     """
-    return observability.langfuse_links()
+    return {
+        **observability.langfuse_links(),
+        "checkpointer": get_checkpointer_status(),
+    }
