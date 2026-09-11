@@ -182,7 +182,63 @@ del dataset generado.
 
 ---
 
-## 6. ¿Por qué no está conectado a CI (todavía)?
+## 6. Otro gap real, encontrado después: `missing_evidence` existe en el generador, no en el agente
+
+Mismo espíritu que §5 (auditoría real del propio trabajo), encontrado investigando por qué
+la accuracy de `evaluate_evaluator_agent.py` no llega al 100% ni siquiera en `--dry-run`
+(reglas deterministas puras, sin LLM).
+
+### El problema
+
+`classify_case()` (`data/generate_dataset.py:2270`) incluye un factor adicional que fuerza
+`human_review`:
+
+```python
+missing_evidence = reason in STORE_FAULT_REASONS and rng.random() < 0.08
+```
+
+Es decir: si el motivo es imputable a la tienda (`defective`, `wrong_item_shipped`,
+`damaged_in_transit`, `missing_parts`, `not_as_described`) y, con un 8% de probabilidad,
+"falta evidencia fotográfica exigible para el motivo declarado" — el caso pasa a revisión
+humana. Tiene sentido de negocio: una reclamación de "llegó roto" sin foto es más fácil de
+abusar que una con foto.
+
+**El problema**: esta variable **no se exporta a `eval_cases.csv`** (no es una de sus 14
+columnas) y **no existe ningún equivalente en el agente real** — ni un campo en
+`ReturnState`, ni un parámetro en `deterministic_check()` (`policy_rules.py`), ni una forma
+de subir una foto desde el chat de Streamlit. Contando contra las 480 filas:
+
+| | Casos | % |
+|---|---|---|
+| Con `missing_evidence` como factor (solo o combinado con otro) | 16 | 3.3% |
+| **Únicamente** por `missing_evidence` (ningún otro factor ya fuerza `human_review`) | 8 | **1.7%** |
+
+Ese 1.7% es un **techo de accuracy estructural**: el agente real no puede acertar esos 8
+casos aunque razone perfectamente, porque el dataset le exige adivinar información
+(¿hay foto o no?) que nunca estuvo disponible ni pudo estarlo.
+
+### Por qué se documenta y no se implementa
+
+Se valoró cerrar el gap implementando subida de fotos de verdad (Streamlit
+`file_uploader` + Supabase Storage + nueva columna/migración + nuevo parámetro en
+`deterministic_check()` + nueva regla `rule_missing_evidence` + ajuste del prompt de
+`triage.py` + tests). Se descartó por desproporcionado:
+
+- Cierra solo 1.7 puntos de accuracy sobre 480 casos.
+- No es central a la tesis (el foco es la orquestación multi-agente + HITL por importe,
+  no la verificación de evidencia fotográfica).
+- Añade superficie nueva (subida de ficheros, storage, una regla de negocio más) a pocas
+  semanas de la defensa, con el riesgo de introducir bugs nuevos a cambio de un beneficio
+  marginal en una métrica (el golden dataset) que además ya tiene otras limitaciones
+  conocidas (mockea el RAG real, ver [`defenderRAG.md` §4.1](defenderRAG.md)).
+
+**Decisión**: se documenta como limitación consciente y acotada, no como deuda técnica
+pendiente. El techo real de `evaluate_evaluator_agent.py --dry-run` es ~98.3%, no 100% —
+y ahora se sabe exactamente por qué.
+
+---
+
+## 7. ¿Por qué no está conectado a CI (todavía)?
 
 `evaluate_evaluator_agent.py` está **diseñado** para funcionar como gate de CI: en modo `--dry-run`
 (sin LLM, sin red) devuelve un exit code según la accuracy obtenida:
@@ -200,7 +256,7 @@ examen mal planteado a CI solo automatiza una señal poco fiable.
 
 ---
 
-## 7. Preguntas frecuentes y objeciones comunes
+## 8. Preguntas frecuentes y objeciones comunes
 
 ### Objeción: "¿No es circular evaluar con reglas que se parecen a las que aplica el propio agente (`policy_rules.py`)?"
 
@@ -238,9 +294,19 @@ Es deliberado, no un descuido: los UUID son claves primarias sin significado de 
 aporta valor fijarlos, y fijarlos obligaría a un generador de UUID con seed propio sin
 ningún beneficio real a cambio.
 
+### Objeción: "El dataset contempla evidencia fotográfica (`missing_evidence`) pero el agente no la verifica — ¿no es una inconsistencia?"
+
+Es una limitación real, reconocida en §6, no una inconsistencia oculta. `classify_case()`
+modela ese matiz de negocio a propósito (para generar casos `human_review` variados y
+realistas), pero implementar la verificación de evidencia en el agente real —subida de
+fotos, almacenamiento, nueva regla determinista— es una funcionalidad completa nueva, no
+un ajuste, y afecta solo al 1.7% de los 480 casos. Se decidió documentar el techo de
+accuracy que esto implica (~98.3%, no 100%) en vez de ampliar el alcance del proyecto
+para cerrarlo.
+
 ---
 
-## 8. Resumen para la presentación
+## 9. Resumen para la presentación
 
 > "El dataset de ReFlow se genera con un script Python 100% determinista, sin
 > dependencias externas ni llamadas a APIs, después de descartar tanto un servidor MCP de
