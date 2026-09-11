@@ -145,9 +145,17 @@ def _build_mock_policy(
 def _build_state(row: dict) -> dict[str, Any]:
     """Construye el estado mínimo que necesita evaluator_agent."""
     order_item_id = f"oi-eval-{row['case_id'][:8]}"
-    # delivered_at simulado: ahora - days_since_delivery
+    # delivered_at simulado: ahora - days_since_delivery. `now` debe ser el
+    # momento REAL de la ejecución, no una fecha fija: calculate_days_since_delivery()
+    # (supabase_service.py) calcula contra datetime.now(timezone.utc) real, así
+    # que una fecha fija se convierte en una bomba de relojería que infla
+    # "días desde entrega" un día más cada día que pasa desde que se escribió
+    # este script -- mismo problema (y mismo fix) que tests/conftest.py::
+    # mock_order_details, ver commit ab28809. Detectado al ejercer por
+    # primera vez el modo LLM real de este script (--dry-run no lo toca:
+    # usa la columna days_since_delivery del CSV directamente, sin fechas).
     days = int(row["days_since_delivery"])
-    now = datetime(2026, 8, 18, 12, 0, 0, tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
     from datetime import timedelta
 
     delivered = now - timedelta(days=days)
@@ -433,8 +441,15 @@ async def run_evaluation(
                 """Sustituye a search_return_policy() devolviendo la policy mockeada de este caso."""
                 return mock_policy
 
+            async def _mock_policy_info(category: str) -> dict:
+                """Sustituye a get_policy_info() (pre-check determinista, ver evaluator.py)."""
+                return mock_policy.get("policy_info") or {}
+
             try:
                 with patch(
+                    "backend.agents.nodes.evaluator.get_policy_info",
+                    side_effect=_mock_policy_info,
+                ), patch(
                     "backend.agents.nodes.evaluator.search_return_policy",
                     side_effect=_mock_search,
                 ):

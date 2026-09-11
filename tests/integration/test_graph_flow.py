@@ -138,10 +138,14 @@ class TestGraphFlow:
             "backend.agents.nodes.evaluator._build_llm",
             return_value=_mock_llm_with_structured_output(eval_out),
         ), patch(
-            "backend.agents.nodes.evaluator.search_return_policy",
+            "backend.agents.nodes.evaluator.get_policy_info",
             new_callable=AsyncMock,
             # Sin max_return_days/allowed_conditions: las reglas de plazo y
             # condición de policy_rules.py no vetan nada (ver docstring).
+            return_value={"restocking_fee_percent": 0.0},
+        ), patch(
+            "backend.agents.nodes.evaluator.search_return_policy",
+            new_callable=AsyncMock,
             return_value={"policy_info": {"restocking_fee_percent": 0.0}},
         ), patch(
             "backend.agents.nodes.resolution._build_llm",
@@ -229,6 +233,10 @@ class TestGraphFlow:
         ), patch(
             "backend.agents.nodes.evaluator._build_llm",
             return_value=_mock_llm_with_structured_output(eval_out),
+        ), patch(
+            "backend.agents.nodes.evaluator.get_policy_info",
+            new_callable=AsyncMock,
+            return_value={"restocking_fee_percent": 0.0},
         ), patch(
             "backend.agents.nodes.evaluator.search_return_policy",
             new_callable=AsyncMock,

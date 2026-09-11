@@ -214,6 +214,91 @@ Efecto real pero modesto — se incluye porque el coste de implementarlo es un d
 
 ---
 
+## 4.2. Optimización: no pagar el RAG narrativo cuando el veto ya está decidido
+
+### El hallazgo
+
+Analizando una traza real en Langfuse (un artículo fuera de plazo, categoría
+electrónica), se observó que `evaluator_agent()` ejecutaba **siempre**, para
+**todos** los artículos, en este orden: (1) búsqueda RAG narrativa
+(embedding + RPC vectorial), (2) llamada al LLM evaluador, y solo
+**después** (3) el veto determinista (`policy_rules.py::deterministic_check`).
+Cuando ese veto resuelve `"invalid"` (plazo muy superado, exclusión de
+higiene, condición no admitida), **sobreescribe por completo** lo que dijera
+el LLM — `is_eligible`, `refund_amount` y `eligibility_reason` quedan
+reemplazados por la plantilla determinista. Es decir: para esos artículos,
+los pasos (1) y (2) se ejecutan y se pagan (coste de embedding + tokens del
+LLM + latencia), pero **no tienen ningún efecto posible en el resultado
+final** — el veto los habría descartado igual sin ellos.
+
+Se confirmó además que ni siquiera hace falta esa llamada del Evaluador para
+poder responder al cliente: `evaluator_agent()` nunca escribe en
+`state["messages"]` — el mensaje final siempre lo compone una llamada
+**posterior y separada**, dedicada en exclusiva a ese propósito
+(`rejection_agent()`/`resolution_agent()` en `resolution.py`, ver
+[`defenderAgentes.md`](defenderAgentes.md)), que solo necesita el
+`eligibility_reason` ya decidido como texto de entrada.
+
+### El cambio: pre-check determinista ANTES del RAG/LLM
+
+Se extrajo `get_policy_info(category)` (`supabase_service.py`) como consulta
+independiente y más barata que `search_return_policy()`: solo lee la fila
+estructurada de `return_policies` (plazo, condiciones admitidas, recargo),
+**sin generar ningún embedding ni ejecutar la búsqueda vectorial**. Nueva
+tool MCP homónima (`mcp_supabase.py`) y wrapper en `mcp_client.py`, siguiendo
+el mismo patrón de capas que el resto de tools.
+
+`evaluator_agent()` ahora evalúa en dos fases:
+
+1. **Pre-check** (barato): para cada artículo, `get_policy_info()` +
+   `deterministic_check()`. Los artículos con veredicto `"invalid"` quedan
+   decididos aquí — nunca llegan al RAG narrativo ni al LLM.
+2. **Evaluación LLM** (solo para lo que queda en zona gris — veredicto
+   `"valid"`/`"human_review"`): búsqueda RAG narrativa + una única llamada
+   al LLM, exactamente como antes, pero solo para las categorías de los
+   artículos que de verdad lo necesitan.
+
+Si el pre-check ya decide el 100% de los artículos de la solicitud (caso
+común: devolución de un solo artículo con veto claro), la función devuelve
+**sin ejecutar ninguna búsqueda RAG ni llamada al LLM en absoluto**.
+
+### Evidencia: cuánto se ahorra de verdad
+
+Contra los **480 casos completos** del golden dataset (mockeando
+`search_return_policy`/`get_policy_info` para no gastar en embeddings/LLM
+reales, solo para *contar* cuántos artículos llegan a necesitarlos):
+
+| | Casos | % |
+|---|---|---|
+| Se ahorran el RAG narrativo + LLM por completo (veto determinista) | 196 | **40.8%** |
+| Siguen necesitando RAG narrativo + LLM (zona gris o HITL) | 284 | 59.2% |
+
+**4 de cada 10 solicitudes de devolución de este dataset se resuelven sin
+ninguna llamada a OpenAI para la evaluación de política** (ni embedding ni
+chat completion) — solo con una consulta SQL barata + reglas Python puras.
+
+### Hallazgo colateral: un bug de fechas que llevaba el modo LLM real a ~35% de accuracy
+
+Al verificar el cambio anterior con un smoke test real (`evaluate_evaluator_agent.py --limit 20`,
+LLM real, no `--dry-run`), la accuracy fue de solo **35%** — muy por debajo
+del 87.3% del modo `--dry-run`. La causa no era el cambio de arquitectura:
+`_build_state()` (el harness que reconstruye el estado de cada caso)
+calculaba `delivered_at` contra una fecha **fija** (`datetime(2026, 8, 18, ...)`),
+mientras que `calculate_days_since_delivery()` (el código real) calcula
+contra `datetime.now()` — el mismo patrón de "bomba de relojería" que ya se
+había corregido una vez en `tests/conftest.py` (commit `ab28809`), pero que
+nunca se aplicó a este script porque su modo con LLM real nunca se había
+ejecutado hasta ahora (no hay ningún informe con `"mode": "llm"` en
+`tests/qa/golden/results/` anterior a este cambio). Corregido con el mismo
+fix (`now = datetime.now(timezone.utc)`); tras el fix, el mismo smoke test
+de 20 casos sube a **90%** de accuracy, con los únicos 2 fallos siendo el
+gap de `missing_evidence` ya documentado
+([`defenderDatos.md` §6](defenderDatos.md)) y una divergencia legítima
+entre las dos implementaciones independientes de reglas (anticipada en
+[`defenderDatos.md` §8](defenderDatos.md)).
+
+---
+
 ## 5. Búsqueda híbrida: semántica + estructurada
 
 ```python

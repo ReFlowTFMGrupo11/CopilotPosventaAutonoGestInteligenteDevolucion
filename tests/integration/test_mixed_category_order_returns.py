@@ -97,6 +97,13 @@ class TestPolicyEvaluatorMixedCategories:
 
         search_mock = AsyncMock(side_effect=search_side_effect)
 
+        async def policy_info_side_effect(category):
+            """Pre-check determinista: mismos datos estructurados que RAG, sin narrativo."""
+            return {
+                "electronica_informatica": mock_policy_results_electronics,
+                "cosmetica_perfumeria": mock_policy_results_cosmetics,
+            }[category]["policy_info"]
+
         state = {
             "messages": [],
             "order_details": mock_order_details_mixed_categories,
@@ -108,6 +115,10 @@ class TestPolicyEvaluatorMixedCategories:
 
         with patch(
             "backend.agents.nodes.evaluator._build_llm", return_value=mock_llm
+        ), patch(
+            "backend.agents.nodes.evaluator.get_policy_info",
+            new_callable=AsyncMock,
+            side_effect=policy_info_side_effect,
         ), patch("backend.agents.nodes.evaluator.search_return_policy", search_mock):
             await evaluator_agent(state)
 
@@ -166,6 +177,13 @@ class TestPolicyEvaluatorMixedCategories:
                 "cosmetica_perfumeria": mock_policy_results_cosmetics,
             }[category]
 
+        async def policy_info_side_effect(category):
+            """Pre-check determinista: mismos datos estructurados que RAG, sin narrativo."""
+            return {
+                "electronica_informatica": mock_policy_results_electronics,
+                "cosmetica_perfumeria": mock_policy_results_cosmetics,
+            }[category]["policy_info"]
+
         state = {
             "messages": [],
             "order_details": mock_order_details_mixed_categories,
@@ -177,6 +195,10 @@ class TestPolicyEvaluatorMixedCategories:
 
         with patch(
             "backend.agents.nodes.evaluator._build_llm", return_value=mock_llm
+        ), patch(
+            "backend.agents.nodes.evaluator.get_policy_info",
+            new_callable=AsyncMock,
+            side_effect=policy_info_side_effect,
         ), patch(
             "backend.agents.nodes.evaluator.search_return_policy",
             new_callable=AsyncMock,

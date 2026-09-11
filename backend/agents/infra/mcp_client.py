@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 _TOOL_SERVER_MAP = {
     "get_order_details": "supabase",
     "get_customer_return_history": "supabase",
+    "get_policy_info": "supabase",
     "search_return_policy": "supabase",
     "create_return_record": "supabase",
     "update_return_status": "supabase",
@@ -159,6 +160,16 @@ async def get_order_details(order_number: str) -> dict:
 async def get_customer_return_history(customer_id: str) -> dict:
     """Recupera historial de devoluciones via MCP."""
     return await call_tool("get_customer_return_history", {"customer_id": customer_id})
+
+
+async def get_policy_info(category: str) -> dict | None:
+    """Política estructurada de una categoría via MCP, sin búsqueda vectorial.
+
+    Más barata que ``search_return_policy()`` (sin embedding, sin RPC de
+    similitud) — pensada para el pre-check determinista de
+    ``evaluator_agent`` (ver docs/defensaTFM/defenderRAG.md §4.2).
+    """
+    return await call_tool("get_policy_info", {"category": category})
 
 
 async def search_return_policy(
