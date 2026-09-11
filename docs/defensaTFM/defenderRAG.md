@@ -164,6 +164,24 @@ Reformular la query de "motivo+estado del cliente" (registro conversacional) a "
 
 Se mantienen `reason_category`/`condition` en la query nueva (no el texto libre `reason` del cliente) para conservar la especificidad del caso — una query puramente genérica de categoría, sin motivo ni estado, no recuperaba en el top-5 el chunk de "reacciones alérgicas" de cosmética; añadir el motivo sí lo recupera, a cambio de una similitud levemente menor (0.61-0.67 en vez de 0.70-0.74) pero suficiente.
 
+#### Qué significa exactamente "registro documental" vs. "registro de intención"
+
+La diferencia no es de vocabulario suelto, es de **marco de la frase** — cómo se presenta la pregunta, no solo qué palabras contiene:
+
+```python
+# ANTES — "registro de intención": el cliente cuenta SU situación
+f"devolución {reason_category} {condition} {reason}"
+# → "devolución no_longer_needed unopened he cambiado de opinión"
+
+# DESPUÉS — "registro documental": se pregunta por LA NORMA, como lo haría el propio documento
+f"política de devolución en {category}: motivo {reason_es}, estado del producto {condition_es}"
+# → "política de devolución en cosmetica_perfumeria: motivo ya no lo necesita, estado del producto sin abrir"
+```
+
+La query nueva no dice *"quiero devolver esto porque..."* (una queja/petición), dice *"¿cuál es la política...?"* — imita cómo el propio corpus está redactado (cada documento empieza con encabezados tipo *"Política de Devoluciones — Cosmética y Perfumería"*, *"Plazo y condiciones generales"*). El embedding resultante queda más cerca del vector medio de esos párrafos normativos, no del vector de una queja de cliente.
+
+**Por qué no basta con quitar `reason_category`/`condition` y preguntar solo por la categoría.** Una query mínima —`"política de devolución en cosmetica_perfumeria"`— da la similitud más alta de todas (0.73), pero sale "a ciegas" de cuál de los 5-6 chunks de esa categoría es relevante para *este* caso: en la prueba real, el chunk de "Reacciones alérgicas" ni aparecía en el top-5. Añadir `motivo {reason_es}, estado del producto {condition_es}` al final mantiene el envoltorio documental, pero inyecta una señal que le dice al embedding *"...y dentro de esa categoría, prioriza la parte sobre alergias/higiene/plazo, no solo la introducción genérica"* — de ahí "señal de desambiguación": no cambia el registro de la frase, solo decide qué parte del documento es más relevante para el caso concreto. El coste es una similitud algo menor (0.61-0.67 en vez de 0.70-0.74), aceptado a cambio de no perder el chunk específico del caso.
+
 ### Hallazgo 2 — cuántos chunks sobreviven a cada umbral candidato (32 ejecuciones reales)
 
 | `match_threshold` | Chunks devueltos (de 5) | Casos con 0 chunks |
