@@ -106,7 +106,20 @@ class Settings(BaseSettings):
     hitl_threshold_eur: float = 100.0
 
     # ── RAG (búsqueda semántica de políticas) ────────────────────────────
-    rag_match_threshold: float = 0.7
+    # 0.7 dejaba search_return_policy() devolviendo 0 chunks en el uso real
+    # (comprobado contra la BD real, no solo mocks): con text-embedding-3-small,
+    # ninguna query realista de motivo+categoría del cliente supera ~0.5-0.55
+    # de similitud coseno contra el corpus de políticas (registro conversacional
+    # vs. registro normativo del documento). 0.5 se elige con evidencia amplia
+    # (16 categorías × 2 motivos = 32 ejecuciones reales contra la BD, ver
+    # docs/defensaTFM/defenderRAG.md §4.1): en NINGUNA de las 32 pruebas
+    # devuelve 0 chunks, y la media es 4.97/5 chunks recuperados -- a
+    # diferencia de un intento anterior de bajar este valor a 0.35 (revertido
+    # por estar basado en solo 4 categorías, ver git log de este fichero),
+    # que no tenía evidencia suficiente para fijar un valor de producción.
+    # Sobreescribible vía RAG_MATCH_THRESHOLD si el corpus de políticas
+    # cambia sustancialmente.
+    rag_match_threshold: float = 0.5
 
     # ── Langfuse (observabilidad, opcional) ─────────────────────────────
     langfuse_secret_key: SecretStr | None = None

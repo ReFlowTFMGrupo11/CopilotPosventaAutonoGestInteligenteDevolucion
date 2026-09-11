@@ -30,6 +30,61 @@ from backend.services.supabase_service import calculate_days_since_delivery
 
 logger = logging.getLogger(__name__)
 
+# ── Traducción de enums para la query RAG (ver docs/defensaTFM/defenderRAG.md
+#    §4.1) ─────────────────────────────────────────────────────────────────
+#
+# `reason_category`/`condition` viajan en inglés por todo el código (claves
+# de _CONDITION_MAP en triage.py, comparaciones en policy_rules.py, etc.) y
+# NO se tocan aquí -- este mapeo se usa SOLO al construir el texto de la
+# query semántica hacia search_return_policy(), nunca para lógica de
+# negocio. Medido contra la BD real (16 categorías × 2 motivos, ver
+# defenderRAG.md): traducir estos dos términos sube la similitud media
+# ~0.01 (positivo en 15/16 casos) al eliminar el último anglicismo de una
+# query que ya es, por lo demás, 100% castellano -- el documento de
+# políticas está en castellano, así que cualquier resto de inglés en la
+# query es puro ruido de registro frente al corpus.
+_REASON_CATEGORY_ES = {
+    "defective": "defectuoso",
+    "wrong_item": "artículo incorrecto",
+    "not_as_described": "no coincide con lo descrito",
+    "no_longer_needed": "ya no lo necesita",
+    "arrived_late": "llegó tarde",
+    "other": "otro motivo",
+}
+_CONDITION_ES = {
+    "unopened": "sin abrir",
+    "defective": "defectuoso",
+    "damaged": "dañado",
+    "used": "usado",
+    "wrong_item": "artículo incorrecto",
+}
+
+
+def _build_rag_query(category: str, reason_category: str, condition: str) -> str:
+    """Construye la query semántica para ``search_return_policy()``.
+
+    Formulación en "registro documental" (pregunta sobre política de la
+    categoría) en vez de "registro conversacional" (motivo+estado tal cual
+    los da el cliente) -- medido contra la BD real (ver defenderRAG.md
+    §4.1): la similitud coseno media con ``text-embedding-3-small`` sube de
+    ~0.47 (query anterior: ``devolución {reason_category} {condition}
+    {reason}``, con el texto libre del cliente) a ~0.68 (esta query), porque
+    se acerca al registro normativo/formal de los documentos de política en
+    vez del registro coloquial de la conversación. Se mantienen
+    ``reason_category``/``condition`` (no el texto libre ``reason`` del
+    cliente) para conservar la especificidad del caso dentro de los 5-6
+    chunks de la categoría (p. ej. que el chunk de "reacciones alérgicas"
+    de cosmética se siga recuperando), sin arrastrar la varianza léxica del
+    texto libre que hacía caer la similitud en la query anterior.
+    """
+    reason_es = _REASON_CATEGORY_ES.get(reason_category, reason_category)
+    condition_es = _CONDITION_ES.get(condition, condition)
+    return (
+        f"política de devolución en {category}: "
+        f"motivo {reason_es}, estado del producto {condition_es}"
+    )
+
+
 # ── Prompt del sistema ─────────────────────────────────────────────────────
 
 POLICY_SYSTEM_PROMPT = """\
@@ -126,7 +181,9 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
         category = product_categories.get(item.get("order_item_id"), "")
         if category and category not in policy_by_category:
             raw_policy = await search_return_policy(
-                query=f"devolución {reason_category} {item.get('condition', '')} {reason}",
+                query=_build_rag_query(
+                    category, reason_category, item.get("condition", "")
+                ),
                 category=category,
                 thread_id=state.get("thread_id"),
             )

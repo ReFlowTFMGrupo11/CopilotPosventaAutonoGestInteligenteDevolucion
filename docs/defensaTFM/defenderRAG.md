@@ -128,10 +128,71 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 ### Parámetros de búsqueda
 
 | Parámetro | Valor | Justificación |
-|-----------|-------|---------------|
-| `match_threshold` | 0.7 (`Settings.rag_match_threshold`, configurable vía `RAG_MATCH_THRESHOLD`) | Filtra resultados irrelevantes sin ser demasiado restrictivo |
+|-----------|-------|----------------|
+| `match_threshold` | 0.5 (`Settings.rag_match_threshold`, configurable vía `RAG_MATCH_THRESHOLD`) | Calibrado contra similitud real medida en 32 ejecuciones (16 categorías × 2 motivos) — ver §4.1 |
 | `match_count` | 5 | Suficiente contexto sin saturar el prompt del Evaluador |
 | Distancia | Coseno (`<=>`) | Estándar para embeddings de texto, invariante a la magnitud |
+
+---
+
+## 4.1. Investigación: el umbral 0.7 dejaba el RAG sin devolver nada en uso real
+
+### El síntoma
+
+Inspeccionando una traza real en Langfuse (`score_rag_similarity`, ver `backend/services/observability.py`), una búsqueda real —pedido de perfumería, motivo "ya no lo necesito", artículo sin abrir— devolvía `semantic_results: []` y `similarity: 0.0`. No era un caso aislado: **con `match_threshold=0.7`, la inmensa mayoría de búsquedas reales devuelven 0 chunks**, enmascarado en producción porque `policy_rules.py` no depende del RAG para decidir elegibilidad (solo aporta contexto narrativo adicional al LLM) — el sistema seguía funcionando, pero el Evaluador razonaba "a ciegas" respecto al contenido específico de cada política de categoría.
+
+### Por qué pasa
+
+`text-embedding-3-small` compara una query corta orientada al **caso del cliente** (motivo + estado del artículo, registro conversacional) contra párrafos de un documento de política largo, en **registro normativo/formal**. Ese contraste de registro limita la similitud coseno alcanzable, con independencia de que el contenido sea semánticamente correcto.
+
+### Intento anterior (revertido) y por qué no era suficiente
+
+El 30/08 se bajó `rag_match_threshold` a 0.35 tras medir similitud real en 4 categorías (commit `0b8221e`). Se revirtió 31 minutos después (commit `9e06e4c`) con el argumento correcto: *"0.35 se elegía con datos de pocas categorías y una única orden de verificación — insuficiente para fijar un valor de producción."* La infraestructura (umbral configurable vía env, `condition` incluida en la query) se mantuvo; el número concreto no.
+
+### Metodología de esta investigación
+
+Para no repetir el mismo error, se midió la similitud coseno real (consultando `match_policy_embeddings` directamente contra la BD, con `match_threshold=0` para observar el valor crudo) en **las 16 categorías completas del catálogo, con 2 motivos distintos cada una (`defective`/`defective` y `changed_mind`/`unopened`) = 32 ejecuciones reales**, no simuladas ni mockeadas.
+
+### Hallazgo 1 — la query importa más que el umbral
+
+Reformular la query de "motivo+estado del cliente" (registro conversacional) a "pregunta sobre la política de la categoría" (registro documental) sube la similitud media de forma consistente:
+
+| Estilo de query | Ejemplo | Similitud media (mejor chunk) |
+|---|---|---|
+| **Anterior** — `f"devolución {reason_category} {condition} {reason}"` | `"devolución no_longer_needed unopened he cambiado de opinión"` | ~0.47 (nunca cerca de 0.7) |
+| **Nueva** — pregunta de política + motivo/estado como desambiguador | `"política de devolución en cosmetica_perfumeria: motivo ya no lo necesita, estado del producto sin abrir"` | ~0.68 |
+
+Se mantienen `reason_category`/`condition` en la query nueva (no el texto libre `reason` del cliente) para conservar la especificidad del caso — una query puramente genérica de categoría, sin motivo ni estado, no recuperaba en el top-5 el chunk de "reacciones alérgicas" de cosmética; añadir el motivo sí lo recupera, a cambio de una similitud levemente menor (0.61-0.67 en vez de 0.70-0.74) pero suficiente.
+
+### Hallazgo 2 — cuántos chunks sobreviven a cada umbral candidato (32 ejecuciones reales)
+
+| `match_threshold` | Chunks devueltos (de 5) | Casos con 0 chunks |
+|---|---|---|
+| 0.45 | min=5, media=5.00 | 0/32 |
+| **0.50 (elegido)** | **min=4, media=4.97** | **0/32** |
+| 0.55 | min=2, media=4.41 | 0/32 |
+| 0.60 | min=1, media=3.16 | 0/32 |
+| 0.65 | min=0, media=1.62 | 2/32 |
+| 0.70 (anterior) | min=0, media=0.09 | **29/32 (91%)** |
+
+**0.5** es el punto con margen de seguridad más amplio antes de perder cobertura: garantiza al menos 4 de los 5 chunks en el peor caso observado, sin ningún fallo en las 32 pruebas, y queda claramente por debajo del "peor mejor-chunk" real (0.6444, categoría `alimentacion`).
+
+### Hallazgo 3 — traducir los motivos/estados a castellano ayuda, pero de forma menor
+
+`reason_category`/`condition` viajan en inglés en el código (`defective`, `changed_mind`, `unopened`...). Traducirlos *solo dentro de la query RAG* (sin tocar la lógica de negocio, que sigue comparando contra los valores en inglés) elimina el último anglicismo de una query ya mayoritariamente en castellano:
+
+| | EN (`defective`, `unopened`...) | ES (`defectuoso`, `sin abrir`...) |
+|---|---|---|
+| Similitud media (8 categorías × 2 motivos) | 0.6723 | 0.6832 |
+| Mejora | — | **+0.0109** (positiva en 15/16 comparaciones) |
+
+Efecto real pero modesto — se incluye porque el coste de implementarlo es un diccionario de traducción de ~10 valores (`_REASON_CATEGORY_ES`/`_CONDITION_ES` en `evaluator.py`), no una reformulación estructural.
+
+### Decisión final
+
+1. **Query** (`evaluator.py::_build_rag_query`): registro documental (`"política de devolución en {category}: motivo {reason_es}, estado del producto {condition_es}"`) con motivo/estado traducidos al castellano.
+2. **Umbral** (`Settings.rag_match_threshold`): **0.5**, con evidencia de 32 ejecuciones reales sin ningún fallo — corrige el "insuficiente para producción" del intento revertido con 8× más puntos de datos y las 16 categorías completas, no una muestra parcial.
+3. Verificado end-to-end contra la BD real (no solo mocks): el caso original que devolvía `semantic_results: []` ahora devuelve 5 chunks con similitud 0.61-0.67. Suite completa (101 tests) y `evaluate_evaluator_agent.py --dry-run` (480 casos, accuracy 87.3%) sin regresiones — ambos aíslan el RAG mockeándolo, así que no podían haber detectado este problema en primer lugar; es un recordatorio de que un dry-run/mock en verde no implica que el sistema real funcione.
 
 ---
 
@@ -142,7 +203,7 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 #    — filtra por categoría para evitar cross-contamination entre políticas —
 rpc_params = {
     "query_embedding": query_embedding,
-    "match_threshold": get_settings().rag_match_threshold,  # 0.7 por defecto
+    "match_threshold": get_settings().rag_match_threshold,  # 0.5 por defecto (ver §4.1)
     "match_count": 5,
     "filter_category": category or None,
 }
