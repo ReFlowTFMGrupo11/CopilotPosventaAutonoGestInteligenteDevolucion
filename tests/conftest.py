@@ -150,12 +150,6 @@ def mock_label_result():
 
 
 @pytest.fixture
-def mock_supabase_client():
-    """Cliente Supabase completamente mockeado."""
-    return AsyncMock()
-
-
-@pytest.fixture
 def sample_items_to_return():
     """Items que el cliente quiere devolver."""
     return [
