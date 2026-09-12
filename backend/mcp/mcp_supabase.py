@@ -15,6 +15,10 @@ Tools:
 - search_return_policy: Búsqueda semántica RAG sobre políticas. (policy_service)
 - create_return_record: Crea registro de devolución. (returns_service)
 - update_return_status: Actualiza estado de devolución. (returns_service)
+- get_pending_return_request_id: Recupera el id de una devolución pendiente
+  tras un duplicado en HITL (resume tras interrupt()). (returns_service)
+- get_latest_return_request: Recupera la devolución más reciente de un
+  pedido tras un duplicado en auto-aprobación. (returns_service)
 """
 
 # Se usa la serie 1.x del SDK "mcp" (no la 2.x, donde esta clase pasó a
@@ -185,6 +189,55 @@ async def update_return_status(
         resolution=resolution,
         notes=notes,
     )
+
+
+# ---------------------------------------------------------------------------
+# Tool 7: get_pending_return_request_id
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_pending_return_request_id(order_id: str) -> dict:
+    """
+    Recupera el id de la devolución pendiente/en aprobación de un pedido.
+    Usado por el Agente de Resolución tras un duplicado al reanudar un HITL
+    (resume tras interrupt()): el registro ya se creó en el intento
+    anterior, así que se recupera su id en vez de crear uno nuevo.
+
+    Devuelve un dict (no un string plano) para que la respuesta viaje como
+    JSON por el protocolo MCP: call_tool() en mcp_client.py solo desenvuelve
+    de forma fiable contenido JSON (dict/list); un string plano sin comillas
+    (p. ej. un UUID, o "" si no hay ninguna pendiente) no es JSON válido y
+    haría que call_tool() lo tratase como "texto no-JSON inesperado" en vez
+    de como el resultado normal de la tool.
+
+    Args:
+        order_id: UUID del pedido.
+
+    Returns:
+        Dict con "return_request_id" (cadena vacía si no hay ninguna
+        devolución pendiente para ese pedido).
+    """
+    return_request_id = await returns_service.get_pending_return_request_id(order_id)
+    return {"return_request_id": return_request_id}
+
+
+# ---------------------------------------------------------------------------
+# Tool 8: get_latest_return_request
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_latest_return_request(order_id: str) -> dict:
+    """
+    Recupera la devolución más reciente de un pedido (id y status). Usado
+    por el Agente de Resolución tras un duplicado en auto-aprobación, para
+    informar al cliente del estado de la devolución que ya existe.
+
+    Args:
+        order_id: UUID del pedido.
+    """
+    return await returns_service.get_latest_return_request(order_id)
 
 
 # ---------------------------------------------------------------------------

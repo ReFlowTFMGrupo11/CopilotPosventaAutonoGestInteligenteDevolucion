@@ -65,6 +65,26 @@ Agentes → mcp_client.py → HTTP → MCP Servers → services/ → Supabase
 3. **Desacoplamiento real**: Los agentes no conocen la implementación interna (Supabase, pgvector, reportlab). Solo conocen el contrato MCP.
 4. **Interoperabilidad**: Cualquier cliente MCP (Claude Desktop, Copilot, otro equipo) puede usar los mismos servers.
 
+**Cumplimiento verificado** (`grep -n "from backend.services" backend/agents/nodes/*.py backend/agents/graph.py`):
+ningún nodo importa `backend.services` para acceder a datos de negocio. Antes sí lo
+hacían dos (`evaluator.py` y `resolution.py`, arrastrado del `supabase_service.py`
+original) — corregido: `orders_service.get_order_details()` ahora precalcula y
+devuelve `order["days_since_delivery"]` (así el Evaluador lo lee del dato que ya le
+llega vía MCP, sin necesitar `calculate_days_since_delivery` importado aparte), y se
+añadieron las tools `get_pending_return_request_id`/`get_latest_return_request` para
+que `resolution.py` recupere el registro duplicado tras un `interrupt()` vía MCP en
+vez de leer `returns_service` directamente. Quedan solo dos excepciones deliberadas,
+ninguna de acceso a datos de negocio:
+- `resolution.py` importa `DUPLICATE_RETURN_MARKER` (constante string) de
+  `returns_service` — necesaria para interpretar un mensaje de error que ya llegó
+  *a través* de MCP (`call_tool()` aplana toda excepción a `RuntimeError` con un
+  string en el límite del protocolo; no hay forma de propagar un tipo de excepción
+  custom a través de ese roundtrip, así que hace falta un marcador de texto
+  compartido entre quien lo lanza y quien lo interpreta).
+- `graph.py` importa `observability` — logging/trazas transversales (Langfuse), no
+  un dominio de negocio; mismo criterio que el resto del código (p. ej.
+  `mcp_client.py` también importa `observability.score_rag_similarity` directamente).
+
 ### ¿Y si los MCP servers no están levantados?
 
 - En **tests**: se mockea `backend.agents.mcp_client` (nunca se hace HTTP real).

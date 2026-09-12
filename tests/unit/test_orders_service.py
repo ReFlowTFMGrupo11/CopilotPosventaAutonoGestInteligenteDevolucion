@@ -5,6 +5,8 @@ dominio (ver docs/REMAINING_TASKS.md #3): calculate_days_since_delivery y
 get_order_details son las dos únicas funciones del dominio "pedidos".
 """
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
@@ -116,3 +118,29 @@ class TestGetOrderDetails:
 
         assert "order" in result
         assert "items" in result
+
+    @pytest.mark.asyncio
+    async def test_includes_days_since_delivery_precalculado(self):
+        """El Evaluador (via MCP) lee `order["days_since_delivery"]` ya
+        calculado, sin importar `calculate_days_since_delivery` directamente
+        (ver docs/defensaTFM/defenderMCP.md) -- este test cubre que
+        get_order_details() lo calcula e incluye en la respuesta."""
+        mock_client, query = _make_sync_supabase_client()
+
+        delivered_at = datetime.now(timezone.utc) - timedelta(days=7)
+        order_chain = MagicMock()
+        order_chain.data = {
+            "id": "ord-1",
+            "delivered_at": delivered_at.isoformat(),
+        }
+        items_chain = MagicMock()
+        items_chain.data = []
+        query.execute = AsyncMock(side_effect=[order_chain, items_chain])
+
+        with patch(
+            "backend.services.orders_service.get_supabase_client",
+            return_value=mock_client,
+        ):
+            result = await get_order_details("ord-1")
+
+        assert result["order"]["days_since_delivery"] == 7
