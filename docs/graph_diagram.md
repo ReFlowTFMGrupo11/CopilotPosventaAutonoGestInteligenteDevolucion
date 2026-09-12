@@ -127,6 +127,24 @@ sequenceDiagram
 | `resolver` | `nodes/resolution.py` | Nodo `Command`: filtra solo artículos elegibles (`items_eligibility`), decide HITL (`needs_admin_approval` del Evaluador O `refund_amount > HITL_THRESHOLD_EUR`), llama `interrupt()` si aplica, genera etiqueta, registra devolución (con guard de duplicados), notifica al cliente y redacta mensaje final (puede ser mixto: aprobados + rechazados) | ✅ ambos |
 | `reject` | `nodes/resolution.py` | Genera mensaje empático de rechazo cuando **ningún** artículo es elegible | ❌ |
 
+### `get_customer_return_history`: de dónde sale y quién lo consume
+
+Se llama en `fetch_order_data` en la misma tanda que `get_order_details` (ver
+diagrama de secuencia más abajo), y su resultado (`return_history`) alimenta
+**dos** consumidores distintos, uno inmediato y otro más adelante en el grafo:
+
+1. **Mismo nodo, inmediato**: `_check_existing_return()` — si ya hay una
+   devolución activa para ese pedido, bloquea la conversación aquí mismo
+   (fila de la tabla de arriba).
+2. **`evaluator.py`, más adelante**: `return_history.get("approved", 0)` se
+   pasa a `policy_rules.py::rule_frequent_returner()` — si el cliente supera
+   `FREQUENT_RETURNER_THRESHOLD` (5) devoluciones aprobadas, marca
+   `human_review` (posible abuso) con independencia de que el resto de
+   condiciones sean normalmente elegibles. Ver la regla completa en
+   `docs/defensaTFM/defenderDatos.md` §3 (tabla de reglas del golden
+   dataset) y el diagrama de capas en `docs/defensaTFM/defenderAgentes.md`
+   ("patrón Chain of Rules").
+
 ## Rol del Checkpointer
 
 ```mermaid
