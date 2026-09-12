@@ -1,0 +1,209 @@
+"""Tests unitarios de backend/api/routers/admin.py.
+
+Corresponde 1:1 con frontend/pages/1_Admin.py (ver
+docs/defensaTFM/defenderFastAPI.md) -- incluye tanto las acciones propias
+de administración (HITL, listar devoluciones) como get_order/
+get_customer_history/get_stats, migrados desde el extinto
+routers/orders.py porque su único consumidor real es esta misma página
+(búsqueda de pedido + KPIs superiores del panel), nunca el chat de cliente.
+
+Usan dependency_overrides/mocks para inyectar el grafo y Supabase, de modo
+que NO se necesita OpenAI, Supabase ni servidores MCP.
+"""
+
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+
+@pytest.mark.asyncio
+async def test_list_pending_returns(async_client, mock_supabase):
+    """Verifica que se listan las devoluciones pendientes de aprobación."""
+    # Configurar datos de retorno
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {
+                "id": "ret-1",
+                "order_id": "ORD-001",
+                "customer_id": "cust-1",
+                "reason": "Defectuoso",
+                "refund_amount": 150.0,
+                "created_at": "2026-08-01",
+            },
+        ]
+    )
+
+    async with async_client as client:
+        resp = await client.get("/api/admin/pending")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 1
+    assert data["pending"][0]["order_id"] == "ORD-001"
+
+
+@pytest.mark.asyncio
+async def test_approve_return(async_client, mock_graph):
+    """Verifica que aprobar una devolución vía HITL devuelve el número de seguimiento."""
+    mock_graph.ainvoke.return_value = {
+        "resolution": "approved",
+        "tracking_number": "TRK-12345",
+    }
+
+    async with async_client as client:
+        resp = await client.post(
+            "/api/admin/test-thread-123/approve",
+            json={
+                "reason": "Cliente VIP",
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["thread_id"] == "test-thread-123"
+    assert data["resolution"] == "approved"
+    assert data["tracking_number"] == "TRK-12345"
+
+
+@pytest.mark.asyncio
+async def test_reject_return(async_client, mock_graph):
+    """Verifica que rechazar una devolución vía HITL devuelve resolution='rejected'."""
+    mock_graph.ainvoke.return_value = {
+        "resolution": "rejected",
+    }
+
+    async with async_client as client:
+        resp = await client.post(
+            "/api/admin/test-thread-123/reject",
+            json={
+                "reason": "Fuera de plazo",
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["resolution"] == "rejected"
+
+
+@pytest.mark.asyncio
+async def test_approve_return_graph_error(async_client, mock_graph):
+    """Verifica que aprobar un thread sin HITL pendiente devuelve un 400."""
+    mock_graph.ainvoke.side_effect = Exception("No hay thread pausado")
+
+    async with async_client as client:
+        resp = await client.post("/api/admin/test-thread-123/approve")
+
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_list_returns(async_client, mock_supabase):
+    """Verifica que se listan todas las devoluciones sin filtrar por estado."""
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
+            {"id": "ret-2", "status": "rejected", "order_id": "ORD-002"},
+        ]
+    )
+
+    async with async_client as client:
+        resp = await client.get("/api/admin/returns")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_list_returns_with_status_filter(async_client, mock_supabase):
+    """Verifica que el filtro por status en la query param se acepta y responde 200."""
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {"id": "ret-1", "status": "approved", "order_id": "ORD-001"},
+        ]
+    )
+
+    async with async_client as client:
+        resp = await client.get("/api/admin/returns?status=approved")
+
+    assert resp.status_code == 200
+
+
+# ── Migrados desde el extinto routers/orders.py (mismas URLs, mismo
+#    comportamiento -- solo cambia backend.api.routers.orders ->
+#    backend.api.routers.admin en el target del patch) ─────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_order(async_client):
+    """Verifica que se devuelven los detalles de un pedido existente."""
+    mock_result = {
+        "order": {"id": "ORD-001", "status": "delivered"},
+        "items": [{"name": "Auriculares", "quantity": 1}],
+    }
+    with patch("backend.api.routers.admin.supabase_service") as mock_svc:
+        mock_svc.get_order_details = AsyncMock(return_value=mock_result)
+
+        async with async_client as client:
+            resp = await client.get("/api/orders/ORD-001")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["order"]["id"] == "ORD-001"
+
+
+@pytest.mark.asyncio
+async def test_get_order_not_found(async_client):
+    """Verifica que un pedido inexistente devuelve un 404."""
+    with patch("backend.api.routers.admin.supabase_service") as mock_svc:
+        mock_svc.get_order_details = AsyncMock(side_effect=Exception("Not found"))
+
+        async with async_client as client:
+            resp = await client.get("/api/orders/FAKE-999")
+
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_customer_history(async_client):
+    """Verifica que se devuelve el historial de devoluciones de un cliente."""
+    mock_result = {
+        "customer_id": "cust-001",
+        "total_returns": 2,
+        "approved": 1,
+        "rejected": 1,
+        "returns": [],
+    }
+    with patch("backend.api.routers.admin.supabase_service") as mock_svc:
+        mock_svc.get_customer_return_history = AsyncMock(return_value=mock_result)
+
+        async with async_client as client:
+            resp = await client.get("/api/customers/cust-001/history")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["customer_id"] == "cust-001"
+    assert data["total_returns"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_stats(async_client, mock_supabase):
+    """Verifica que las estadísticas agregadas se calculan correctamente por estado."""
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data=[
+            {"status": "approved"},
+            {"status": "approved"},
+            {"status": "rejected"},
+            {"status": "pending_approval"},
+        ]
+    )
+
+    async with async_client as client:
+        resp = await client.get("/api/stats")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total_returns"] == 4
+    assert data["approved"] == 2
+    assert data["rejected"] == 1
+    assert data["pending"] == 1
+    assert data["approval_rate"] == 50.0
