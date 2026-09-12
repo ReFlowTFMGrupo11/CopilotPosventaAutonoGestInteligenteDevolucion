@@ -17,7 +17,8 @@ test_triage_agent.py / test_mixed_category_order_returns.py):
   ``from backend.agents.infra.mcp_client import ...`` dentro de cada nodo,
   así que hay que mockearlas en el namespace del nodo
   (``backend.agents.nodes.<modulo>.<función>``), no en
-  ``mcp_client``/``supabase_service``/``logistics_service`` directamente.
+  ``mcp_client``/``orders_service``/``returns_service``/``policy_service``/
+  ``logistics_service`` directamente.
 - ``items_confirmed`` solo se fija a True si ``items_to_return`` NO cambia
   respecto al turno anterior (ver triage.py::_items_key) — se simula un
   estado inicial que ya trae ``items_to_return`` fijado y una respuesta de

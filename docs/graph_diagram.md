@@ -19,7 +19,7 @@ graph TD
     FETCH --> ROUTE_F{route_after_fetch<br/>¿error? ¿items con condition<br/>válida? ¿reason+reason_category?<br/>¿items_confirmed?}
 
     ROUTE_F -->|Falta algo| END_WAIT3([END<br/>Pide dato que falte / confirmación])
-    ROUTE_F -->|Todo OK| EVAL[📋 Evaluator Agent<br/>RAG políticas por categoría<br/>+ policy_rules.py determinista,<br/>evalúa CADA artículo por separado]
+    ROUTE_F -->|Todo OK| EVAL[📋 Evaluator Agent<br/>Pre-check determinista barato primero<br/>RAG+LLM SOLO si queda en zona gris<br/>evalúa CADA artículo por separado]
 
     EVAL --> ROUTE_E{route_after_evaluator<br/>¿any_eligible OR<br/>needs_admin_approval?}
 
@@ -123,7 +123,7 @@ sequenceDiagram
 |------|---------|----------|---------|
 | `triage` | `nodes/triage.py` | LLM extrae info conversacionalmente; interpreta semánticamente el motivo → `condition`; exige confirmación explícita del cliente (`items_confirmed`) antes de dar por buena la inferencia; gestiona cambio de pedido (`switching_order`) y bloqueo si ya hay una devolución activa | ❌ |
 | `fetch_order_data` | `nodes/triage.py` | Consulta pedido + historial en Supabase; detecta devolución activa duplicada (`_check_existing_return`); auto-selecciona artículo único si el `reason_category` ya es conocido (`_auto_select_single_item`); no-op si ya tiene los datos en estado | ✅ supabase:8001 |
-| `evaluator` | `nodes/evaluator.py` | Evalúa **cada artículo por separado**: RAG (`search_return_policy`, una vez por categoría distinta) + reglas deterministas de `policy_rules.py` (`deterministic_check`: veto legal, plazo, higiene, condición, importe HITL, plazo frontera, cliente frecuente). El veredicto `invalid` fuerza `is_eligible=False` pase lo que diga el LLM; `refund_amount` siempre sale de `compute_refund()`, nunca del LLM | ✅ supabase:8001 |
+| `evaluator` | `nodes/evaluator.py` | Evalúa **cada artículo por separado**, en dos fases (ver `docs/defensaTFM/defenderRAG.md` §4.2): **(1)** pre-check barato con `get_policy_info()` (sin RAG narrativo) + `policy_rules.py::deterministic_check` — si el veredicto ya es `invalid` (plazo, higiene, condición), el artículo queda decidido aquí, sin gastar en RAG ni LLM; **(2)** solo para los artículos que quedan en zona gris (`valid`/`human_review`), búsqueda RAG (`search_return_policy`, una vez por categoría distinta) + LLM. `refund_amount` siempre sale de `compute_refund()`, nunca del LLM. Medido contra el golden dataset: 40.8% de los casos se resuelven sin ninguna llamada a OpenAI (fase 1 sola) | ✅ supabase:8001 |
 | `resolver` | `nodes/resolution.py` | Nodo `Command`: filtra solo artículos elegibles (`items_eligibility`), decide HITL (`needs_admin_approval` del Evaluador O `refund_amount > HITL_THRESHOLD_EUR`), llama `interrupt()` si aplica, genera etiqueta, registra devolución (con guard de duplicados), notifica al cliente y redacta mensaje final (puede ser mixto: aprobados + rechazados) | ✅ ambos |
 | `reject` | `nodes/resolution.py` | Genera mensaje empático de rechazo cuando **ningún** artículo es elegible | ❌ |
 

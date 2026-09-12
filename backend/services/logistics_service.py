@@ -1,7 +1,7 @@
 """
 Servicio de logística: generación de la etiqueta de transporte (PDF) y notificación
 al cliente. Contiene la lógica que antes vivía dentro de las funciones `@mcp.tool()`
-de backend/mcp/mcp_logistics.py (ver backend/services/supabase_service.py para la
+de backend/mcp/mcp_logistics.py (ver backend/services/orders_service.py para la
 explicación completa de por qué existe esta capa).
 """
 

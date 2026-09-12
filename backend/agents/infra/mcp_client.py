@@ -184,7 +184,7 @@ async def search_return_policy(
     devolviendo nada relevante. `thread_id` viaja también dentro de la
     llamada MCP (no solo se usa aquí en local) porque el propio embedding
     de OpenAI se llama en el proceso del MCP server, no en este -- ver
-    ``backend.services.supabase_service.search_return_policy``.
+    ``backend.services.policy_service.search_return_policy``.
     """
     result = await call_tool(
         "search_return_policy",

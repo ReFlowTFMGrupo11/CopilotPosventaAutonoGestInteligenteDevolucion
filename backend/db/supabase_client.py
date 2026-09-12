@@ -21,8 +21,9 @@ from supabase import AsyncClient, create_async_client
 from backend.config import get_settings
 
 # Singleton perezoso: antes de la auditoria de ramas (ver doc/AUDITORIA_RAMAS.md),
-# mcp_supabase.py y backend/services/supabase_service.py reimplementaban cada uno
-# su propio cliente en vez de reusar esta funcion, y esta funcion ademas creaba
+# mcp_supabase.py y la capa de servicios (hoy backend/services/orders_service.py,
+# returns_service.py, policy_service.py) reimplementaban cada uno su propio
+# cliente en vez de reusar esta funcion, y esta funcion ademas creaba
 # una conexion nueva en cada llamada. Se centraliza aqui: un unico cliente por
 # proceso, cacheado tras la primera llamada.
 _client: Optional[AsyncClient] = None

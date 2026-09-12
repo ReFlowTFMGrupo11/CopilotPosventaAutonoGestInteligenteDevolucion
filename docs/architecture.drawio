@@ -91,7 +91,7 @@
                 <mxCell id="services_group" value="Services (lógica de negocio)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=11;" vertex="1" parent="1">
                     <mxGeometry x="920" y="280" width="300" height="90" as="geometry"/>
                 </mxCell>
-                <mxCell id="svc_supa" value="supabase_service.py&#xa;(CRUD + RAG)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
+                <mxCell id="svc_supa" value="orders/returns/policy_service.py&#xa;(CRUD + RAG)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
                     <mxGeometry x="935" y="305" width="130" height="50" as="geometry"/>
                 </mxCell>
                 <mxCell id="svc_logis" value="logistics_service.py&#xa;(etiquetas PDF)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
@@ -153,7 +153,7 @@
                 <mxCell id="rag_note" value="&lt;i&gt;RAG: Evaluador → MCP Supabase →&#xa;embedding query (OpenAI) →&#xa;pgvector cosine similarity →&#xa;top-5 policy chunks → prompt LLM&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
                     <mxGeometry x="920" y="600" width="230" height="70" as="geometry"/>
                 </mxCell>
-                <mxCell id="c12" value="supabase_service&#xa;(consultas admin)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;dashed=1;" edge="1" parent="1" source="admin_api" target="svc_supa">
+                <mxCell id="c12" value="orders/returns_service&#xa;(consultas admin)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;dashed=1;" edge="1" parent="1" source="admin_api" target="svc_supa">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
                 <mxCell id="c14" value="/api/admin/observability&#xa;(enlaces a coste/sesión)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="admin_api" target="langfuse_group">

@@ -107,12 +107,28 @@ erDiagram
         TIMESTAMPTZ created_at
     }
 
+    llm_usage {
+        UUID id PK
+        TEXT thread_id
+        UUID customer_id FK
+        UUID order_id FK
+        TEXT node
+        TEXT model
+        INTEGER input_tokens
+        INTEGER output_tokens
+        INTEGER total_tokens
+        INTEGER latency_ms
+        TIMESTAMPTZ created_at
+    }
+
     customers ||--o{ orders : "places"
     customers ||--o{ return_requests : "submits"
     customers ||--o{ chat_sessions : "starts"
+    customers ||--o{ llm_usage : "generates (opcional)"
 
     orders ||--o{ order_items : "contains"
     orders ||--o{ return_requests : "generates"
+    orders ||--o{ llm_usage : "asociado a (opcional)"
 
     products ||--o{ order_items : "appears in"
     products }o--o{ return_policies : "category match"
@@ -125,3 +141,23 @@ erDiagram
 
     chat_sessions ||--o{ chat_messages : "contains"
 ```
+
+## Notas sobre tablas que no reflejan el uso real
+
+- **`chat_sessions`/`chat_messages`**: existen en el esquema (migración
+  `010_create_chat_sessions.sql`) y se siembran con datos sintéticos
+  (`data/generate_dataset.py`), pero **ningún código de `backend/` las
+  consulta ni las escribe en runtime** — comprobado con `grep` sobre
+  `backend/`. El estado real de cada conversación no vive aquí: vive en las
+  tablas propias del checkpointer de LangGraph (`checkpoints`,
+  `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`), creadas
+  dinámicamente por `AsyncPostgresSaver.setup()` (ver `backend/agents/graph.py`)
+  la primera vez que arranca el backend — **no** por ningún fichero de
+  `supabase/migrations/`, así que no aparecen en este diagrama. `thread_id`
+  (columna TEXT en `return_requests` y `llm_usage`, migraciones 012/014) es
+  el identificador que conecta ambos mundos, sin ser una FK real a
+  `chat_sessions.id` (son espacios de identificadores distintos: UUID vs. el
+  `thread_id` de LangGraph).
+- **`llm_usage`**: `customer_id`/`order_id` son `NULL` en los turnos de
+  triaje anteriores a conocer el `order_number` del cliente (ver
+  `fetch_order_data` en `triage.py`) — de ahí "(opcional)" en las relaciones.
