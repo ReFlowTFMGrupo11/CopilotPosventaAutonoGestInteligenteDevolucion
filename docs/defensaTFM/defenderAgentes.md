@@ -357,3 +357,26 @@ except (RuntimeError, ValueError):
 ```
 
 Esto sigue el principio de **diseño para fallos** (*design for failure*): el nodo no asume que es la primera vez que se ejecuta.
+
+---
+
+## 13. Los tres ámbitos de memoria multiagente, aplicados a ReFlow
+
+| Ámbito (teoría) | Mecanismo en ReFlow | Quién lo usa |
+|---|---|---|
+| **Corto plazo** (historial del chat) | `checkpointer` (`AsyncPostgresSaver`/`InMemorySaver`) + `thread_id` | Solo `triage_agent` — es el único nodo que conversa con el cliente turno a turno |
+| **Contexto de subtarea** (encargo acotado, no el chat) | Cada nodo construye su propio bloque de `context`/`SystemMessage` con solo los datos que necesita evaluar o resolver | `evaluator_agent` (política + pedido + historial de devoluciones) y `resolution_agent` (`resolution_context`) |
+| **Compartida** (largo plazo, cruza entre agentes) | El propio `ReturnState` del grafo — poblado por `triage`/`fetch_order_data` y leído por `evaluator`/`resolution` sin que nadie repita nada | Todos los nodos, vía el estado del grafo (no vía un `store` separado) |
+
+### ¿Por qué no hay un `store` (`InMemoryStore`) como en el lab 1?
+
+El patrón `store` de la clase resuelve un problema que ReFlow **no tiene**: preferencias de un mismo usuario que persisten *entre conversaciones distintas* (ej. "el cliente prefiere que le hablen en tono formal", vigente en la conversación de la semana que viene). Una devolución es una transacción de una sola sesión — todo lo que un agente necesita saber del cliente/pedido nace y muere dentro del mismo `thread_id`, y ya viaja en el `ReturnState` compartido de la fila de arriba. Añadir un `store` cruzaría información entre distintas solicitudes de devolución sin que exista ningún requisito de negocio que lo pida — sería una capa de memoria sin caso de uso.
+
+Si en el futuro ReFlow necesitara recordar algo del cliente entre solicitudes distintas (p. ej. "cliente VIP: aplicar tolerancia extra de plazo"), ahí sí correspondería un `store` compartido entre los tres nodos, poblado una vez y leído por `evaluator_agent` sin pasar por el chat — el mismo patrón que el lab 1, aplicado a un hecho que sí sobrevive a la sesión.
+
+### Contexto aislado: el caso que SÍ había que corregir
+
+Antes de esta revisión, `evaluator_agent` inyectaba `trim_history(state["messages"])` (el chat crudo, recortado a los últimos `MAX_HISTORY_MESSAGES`) además de su `context` ya autosuficiente — exactamente el antipatrón que la clase pide reconocer ("si le pasas todo el historial a cada subagente... el subagente se distrae con contenido que no es de su tarea"). `resolution_agent` nunca tuvo este problema (construye su propio `resolution_context` sin tocar `state["messages"]`). Se eliminó la inyección redundante en `evaluator.py`; el criterio de "quién necesita el chat" queda ahora así:
+
+- **Necesita el chat**: `triage_agent` (conversa con el cliente).
+- **No lo necesita**: `evaluator_agent` y `resolution_agent` (reciben el encargo ya resuelto en datos estructurados).
