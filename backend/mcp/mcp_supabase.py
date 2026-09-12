@@ -10,6 +10,7 @@ de esta separación.
 Tools:
 - get_order_details: Consulta detalles del pedido.
 - get_customer_return_history: Historial de devoluciones del cliente.
+- get_policy_info: Política estructurada de una categoría (sin RAG narrativo).
 - search_return_policy: Búsqueda semántica RAG sobre políticas.
 - create_return_record: Crea registro de devolución.
 - update_return_status: Actualiza estado de devolución.
@@ -69,7 +70,27 @@ async def get_customer_return_history(customer_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Tool 3: search_return_policy
+# Tool 3: get_policy_info
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def get_policy_info(category: str) -> dict:
+    """
+    Consulta la política estructurada de una categoría (plazo, condiciones
+    admitidas, recargo de reposición) SIN búsqueda vectorial ni llamada a
+    embeddings — más barata que search_return_policy. Usado por Agente 2
+    para el veto legal/determinista antes de decidir si hace falta la
+    búsqueda RAG narrativa.
+
+    Args:
+        category: Categoría de producto (ej. "electronica_informatica").
+    """
+    return await supabase_service.get_policy_info(category)
+
+
+# ---------------------------------------------------------------------------
+# Tool 4: search_return_policy
 # ---------------------------------------------------------------------------
 
 
@@ -90,7 +111,7 @@ async def search_return_policy(
 
 
 # ---------------------------------------------------------------------------
-# Tool 4: create_return_record
+# Tool 5: create_return_record
 # ---------------------------------------------------------------------------
 
 
@@ -136,7 +157,7 @@ async def create_return_record(
 
 
 # ---------------------------------------------------------------------------
-# Tool 5: update_return_status
+# Tool 6: update_return_status
 # ---------------------------------------------------------------------------
 
 

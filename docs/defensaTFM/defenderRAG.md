@@ -128,10 +128,174 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 ### Parámetros de búsqueda
 
 | Parámetro | Valor | Justificación |
-|-----------|-------|---------------|
-| `match_threshold` | 0.7 (`Settings.rag_match_threshold`, configurable vía `RAG_MATCH_THRESHOLD`) | Filtra resultados irrelevantes sin ser demasiado restrictivo |
+|-----------|-------|----------------|
+| `match_threshold` | 0.5 (`Settings.rag_match_threshold`, configurable vía `RAG_MATCH_THRESHOLD`) | Calibrado contra similitud real medida en 32 ejecuciones (16 categorías × 2 motivos) — ver §4.1 |
 | `match_count` | 5 | Suficiente contexto sin saturar el prompt del Evaluador |
 | Distancia | Coseno (`<=>`) | Estándar para embeddings de texto, invariante a la magnitud |
+
+---
+
+## 4.1. Investigación: el umbral 0.7 dejaba el RAG sin devolver nada en uso real
+
+### El síntoma
+
+Inspeccionando una traza real en Langfuse (`score_rag_similarity`, ver `backend/services/observability.py`), una búsqueda real —pedido de perfumería, motivo "ya no lo necesito", artículo sin abrir— devolvía `semantic_results: []` y `similarity: 0.0`. No era un caso aislado: **con `match_threshold=0.7`, la inmensa mayoría de búsquedas reales devuelven 0 chunks**, enmascarado en producción porque `policy_rules.py` no depende del RAG para decidir elegibilidad (solo aporta contexto narrativo adicional al LLM) — el sistema seguía funcionando, pero el Evaluador razonaba "a ciegas" respecto al contenido específico de cada política de categoría.
+
+### Por qué pasa
+
+`text-embedding-3-small` compara una query corta orientada al **caso del cliente** (motivo + estado del artículo, registro conversacional) contra párrafos de un documento de política largo, en **registro normativo/formal**. Ese contraste de registro limita la similitud coseno alcanzable, con independencia de que el contenido sea semánticamente correcto.
+
+### Intento anterior (revertido) y por qué no era suficiente
+
+El 30/08 se bajó `rag_match_threshold` a 0.35 tras medir similitud real en 4 categorías (commit `0b8221e`). Se revirtió 31 minutos después (commit `9e06e4c`) con el argumento correcto: *"0.35 se elegía con datos de pocas categorías y una única orden de verificación — insuficiente para fijar un valor de producción."* La infraestructura (umbral configurable vía env, `condition` incluida en la query) se mantuvo; el número concreto no.
+
+### Metodología de esta investigación
+
+Para no repetir el mismo error, se midió la similitud coseno real (consultando `match_policy_embeddings` directamente contra la BD, con `match_threshold=0` para observar el valor crudo) en **las 16 categorías completas del catálogo, con 2 motivos distintos cada una (`defective`/`defective` y `changed_mind`/`unopened`) = 32 ejecuciones reales**, no simuladas ni mockeadas.
+
+### Hallazgo 1 — la query importa más que el umbral
+
+Reformular la query de "motivo+estado del cliente" (registro conversacional) a "pregunta sobre la política de la categoría" (registro documental) sube la similitud media de forma consistente:
+
+| Estilo de query | Ejemplo | Similitud media (mejor chunk) |
+|---|---|---|
+| **Anterior** — `f"devolución {reason_category} {condition} {reason}"` | `"devolución no_longer_needed unopened he cambiado de opinión"` | ~0.47 (nunca cerca de 0.7) |
+| **Nueva** — pregunta de política + motivo/estado como desambiguador | `"política de devolución en cosmetica_perfumeria: motivo ya no lo necesita, estado del producto sin abrir"` | ~0.68 |
+
+Se mantienen `reason_category`/`condition` en la query nueva (no el texto libre `reason` del cliente) para conservar la especificidad del caso — una query puramente genérica de categoría, sin motivo ni estado, no recuperaba en el top-5 el chunk de "reacciones alérgicas" de cosmética; añadir el motivo sí lo recupera, a cambio de una similitud levemente menor (0.61-0.67 en vez de 0.70-0.74) pero suficiente.
+
+#### Qué significa exactamente "registro documental" vs. "registro de intención"
+
+La diferencia no es de vocabulario suelto, es de **marco de la frase** — cómo se presenta la pregunta, no solo qué palabras contiene:
+
+```python
+# ANTES — "registro de intención": el cliente cuenta SU situación
+f"devolución {reason_category} {condition} {reason}"
+# → "devolución no_longer_needed unopened he cambiado de opinión"
+
+# DESPUÉS — "registro documental": se pregunta por LA NORMA, como lo haría el propio documento
+f"política de devolución en {category}: motivo {reason_es}, estado del producto {condition_es}"
+# → "política de devolución en cosmetica_perfumeria: motivo ya no lo necesita, estado del producto sin abrir"
+```
+
+La query nueva no dice *"quiero devolver esto porque..."* (una queja/petición), dice *"¿cuál es la política...?"* — imita cómo el propio corpus está redactado (cada documento empieza con encabezados tipo *"Política de Devoluciones — Cosmética y Perfumería"*, *"Plazo y condiciones generales"*). El embedding resultante queda más cerca del vector medio de esos párrafos normativos, no del vector de una queja de cliente.
+
+**Por qué no basta con quitar `reason_category`/`condition` y preguntar solo por la categoría.** Una query mínima —`"política de devolución en cosmetica_perfumeria"`— da la similitud más alta de todas (0.73), pero sale "a ciegas" de cuál de los 5-6 chunks de esa categoría es relevante para *este* caso: en la prueba real, el chunk de "Reacciones alérgicas" ni aparecía en el top-5. Añadir `motivo {reason_es}, estado del producto {condition_es}` al final mantiene el envoltorio documental, pero inyecta una señal que le dice al embedding *"...y dentro de esa categoría, prioriza la parte sobre alergias/higiene/plazo, no solo la introducción genérica"* — de ahí "señal de desambiguación": no cambia el registro de la frase, solo decide qué parte del documento es más relevante para el caso concreto. El coste es una similitud algo menor (0.61-0.67 en vez de 0.70-0.74), aceptado a cambio de no perder el chunk específico del caso.
+
+### Hallazgo 2 — cuántos chunks sobreviven a cada umbral candidato (32 ejecuciones reales)
+
+| `match_threshold` | Chunks devueltos (de 5) | Casos con 0 chunks |
+|---|---|---|
+| 0.45 | min=5, media=5.00 | 0/32 |
+| **0.50 (elegido)** | **min=4, media=4.97** | **0/32** |
+| 0.55 | min=2, media=4.41 | 0/32 |
+| 0.60 | min=1, media=3.16 | 0/32 |
+| 0.65 | min=0, media=1.62 | 2/32 |
+| 0.70 (anterior) | min=0, media=0.09 | **29/32 (91%)** |
+
+**0.5** es el punto con margen de seguridad más amplio antes de perder cobertura: garantiza al menos 4 de los 5 chunks en el peor caso observado, sin ningún fallo en las 32 pruebas, y queda claramente por debajo del "peor mejor-chunk" real (0.6444, categoría `alimentacion`).
+
+### Hallazgo 3 — traducir los motivos/estados a castellano ayuda, pero de forma menor
+
+`reason_category`/`condition` viajan en inglés en el código (`defective`, `changed_mind`, `unopened`...). Traducirlos *solo dentro de la query RAG* (sin tocar la lógica de negocio, que sigue comparando contra los valores en inglés) elimina el último anglicismo de una query ya mayoritariamente en castellano:
+
+| | EN (`defective`, `unopened`...) | ES (`defectuoso`, `sin abrir`...) |
+|---|---|---|
+| Similitud media (8 categorías × 2 motivos) | 0.6723 | 0.6832 |
+| Mejora | — | **+0.0109** (positiva en 15/16 comparaciones) |
+
+Efecto real pero modesto — se incluye porque el coste de implementarlo es un diccionario de traducción de ~10 valores (`_REASON_CATEGORY_ES`/`_CONDITION_ES` en `evaluator.py`), no una reformulación estructural.
+
+### Decisión final
+
+1. **Query** (`evaluator.py::_build_rag_query`): registro documental (`"política de devolución en {category}: motivo {reason_es}, estado del producto {condition_es}"`) con motivo/estado traducidos al castellano.
+2. **Umbral** (`Settings.rag_match_threshold`): **0.5**, con evidencia de 32 ejecuciones reales sin ningún fallo — corrige el "insuficiente para producción" del intento revertido con 8× más puntos de datos y las 16 categorías completas, no una muestra parcial.
+3. Verificado end-to-end contra la BD real (no solo mocks): el caso original que devolvía `semantic_results: []` ahora devuelve 5 chunks con similitud 0.61-0.67. Suite completa (101 tests) y `evaluate_evaluator_agent.py --dry-run` (480 casos, accuracy 87.3%) sin regresiones — ambos aíslan el RAG mockeándolo, así que no podían haber detectado este problema en primer lugar; es un recordatorio de que un dry-run/mock en verde no implica que el sistema real funcione.
+
+---
+
+## 4.2. Optimización: no pagar el RAG narrativo cuando el veto ya está decidido
+
+### El hallazgo
+
+Analizando una traza real en Langfuse (un artículo fuera de plazo, categoría
+electrónica), se observó que `evaluator_agent()` ejecutaba **siempre**, para
+**todos** los artículos, en este orden: (1) búsqueda RAG narrativa
+(embedding + RPC vectorial), (2) llamada al LLM evaluador, y solo
+**después** (3) el veto determinista (`policy_rules.py::deterministic_check`).
+Cuando ese veto resuelve `"invalid"` (plazo muy superado, exclusión de
+higiene, condición no admitida), **sobreescribe por completo** lo que dijera
+el LLM — `is_eligible`, `refund_amount` y `eligibility_reason` quedan
+reemplazados por la plantilla determinista. Es decir: para esos artículos,
+los pasos (1) y (2) se ejecutan y se pagan (coste de embedding + tokens del
+LLM + latencia), pero **no tienen ningún efecto posible en el resultado
+final** — el veto los habría descartado igual sin ellos.
+
+Se confirmó además que ni siquiera hace falta esa llamada del Evaluador para
+poder responder al cliente: `evaluator_agent()` nunca escribe en
+`state["messages"]` — el mensaje final siempre lo compone una llamada
+**posterior y separada**, dedicada en exclusiva a ese propósito
+(`rejection_agent()`/`resolution_agent()` en `resolution.py`, ver
+[`defenderAgentes.md`](defenderAgentes.md)), que solo necesita el
+`eligibility_reason` ya decidido como texto de entrada.
+
+### El cambio: pre-check determinista ANTES del RAG/LLM
+
+Se extrajo `get_policy_info(category)` (`supabase_service.py`) como consulta
+independiente y más barata que `search_return_policy()`: solo lee la fila
+estructurada de `return_policies` (plazo, condiciones admitidas, recargo),
+**sin generar ningún embedding ni ejecutar la búsqueda vectorial**. Nueva
+tool MCP homónima (`mcp_supabase.py`) y wrapper en `mcp_client.py`, siguiendo
+el mismo patrón de capas que el resto de tools.
+
+`evaluator_agent()` ahora evalúa en dos fases:
+
+1. **Pre-check** (barato): para cada artículo, `get_policy_info()` +
+   `deterministic_check()`. Los artículos con veredicto `"invalid"` quedan
+   decididos aquí — nunca llegan al RAG narrativo ni al LLM.
+2. **Evaluación LLM** (solo para lo que queda en zona gris — veredicto
+   `"valid"`/`"human_review"`): búsqueda RAG narrativa + una única llamada
+   al LLM, exactamente como antes, pero solo para las categorías de los
+   artículos que de verdad lo necesitan.
+
+Si el pre-check ya decide el 100% de los artículos de la solicitud (caso
+común: devolución de un solo artículo con veto claro), la función devuelve
+**sin ejecutar ninguna búsqueda RAG ni llamada al LLM en absoluto**.
+
+### Evidencia: cuánto se ahorra de verdad
+
+Contra los **480 casos completos** del golden dataset (mockeando
+`search_return_policy`/`get_policy_info` para no gastar en embeddings/LLM
+reales, solo para *contar* cuántos artículos llegan a necesitarlos):
+
+| | Casos | % |
+|---|---|---|
+| Se ahorran el RAG narrativo + LLM por completo (veto determinista) | 196 | **40.8%** |
+| Siguen necesitando RAG narrativo + LLM (zona gris o HITL) | 284 | 59.2% |
+
+**4 de cada 10 solicitudes de devolución de este dataset se resuelven sin
+ninguna llamada a OpenAI para la evaluación de política** (ni embedding ni
+chat completion) — solo con una consulta SQL barata + reglas Python puras.
+
+### Hallazgo colateral: un bug de fechas que llevaba el modo LLM real a ~35% de accuracy
+
+Al verificar el cambio anterior con un smoke test real (`evaluate_evaluator_agent.py --limit 20`,
+LLM real, no `--dry-run`), la accuracy fue de solo **35%** — muy por debajo
+del 87.3% del modo `--dry-run`. La causa no era el cambio de arquitectura:
+`_build_state()` (el harness que reconstruye el estado de cada caso)
+calculaba `delivered_at` contra una fecha **fija** (`datetime(2026, 8, 18, ...)`),
+mientras que `calculate_days_since_delivery()` (el código real) calcula
+contra `datetime.now()` — el mismo patrón de "bomba de relojería" que ya se
+había corregido una vez en `tests/conftest.py` (commit `ab28809`), pero que
+nunca se aplicó a este script porque su modo con LLM real nunca se había
+ejecutado hasta ahora (no hay ningún informe con `"mode": "llm"` en
+`tests/qa/golden/results/` anterior a este cambio). Corregido con el mismo
+fix (`now = datetime.now(timezone.utc)`); tras el fix, el mismo smoke test
+de 20 casos sube a **90%** de accuracy, con los únicos 2 fallos siendo el
+gap de `missing_evidence` ya documentado
+([`defenderDatos.md` §6](defenderDatos.md)) y una divergencia legítima
+entre las dos implementaciones independientes de reglas (anticipada en
+[`defenderDatos.md` §8](defenderDatos.md)).
 
 ---
 
@@ -142,7 +306,7 @@ Sin este filtro, una query para `alimentacion` podría devolver chunks de `masco
 #    — filtra por categoría para evitar cross-contamination entre políticas —
 rpc_params = {
     "query_embedding": query_embedding,
-    "match_threshold": get_settings().rag_match_threshold,  # 0.7 por defecto
+    "match_threshold": get_settings().rag_match_threshold,  # 0.5 por defecto (ver §4.1)
     "match_count": 5,
     "filter_category": category or None,
 }

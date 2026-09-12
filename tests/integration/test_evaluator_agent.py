@@ -70,6 +70,10 @@ class TestPolicyEvaluatorAgent:
         with patch(
             "backend.agents.nodes.evaluator._build_llm", return_value=mock_llm
         ), patch(
+            "backend.agents.nodes.evaluator.get_policy_info",
+            new_callable=AsyncMock,
+            return_value=mock_policy_results["policy_info"],
+        ), patch(
             "backend.agents.nodes.evaluator.search_return_policy",
             new_callable=AsyncMock,
             return_value=mock_policy_results,
@@ -121,6 +125,10 @@ class TestPolicyEvaluatorAgent:
         with patch(
             "backend.agents.nodes.evaluator._build_llm", return_value=mock_llm
         ), patch(
+            "backend.agents.nodes.evaluator.get_policy_info",
+            new_callable=AsyncMock,
+            return_value=mock_policy_results["policy_info"],
+        ), patch(
             "backend.agents.nodes.evaluator.search_return_policy",
             new_callable=AsyncMock,
             return_value=mock_policy_results,
@@ -150,6 +158,10 @@ class TestPolicyEvaluatorAgent:
 
         with patch(
             "backend.agents.nodes.evaluator._build_llm", return_value=mock_llm
+        ), patch(
+            "backend.agents.nodes.evaluator.get_policy_info",
+            new_callable=AsyncMock,
+            return_value=mock_policy_results["policy_info"],
         ), patch(
             "backend.agents.nodes.evaluator.search_return_policy",
             new_callable=AsyncMock,

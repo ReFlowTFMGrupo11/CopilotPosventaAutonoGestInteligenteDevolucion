@@ -67,7 +67,14 @@ def _make_task(dry_run: bool):
             """Sustituye a search_return_policy() devolviendo la policy mockeada de este item."""
             return mock_policy
 
+        async def _mock_policy_info(category: str) -> dict:
+            """Sustituye a get_policy_info() (pre-check determinista, ver evaluator.py)."""
+            return mock_policy.get("policy_info") or {}
+
         with patch(
+            "backend.agents.nodes.evaluator.get_policy_info",
+            side_effect=_mock_policy_info,
+        ), patch(
             "backend.agents.nodes.evaluator.search_return_policy",
             side_effect=_mock_search,
         ):

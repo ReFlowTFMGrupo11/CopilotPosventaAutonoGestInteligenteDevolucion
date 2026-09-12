@@ -142,6 +142,39 @@ async def get_customer_return_history(customer_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Política estructurada (sin búsqueda vectorial)
+# ---------------------------------------------------------------------------
+
+
+async def get_policy_info(category: str) -> dict | None:
+    """Consulta la fila estructurada de ``return_policies`` para una categoría.
+
+    A diferencia de ``search_return_policy()``, NO genera ningún embedding ni
+    ejecuta la búsqueda vectorial (`match_policy_embeddings`) — es una
+    consulta directa a una tabla por su índice de categoría, sin llamada a la
+    API de OpenAI. Existe para que el veto legal/determinista
+    (``policy_rules.py::deterministic_check``, que solo necesita
+    ``max_return_days``/``allowed_conditions``/``restocking_fee_percent``)
+    pueda evaluarse SIN pagar el coste de la búsqueda RAG narrativa cuando el
+    resultado ya está decidido de todos modos (ver
+    docs/defensaTFM/defenderRAG.md §4.2 — evaluator_agent la usa como
+    pre-check antes de decidir si hace falta la búsqueda narrativa + LLM).
+    """
+    if not category:
+        return None
+    client = await get_supabase_client()
+    policy_resp = (
+        await client.table("return_policies")
+        .select("*")
+        .eq("category", category)
+        .eq("active", True)
+        .single()
+        .execute()
+    )
+    return policy_resp.data
+
+
+# ---------------------------------------------------------------------------
 # Búsqueda RAG de políticas
 # ---------------------------------------------------------------------------
 
@@ -207,17 +240,7 @@ async def search_return_policy(
     }
     results = await client.rpc("match_policy_embeddings", rpc_params).execute()
 
-    policy_info = None
-    if category:
-        policy_resp = (
-            await client.table("return_policies")
-            .select("*")
-            .eq("category", category)
-            .eq("active", True)
-            .single()
-            .execute()
-        )
-        policy_info = policy_resp.data
+    policy_info = await get_policy_info(category)
 
     return {
         "query": query,
