@@ -145,15 +145,13 @@ def _build_mock_policy(
 def _build_state(row: dict) -> dict[str, Any]:
     """Construye el estado mínimo que necesita evaluator_agent."""
     order_item_id = f"oi-eval-{row['case_id'][:8]}"
-    # delivered_at simulado: ahora - days_since_delivery. `now` debe ser el
-    # momento REAL de la ejecución, no una fecha fija: calculate_days_since_delivery()
-    # (orders_service.py) calcula contra datetime.now(timezone.utc) real, así
-    # que una fecha fija se convierte en una bomba de relojería que infla
-    # "días desde entrega" un día más cada día que pasa desde que se escribió
-    # este script -- mismo problema (y mismo fix) que tests/conftest.py::
-    # mock_order_details, ver commit ab28809. Detectado al ejercer por
-    # primera vez el modo LLM real de este script (--dry-run no lo toca:
-    # usa la columna days_since_delivery del CSV directamente, sin fechas).
+    # days_since_delivery viene directo de la columna del CSV, sin pasar por
+    # una fecha fabricada: evaluator_agent ya no calcula esto él mismo (ver
+    # orders_service.get_order_details(), que lo precalcula al ser el único
+    # llamador vía MCP) -- lee order["days_since_delivery"] directamente. Es
+    # más robusto que la fecha simulada de antes (delivered_at = ahora -
+    # days), que era una bomba de relojería si "ahora" y el cálculo interno
+    # de evaluator.py no se ejecutaban en el mismo instante exacto.
     days = int(row["days_since_delivery"])
     now = datetime.now(timezone.utc)
     from datetime import timedelta
@@ -169,6 +167,7 @@ def _build_state(row: dict) -> dict[str, Any]:
                 "status": "delivered",
                 "delivered_at": delivered.isoformat(),
                 "created_at": delivered.isoformat(),
+                "days_since_delivery": days,
                 "customer": {
                     "id": f"cust-eval-{row['case_id'][:8]}",
                     "email": row["customer_email"],

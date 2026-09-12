@@ -46,15 +46,13 @@ from backend.agents.usage_tracking import invoke_tracked
 from backend.agents.infra.mcp_client import (
     create_return_record,
     generate_shipping_label,
+    get_latest_return_request,
+    get_pending_return_request_id,
     send_customer_notification,
     update_return_status,
 )
 from backend.config import get_settings
-from backend.services.returns_service import (
-    DUPLICATE_RETURN_MARKER,
-    get_latest_return_request,
-    get_pending_return_request_id,
-)
+from backend.services.returns_service import DUPLICATE_RETURN_MARKER
 from backend.models import OrderItem
 
 logger = logging.getLogger(__name__)

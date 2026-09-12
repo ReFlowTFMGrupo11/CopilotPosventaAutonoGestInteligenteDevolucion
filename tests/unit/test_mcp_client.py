@@ -231,3 +231,33 @@ class TestSearchReturnPolicyWrapper:
             await mcp_client.search_return_policy(query="q", category="c")
 
         mock_score.assert_called_once_with(None, "q", "c", [])
+
+
+class TestGetPendingReturnRequestIdWrapper:
+    """La tool MCP devuelve {"return_request_id": ...} (no un string plano
+    -- ver el porqué en el docstring de la tool en mcp_supabase.py); este
+    wrapper debe desenvolverlo para mantener la misma interfaz que
+    returns_service.get_pending_return_request_id (un string)."""
+
+    @pytest.mark.asyncio
+    async def test_desenvuelve_el_id_del_dict(self):
+        with patch(
+            "backend.agents.infra.mcp_client.call_tool",
+            new=AsyncMock(return_value={"return_request_id": "ret-123"}),
+        ) as mock_call:
+            result = await mcp_client.get_pending_return_request_id("ord-1")
+
+        assert result == "ret-123"
+        mock_call.assert_awaited_once_with(
+            "get_pending_return_request_id", {"order_id": "ord-1"}
+        )
+
+    @pytest.mark.asyncio
+    async def test_sin_devolucion_pendiente_devuelve_cadena_vacia(self):
+        with patch(
+            "backend.agents.infra.mcp_client.call_tool",
+            new=AsyncMock(return_value={"return_request_id": ""}),
+        ):
+            result = await mcp_client.get_pending_return_request_id("ord-1")
+
+        assert result == ""

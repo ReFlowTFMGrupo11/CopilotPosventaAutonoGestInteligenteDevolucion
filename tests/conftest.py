@@ -40,6 +40,10 @@ def mock_order_details():
             "status": "delivered",
             "delivered_at": delivered_at.isoformat(),
             "created_at": created_at.isoformat(),
+            # Precalculado, como lo entregaría get_order_details() (MCP) de
+            # verdad -- evaluator_agent ya no lo calcula él mismo, ver
+            # orders_service.get_order_details().
+            "days_since_delivery": 5,
             "customer": {
                 "id": "cust-001-uuid",
                 "email": "ana.garcia@example.com",
@@ -190,6 +194,10 @@ def mock_order_details_mixed_categories():
             "status": "delivered",
             "delivered_at": delivered_at.isoformat(),
             "created_at": created_at.isoformat(),
+            # Precalculado, como lo entregaría get_order_details() (MCP) de
+            # verdad -- evaluator_agent ya no lo calcula él mismo, ver
+            # orders_service.get_order_details().
+            "days_since_delivery": 10,
             "customer": {
                 "id": "cust-mixed-uuid",
                 "email": "laura.perez@example.com",

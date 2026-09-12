@@ -35,7 +35,6 @@ from backend.agents.usage_tracking import invoke_structured_tracked
 from backend.agents.infra.mcp_client import get_policy_info, search_return_policy
 from backend.agents.nodes.policy_rules import compute_refund, deterministic_check
 from backend.models import ItemEligibility, OrderItem, PolicyEvaluationOutput
-from backend.services.orders_service import calculate_days_since_delivery
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +207,10 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
     product_categories = _category_by_item_id(order_details)
     order_items_raw = order_details.get("items", [])
     approved_returns = return_history.get("approved", 0)
-    days_since_order = calculate_days_since_delivery(order_details)
+    # Ya viene calculado desde get_order_details() (MCP) -- ver
+    # orders_service.get_order_details(); evita que este nodo tenga que
+    # importar backend.services directamente (ver defenderMCP.md).
+    days_since_order = order_details.get("order", {}).get("days_since_delivery", 9999)
 
     # ── FASE 1: pre-check determinista, barato (sin RAG narrativo) ──────
     # Una consulta a get_policy_info() por categoría DISTINTA — no hace

@@ -33,6 +33,8 @@ _TOOL_SERVER_MAP = {
     "search_return_policy": "supabase",
     "create_return_record": "supabase",
     "update_return_status": "supabase",
+    "get_pending_return_request_id": "supabase",
+    "get_latest_return_request": "supabase",
     "generate_shipping_label": "logistics",
     "send_customer_notification": "logistics",
 }
@@ -238,6 +240,25 @@ async def update_return_status(
             "notes": notes,
         },
     )
+
+
+async def get_pending_return_request_id(order_id: str) -> str:
+    """Recupera el id de la devolución pendiente/en aprobación via MCP.
+
+    La tool MCP devuelve un dict (``{"return_request_id": ...}``), no un
+    string plano -- ver el docstring de la tool en mcp_supabase.py sobre
+    por qué (call_tool() solo desenvuelve JSON de forma fiable). Este
+    wrapper desenvuelve el dict para que la interfaz siga siendo idéntica a
+    ``returns_service.get_pending_return_request_id`` (misma que antes del
+    cambio a MCP): quien llama recibe directamente el string.
+    """
+    result = await call_tool("get_pending_return_request_id", {"order_id": order_id})
+    return result.get("return_request_id", "")
+
+
+async def get_latest_return_request(order_id: str) -> dict:
+    """Recupera la devolución más reciente de un pedido via MCP."""
+    return await call_tool("get_latest_return_request", {"order_id": order_id})
 
 
 async def generate_shipping_label(

@@ -66,6 +66,13 @@ async def get_order_details(order_number: str) -> dict:
     Se busca por el número de pedido (el dato que tiene el cliente), no por el
     UUID interno: ese se devuelve dentro de "order"/"id" para uso interno del grafo.
 
+    Incluye ``order["days_since_delivery"]`` ya calculado (ver
+    `calculate_days_since_delivery`): así el Agente Evaluador
+    (`backend/agents/nodes/evaluator.py`) lo recibe como parte del dato que
+    ya le llega vía MCP, sin necesitar un import directo de esta capa de
+    servicios (ver docs/defensaTFM/defenderMCP.md, "agentes solo hablan con
+    MCP, nunca con services/ directamente").
+
     Args:
         order_number: Número de pedido tal como lo tiene el cliente (ej. "ORD-2026-00177").
     """
@@ -86,7 +93,12 @@ async def get_order_details(order_number: str) -> dict:
         .execute()
     )
 
+    order_data = order_resp.data
+    order_data["days_since_delivery"] = calculate_days_since_delivery(
+        {"order": order_data}
+    )
+
     return {
-        "order": order_resp.data,
+        "order": order_data,
         "items": items_resp.data,
     }
