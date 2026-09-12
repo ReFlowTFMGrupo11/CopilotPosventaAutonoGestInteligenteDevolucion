@@ -35,7 +35,7 @@ from backend.agents.usage_tracking import invoke_structured_tracked
 from backend.agents.infra.mcp_client import get_policy_info, search_return_policy
 from backend.agents.nodes.policy_rules import compute_refund, deterministic_check
 from backend.models import ItemEligibility, OrderItem, PolicyEvaluationOutput
-from backend.services.supabase_service import calculate_days_since_delivery
+from backend.services.orders_service import calculate_days_since_delivery
 
 logger = logging.getLogger(__name__)
 

@@ -140,7 +140,7 @@ async def test_get_order(async_client):
         "order": {"id": "ORD-001", "status": "delivered"},
         "items": [{"name": "Auriculares", "quantity": 1}],
     }
-    with patch("backend.api.routers.admin.supabase_service") as mock_svc:
+    with patch("backend.api.routers.admin.orders_service") as mock_svc:
         mock_svc.get_order_details = AsyncMock(return_value=mock_result)
 
         async with async_client as client:
@@ -154,7 +154,7 @@ async def test_get_order(async_client):
 @pytest.mark.asyncio
 async def test_get_order_not_found(async_client):
     """Verifica que un pedido inexistente devuelve un 404."""
-    with patch("backend.api.routers.admin.supabase_service") as mock_svc:
+    with patch("backend.api.routers.admin.orders_service") as mock_svc:
         mock_svc.get_order_details = AsyncMock(side_effect=Exception("Not found"))
 
         async with async_client as client:
@@ -173,7 +173,7 @@ async def test_get_customer_history(async_client):
         "rejected": 1,
         "returns": [],
     }
-    with patch("backend.api.routers.admin.supabase_service") as mock_svc:
+    with patch("backend.api.routers.admin.returns_service") as mock_svc:
         mock_svc.get_customer_return_history = AsyncMock(return_value=mock_result)
 
         async with async_client as client:

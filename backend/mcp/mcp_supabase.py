@@ -1,19 +1,20 @@
 """
 MCP Server: Supabase (Datos y Políticas)
 
-Wrapper fino sobre backend/services/supabase_service.py: cada tool solo traduce
-argumentos y delega en la función de servicio equivalente. Toda la lógica real
-(consultas a Supabase, RAG con pgvector) vive en services/, no aquí — ver el
-docstring de supabase_service.py y doc/AUDITORIA_RAMAS.md (punto 6) para el porqué
-de esta separación.
+Wrapper fino sobre backend/services/{orders,returns,policy}_service.py: cada
+tool solo traduce argumentos y delega en la función de servicio equivalente.
+Toda la lógica real (consultas a Supabase, RAG con pgvector) vive en
+services/, no aquí — ver docs/REMAINING_TASKS.md #3 (por qué se dividió en 3
+módulos por dominio, no uno solo) y doc/AUDITORIA_RAMAS.md punto 6 (por qué
+existe esta capa de servicios en absoluto).
 
 Tools:
-- get_order_details: Consulta detalles del pedido.
-- get_customer_return_history: Historial de devoluciones del cliente.
-- get_policy_info: Política estructurada de una categoría (sin RAG narrativo).
-- search_return_policy: Búsqueda semántica RAG sobre políticas.
-- create_return_record: Crea registro de devolución.
-- update_return_status: Actualiza estado de devolución.
+- get_order_details: Consulta detalles del pedido. (orders_service)
+- get_customer_return_history: Historial de devoluciones del cliente. (returns_service)
+- get_policy_info: Política estructurada de una categoría (sin RAG narrativo). (policy_service)
+- search_return_policy: Búsqueda semántica RAG sobre políticas. (policy_service)
+- create_return_record: Crea registro de devolución. (returns_service)
+- update_return_status: Actualiza estado de devolución. (returns_service)
 """
 
 # Se usa la serie 1.x del SDK "mcp" (no la 2.x, donde esta clase pasó a
@@ -22,10 +23,10 @@ Tools:
 from mcp.server.fastmcp import FastMCP
 from backend.models import ReturnItem
 
-from backend.services import supabase_service
+from backend.services import orders_service, policy_service, returns_service
 
 # Nota: ya no hace falta load_dotenv() aquí. search_return_policy (en
-# supabase_service.py) leía antes OPENAI_API_KEY con os.getenv() suelto, que
+# policy_service.py) leía antes OPENAI_API_KEY con os.getenv() suelto, que
 # solo ve variables de entorno reales del proceso, no el fichero .env — por
 # eso este server (lanzado standalone, sin pasar por main.py) necesitaba
 # cargarlo a mano o "Missing credentials" al llamar a la API de embeddings.
@@ -49,7 +50,7 @@ async def get_order_details(order_number: str) -> dict:
     Args:
         order_number: Número de pedido tal como lo tiene el cliente (ej. "ORD-2026-00177").
     """
-    return await supabase_service.get_order_details(order_number)
+    return await orders_service.get_order_details(order_number)
 
 
 # ---------------------------------------------------------------------------
@@ -66,7 +67,7 @@ async def get_customer_return_history(customer_id: str) -> dict:
     Args:
         customer_id: UUID del cliente.
     """
-    return await supabase_service.get_customer_return_history(customer_id)
+    return await returns_service.get_customer_return_history(customer_id)
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +87,7 @@ async def get_policy_info(category: str) -> dict:
     Args:
         category: Categoría de producto (ej. "electronica_informatica").
     """
-    return await supabase_service.get_policy_info(category)
+    return await policy_service.get_policy_info(category)
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +108,7 @@ async def search_return_policy(
         category: Categoría opcional para filtrar políticas (e.g., "electronics").
         thread_id: id de conversación, solo para trazabilidad en LangFuse.
     """
-    return await supabase_service.search_return_policy(query, category, thread_id)
+    return await policy_service.search_return_policy(query, category, thread_id)
 
 
 # ---------------------------------------------------------------------------
@@ -143,8 +144,8 @@ async def create_return_record(
         notes: Notas adicionales opcionales.
     """
     # El tipado con ReturnItem es solo de esta tool (frontera MCP/LLM);
-    # supabase_service.create_return_record espera dicts normales.
-    return await supabase_service.create_return_record(
+    # returns_service.create_return_record espera dicts normales.
+    return await returns_service.create_return_record(
         order_id=order_id,
         customer_id=customer_id,
         reason=reason,
@@ -178,7 +179,7 @@ async def update_return_status(
         resolution: Resolución aplicada (e.g., "full_refund", "partial_refund", "replacement").
         notes: Notas adicionales del administrador.
     """
-    return await supabase_service.update_return_status(
+    return await returns_service.update_return_status(
         return_id=return_id,
         status=status,
         resolution=resolution,

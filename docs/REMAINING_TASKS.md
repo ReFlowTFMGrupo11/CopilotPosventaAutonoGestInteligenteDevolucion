@@ -98,58 +98,70 @@ sobre el pasado sin que se note.
 
 ---
 
-## 3. [Arquitectura — prioridad media] `supabase_service.py` mezcla 3 dominios de negocio bajo un nombre de tecnología
+## 3. [Arquitectura — prioridad media] ~~`supabase_service.py` mezcla 3 dominios de negocio bajo un nombre de tecnología~~ — RESUELTO
 
-### El problema
+### El problema (ya corregido)
 
 `backend/services/supabase_service.py` (574 líneas, 42% de toda la capa de
-servicios) agrupa, bajo un nombre que describe la base de datos (no el
+servicios) agrupaba, bajo un nombre que describía la base de datos (no el
 negocio), al menos 3 dominios independientes:
 
-| Dominio | Funciones |
-|---|---|
-| Pedidos | `get_order_details` |
-| Devoluciones (CRUD + panel admin) | `get_customer_return_history`, `create_return_record`, `update_return_status`, `get_pending_return_request_id`, `get_latest_return_request`, `list_pending_approvals`, `list_returns`, `get_return_detail`, `get_return_stats`, `_flatten_*`, `DUPLICATE_RETURN_MARKER` |
-| Políticas / RAG | `get_policy_info`, `search_return_policy` |
+| Dominio | Funciones | Fichero nuevo |
+|---|---|---|
+| Pedidos | `get_order_details`, `calculate_days_since_delivery` | `orders_service.py` |
+| Devoluciones (CRUD + panel admin) | `get_customer_return_history`, `create_return_record`, `update_return_status`, `get_pending_return_request_id`, `get_latest_return_request`, `list_pending_approvals`, `list_returns`, `get_return_detail`, `get_return_stats`, `_flatten_*`, `DUPLICATE_RETURN_MARKER` | `returns_service.py` |
+| Políticas / RAG | `get_policy_info`, `search_return_policy` | `policy_service.py` |
 
-Es el mismo olor arquitectónico que ya se corrigió en los routers de la API
-(`orders.py` mezclaba pedidos + KPIs + búsqueda, corregido en PR #56) — pero
-todavía no se ha aplicado el mismo criterio a la capa de servicios.
-
-### Propuesta de split (siguiendo el patrón de
-`zhanymkanov/fastapi-best-practices`: un `service.py` por dominio)
-
-- `orders_service.py` — `get_order_details` (+ `calculate_days_since_delivery`, usada por pedidos y devoluciones)
-- `returns_service.py` — todo lo de devoluciones (el bloque más grande)
-- `policy_service.py` (o `rag_service.py`) — `get_policy_info`, `search_return_policy`
-
-### Por qué no se hace ahora
-
-Es un refactor de mayor superficie que renombrar funciones sueltas: toca
-imports en `backend/mcp/mcp_supabase.py`, `backend/agents/nodes/*.py`,
-`backend/api/routers/admin.py`, y el fichero de test
-`tests/unit/test_supabase_service.py` entero. Se deja documentado para
-abordarlo en una PR dedicada, no mezclado con otros cambios.
+Era el mismo olor arquitectónico ya corregido en los routers de la API
+(`orders.py` mezclaba pedidos + KPIs + búsqueda, corregido en PR #56) —
+siguiendo el mismo criterio (`zhanymkanov/fastapi-best-practices`: un
+`service.py` por dominio) se dividió `supabase_service.py` en los 3 ficheros
+de la tabla anterior y se eliminó el original. Actualizados los imports en
+`backend/mcp/mcp_supabase.py`, `backend/agents/nodes/resolution.py`,
+`backend/agents/nodes/evaluator.py` y `backend/api/routers/admin.py`.
 
 ---
 
-## 4. [Testing — prioridad media] `supabase_service.py` tiene la cobertura más baja de la capa de servicios
+## 4. [Testing — prioridad media] ~~`supabase_service.py` tenía la cobertura más baja de la capa de servicios~~ — RESUELTO
 
-De sus 12 funciones públicas, solo 4 tienen test dedicado hoy
+De sus 12 funciones públicas, solo 4 tenían test dedicado
 (`get_order_details`, `get_customer_return_history`, `create_return_record`,
 `update_return_status`). Sin cubrir: `get_policy_info`, `search_return_policy`,
 `get_pending_return_request_id`, `get_latest_return_request`,
 `list_pending_approvals`, `list_returns`, `get_return_detail`,
 `get_return_stats`, y las 3 funciones `_flatten_*`.
 
-Tiene sentido abordarlo **a la vez** que el punto 3 (split por dominio): al
-mover cada función a su nuevo fichero, escribir el test que le falta en el
-mismo commit, en vez de escribir tests para código que se va a mover
-inmediatamente después.
+Se abordó **a la vez** que el punto 3 (split por dominio): al mover cada
+función a su nuevo fichero (`test_orders_service.py`, `test_returns_service.py`,
+`test_policy_service.py`), se escribió el test que le faltaba en el mismo
+commit. `test_supabase_service.py` (295 líneas) se eliminó, sustituido por
+los 3 ficheros anteriores.
 
 ---
 
-## 5. [Código — prioridad baja] Inconsistencias menores encontradas en la auditoría de la capa de servicios
+## 5. [Documentación — prioridad baja] `docs/architecture.drawio` no representa el dashboard de Costes
+
+Comprobado al auditar `docs/` y los diagramas: `architecture.drawio` (61
+elementos, geometría/estilo precisos) no menciona `usage_service.py`,
+`pricing.py` ni el flujo de coste (`/api/admin/usage/sessions*`,
+`2_Costes.py`) en absoluto — sí incluye Langfuse y
+`/api/admin/observability`, pero el dashboard de coste propio
+(`defenderDashboardCostes.md`) queda sin representar visualmente. No es una
+regresión de esta sesión (el diagrama ya estaba así antes); no se corrige
+aquí porque añadir una caja nueva (con su propia `mxGeometry`) a mano por
+texto, sin la herramienta visual, arriesga romper el layout sin que ningún
+test lo detecte (el job de CI `validate-drawio` solo comprueba que el XML
+sea válido, no que se vea bien). Sí se corrigió, al dividir
+`supabase_service.py` (punto 3), el *label* de texto de la caja `svc_supa`
+existente (`supabase_service.py` → `orders/returns/policy_service.py`) — un
+cambio seguro porque solo toca el atributo `value`, no la geometría.
+Pendiente: añadir con draw.io/diagrams.net directamente una caja nueva
+`usage_service.py + pricing.py` junto a la caja de servicios ya renombrada,
+en la sección "Services".
+
+---
+
+## 6. [Código — prioridad baja] Inconsistencias menores encontradas en la auditoría de la capa de servicios
 
 - `logistics_service.py::send_customer_notification()` usa `print()` en vez
   de `logging` (líneas 148-150) — único sitio de toda la capa de servicios
