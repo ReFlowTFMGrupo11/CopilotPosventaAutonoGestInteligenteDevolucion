@@ -3,7 +3,7 @@ Ingesta de embeddings de políticas (RAG).
 
 Trocea (chunking) los documentos markdown de `dataset/policies/*.md` y
 genera sus embeddings con `text-embedding-3-small` (el mismo modelo que usa
-`search_return_policy` en `backend/services/supabase_service.py`) para
+`search_return_policy` en `backend/services/policy_service.py`) para
 poblar la tabla `policy_embeddings`. Es el paso de ingesta que
 `dataset/README.md` (sección "Cómo cargar el dataset en Supabase", punto 3)
 deja documentado como pendiente por requerir credenciales y llamadas de red.
@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 GENERAL_POLICY_DOC = "00_marco_general_devoluciones.md"
 
 # Mismo modelo que ya usa search_return_policy para la consulta del cliente
-# (backend/services/supabase_service.py): si no coincidiera, las distancias
+# (backend/services/policy_service.py): si no coincidiera, las distancias
 # vectoriales entre pregunta y política dejarían de tener sentido.
 EMBEDDING_MODEL = "text-embedding-3-small"
 

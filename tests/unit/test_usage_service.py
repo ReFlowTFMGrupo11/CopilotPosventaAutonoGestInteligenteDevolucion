@@ -102,7 +102,7 @@ class TestGetUsageBySession:
     async def test_sin_filas_devuelve_lista_vacia(self):
         _, patcher = _patched_client(table_data=[])
         with patcher:
-            result = await usage_service.get_usage_by_session()
+            result = await usage_service.list_usage_sessions()
         assert result == []
 
     @pytest.mark.asyncio
@@ -139,7 +139,7 @@ class TestGetUsageBySession:
         ]
         _, patcher = _patched_client(table_data=rows)
         with patcher:
-            result = await usage_service.get_usage_by_session()
+            result = await usage_service.list_usage_sessions()
 
         assert len(result) == 1
         session = result[0]
@@ -189,7 +189,7 @@ class TestGetUsageBySession:
         ]
         _, patcher = _patched_client(table_data=rows)
         with patcher:
-            result = await usage_service.get_usage_by_session()
+            result = await usage_service.list_usage_sessions()
 
         session = result[0]
         assert session["customer_id"] == "cust-nuevo"
@@ -215,7 +215,7 @@ class TestGetUsageBySession:
         ]
         _, patcher = _patched_client(table_data=rows)
         with patcher:
-            result = await usage_service.get_usage_by_session()
+            result = await usage_service.list_usage_sessions()
 
         assert result[0]["cost_complete"] is False
         assert result[0]["cost_eur"] == 0.0
@@ -241,7 +241,7 @@ class TestGetUsageBySession:
         ]
         _, patcher = _patched_client(table_data=rows)
         with patcher:
-            result = await usage_service.get_usage_by_session()
+            result = await usage_service.list_usage_sessions()
 
         assert result[0]["cost_complete"] is True
         assert result[0]["cost_eur"] == pytest.approx(2.25)  # 0.25 + 2.00
@@ -267,7 +267,7 @@ class TestGetUsageBySession:
         ]
         _, patcher = _patched_client(table_data=rows)
         with patcher:
-            result = await usage_service.get_usage_by_session(limit=2)
+            result = await usage_service.list_usage_sessions(limit=2)
 
         assert len(result) == 2
 

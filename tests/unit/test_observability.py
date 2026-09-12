@@ -369,7 +369,7 @@ class TestResolveProjectId:
 class TestLangfuseLinks:
     def test_no_configurado(self):
         with patch("backend.services.observability._is_configured", return_value=False):
-            assert observability.langfuse_links() == {"configured": False}
+            assert observability.get_langfuse_links() == {"configured": False}
 
     def test_configurado_sin_project_id_resuelto(self):
         with patch(
@@ -380,7 +380,7 @@ class TestLangfuseLinks:
         ), patch(
             "backend.services.observability._resolve_project_id", return_value=None
         ):
-            result = observability.langfuse_links()
+            result = observability.get_langfuse_links()
 
         assert result == {
             "configured": True,
@@ -399,7 +399,7 @@ class TestLangfuseLinks:
             "backend.services.observability._resolve_project_id",
             return_value="proj-abc",
         ):
-            result = observability.langfuse_links()
+            result = observability.get_langfuse_links()
 
         assert (
             result["sessions_url"]

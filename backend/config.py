@@ -4,7 +4,7 @@ variables de entorno del backend, vía ``pydantic-settings``.
 
 Antes de este módulo, cada archivo leía sus propias env vars con
 ``os.getenv(...)`` sueltos por el código (``llm_factory.py``, ``chat.py``,
-``admin.py``, ``mcp_client.py``, ``observability.py``, ``supabase_service.py``,
+``admin.py``, ``mcp_client.py``, ``observability.py``, ``orders_service.py``/``returns_service.py``/``policy_service.py``,
 ``graph.py``...). Esto producía dos tipos de bugs reales en este repo:
 
 1. Duplicación silenciosa: ``GRAPH_RECURSION_LIMIT``/``GRAPH_TURN_TIMEOUT_SECONDS``
@@ -67,7 +67,7 @@ class Settings(BaseSettings):
 
     # ── OpenAI ───────────────────────────────────────────────────────────
     # Solo hace falta explícitamente para el cliente de embeddings en
-    # supabase_service.py (search_return_policy). Los LLM de chat
+    # policy_service.py (search_return_policy). Los LLM de chat
     # (ChatOpenAI en llm_factory.py) siguen leyendo OPENAI_API_KEY
     # directamente del entorno del proceso vía el SDK de OpenAI, como hasta
     # ahora — sin cambios ahí.

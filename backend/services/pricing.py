@@ -34,7 +34,7 @@ def _env_key(model: str) -> str:
     return model.upper().replace("-", "_").replace(".", "_")
 
 
-def price_per_million_usd(model: str) -> tuple[float, float] | None:
+def get_price_per_million_usd(model: str) -> tuple[float, float] | None:
     """(input, output) en $/1M tokens para ``model``, o None si no se conoce.
 
     Se puede fijar/sobreescribir vía env vars
@@ -51,7 +51,7 @@ def price_per_million_usd(model: str) -> tuple[float, float] | None:
     return _DEFAULT_PRICES_USD_PER_MILLION.get(model)
 
 
-def usd_to_eur_rate() -> float:
+def get_usd_to_eur_rate() -> float:
     """Tipo de cambio USD→EUR, fijo (``USD_TO_EUR_RATE``) o el default aproximado."""
     return float(os.getenv("USD_TO_EUR_RATE", "0.86"))
 
@@ -61,11 +61,11 @@ def estimate_cost_eur(
 ) -> float | None:
     """Coste estimado en euros de una llamada, o None si no se conoce el
     precio de ``model`` (ni por defecto ni por env var)."""
-    prices = price_per_million_usd(model)
+    prices = get_price_per_million_usd(model)
     if prices is None:
         return None
     input_price, output_price = prices
     cost_usd = (input_tokens / 1_000_000) * input_price + (
         output_tokens / 1_000_000
     ) * output_price
-    return cost_usd * usd_to_eur_rate()
+    return cost_usd * get_usd_to_eur_rate()

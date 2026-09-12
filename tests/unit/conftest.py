@@ -85,7 +85,15 @@ def mock_graph():
 
 @pytest.fixture
 def mock_supabase():
-    """Fixture: mock de get_supabase_client (async)."""
+    """Fixture: mock de get_supabase_client (async).
+
+    Parchea específicamente ``returns_service.get_supabase_client`` -- los
+    únicos consumidores hoy (``test_admin.py``: pending/returns/stats) viven
+    ahí tras dividir el antiguo supabase_service.py por dominio (ver
+    docs/REMAINING_TASKS.md #3). Si algún test futuro necesita mockear
+    ``orders_service``/``policy_service``, patchear esos módulos aparte, no
+    ampliar esta fixture para que cubra los tres a la vez.
+    """
     client = _make_mock_supabase()
 
     async def fake_get_client():
@@ -97,7 +105,7 @@ def mock_supabase():
         return client
 
     with patch(
-        "backend.services.supabase_service.get_supabase_client", new=fake_get_client
+        "backend.services.returns_service.get_supabase_client", new=fake_get_client
     ):
         yield client
 

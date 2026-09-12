@@ -33,7 +33,7 @@ from backend.api.schemas import (
     OrderDetailResponse,
     ReturnHistoryResponse,
 )
-from backend.services import observability, supabase_service
+from backend.services import observability, orders_service, returns_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -50,7 +50,7 @@ public_router = APIRouter(prefix="/api", tags=["orders"])
 @router.get("/pending")
 async def list_pending_returns():
     """Lista devoluciones pendientes de aprobación humana (HITL >100€)."""
-    data = await supabase_service.list_pending_approvals()
+    data = await returns_service.list_pending_approvals()
     return {"pending": data, "count": len(data)}
 
 
@@ -129,14 +129,14 @@ async def reject_return(
 @router.get("/returns")
 async def list_returns(status: str = None, limit: int = 50):
     """Lista devoluciones con filtro opcional por estado."""
-    data = await supabase_service.list_returns(status=status, limit=limit)
+    data = await returns_service.list_returns(status=status, limit=limit)
     return {"returns": data, "count": len(data)}
 
 
 @router.get("/returns/{return_id}")
 async def get_return_detail(return_id: str):
     """Detalle de una devolución específica."""
-    data = await supabase_service.get_return_detail(return_id)
+    data = await returns_service.get_return_detail(return_id)
     if not data:
         raise HTTPException(status_code=404, detail="Devolución no encontrada.")
     return data
@@ -158,7 +158,7 @@ async def get_observability_links():
     se veía en los logs de consola del proceso.
     """
     return {
-        **observability.langfuse_links(),
+        **observability.get_langfuse_links(),
         "checkpointer": get_checkpointer_status(),
     }
 
@@ -171,7 +171,7 @@ async def get_observability_links():
 async def get_order(order_id: str):
     """Detalle de un pedido (productos, cliente, fechas)."""
     try:
-        result = await supabase_service.get_order_details(order_id)
+        result = await orders_service.get_order_details(order_id)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f"Pedido no encontrado: {exc}")
     return result
@@ -183,7 +183,7 @@ async def get_order(order_id: str):
 async def get_customer_history(customer_id: str):
     """Historial de devoluciones de un cliente."""
     try:
-        result = await supabase_service.get_customer_return_history(customer_id)
+        result = await returns_service.get_customer_return_history(customer_id)
     except Exception as exc:
         raise HTTPException(status_code=404, detail=f"Cliente no encontrado: {exc}")
     return result
@@ -192,4 +192,4 @@ async def get_customer_history(customer_id: str):
 @public_router.get("/stats")
 async def get_stats():
     """KPIs generales del sistema de devoluciones."""
-    return await supabase_service.get_return_stats()
+    return await returns_service.get_return_stats()

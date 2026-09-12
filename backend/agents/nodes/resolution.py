@@ -50,7 +50,7 @@ from backend.agents.infra.mcp_client import (
     update_return_status,
 )
 from backend.config import get_settings
-from backend.services.supabase_service import (
+from backend.services.returns_service import (
     DUPLICATE_RETURN_MARKER,
     get_latest_return_request,
     get_pending_return_request_id,
@@ -186,7 +186,7 @@ async def resolution_agent(
             )
         except (RuntimeError, ValueError) as exc:
             # Solo interpretar como duplicado si lleva el marcador de
-            # supabase_service.py; cualquier otro fallo (red, datos
+            # returns_service.py; cualquier otro fallo (red, datos
             # malformados...) se propaga en vez de silenciarse como si
             # fuera un resume normal tras interrupt().
             if DUPLICATE_RETURN_MARKER not in str(exc):
@@ -307,7 +307,7 @@ async def resolution_agent(
             )
         except (RuntimeError, ValueError) as exc:
             # Solo interpretar como duplicado si lleva el marcador de
-            # supabase_service.py; ver comentario equivalente más arriba.
+            # returns_service.py; ver comentario equivalente más arriba.
             if DUPLICATE_RETURN_MARKER not in str(exc):
                 raise
             # Guard de duplicados: ya existe una devolución para este pedido/artículo

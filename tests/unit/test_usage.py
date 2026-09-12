@@ -38,7 +38,7 @@ async def test_list_usage_sessions(async_client):
         },
     ]
     with patch(
-        "backend.api.routers.usage.usage_service.get_usage_by_session",
+        "backend.api.routers.usage.usage_service.list_usage_sessions",
         new=AsyncMock(return_value=mock_sessions),
     ):
         async with async_client as client:
@@ -56,7 +56,7 @@ async def test_list_usage_sessions_respects_limit_param(async_client):
     """Verifica que el query param `limit` se pasa tal cual al servicio."""
     mock_get = AsyncMock(return_value=[])
     with patch(
-        "backend.api.routers.usage.usage_service.get_usage_by_session", new=mock_get
+        "backend.api.routers.usage.usage_service.list_usage_sessions", new=mock_get
     ):
         async with async_client as client:
             resp = await client.get("/api/admin/usage/sessions?limit=5")

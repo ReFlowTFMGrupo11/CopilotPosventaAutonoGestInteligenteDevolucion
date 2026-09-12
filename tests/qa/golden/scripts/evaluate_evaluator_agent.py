@@ -147,7 +147,7 @@ def _build_state(row: dict) -> dict[str, Any]:
     order_item_id = f"oi-eval-{row['case_id'][:8]}"
     # delivered_at simulado: ahora - days_since_delivery. `now` debe ser el
     # momento REAL de la ejecución, no una fecha fija: calculate_days_since_delivery()
-    # (supabase_service.py) calcula contra datetime.now(timezone.utc) real, así
+    # (orders_service.py) calcula contra datetime.now(timezone.utc) real, así
     # que una fecha fija se convierte en una bomba de relojería que infla
     # "días desde entrega" un día más cada día que pasa desde que se escribió
     # este script -- mismo problema (y mismo fix) que tests/conftest.py::
