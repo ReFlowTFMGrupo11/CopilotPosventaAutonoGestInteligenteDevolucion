@@ -145,20 +145,25 @@ graph LR
 
 ## Controles operativos del turno (API)
 
-Añadidos en `backend/api/routers/chat.py`, no representados en el flujo del
-grafo pero relevantes para entender su comportamiento en producción:
+No representados en el flujo del grafo pero relevantes para entender su
+comportamiento en producción. `GRAPH_RECURSION_LIMIT`/
+`GRAPH_TURN_TIMEOUT_SECONDS`/`with_graph_limits()`/`ThreadLockRegistry` viven
+en `backend/api/dependencies.py` (compartidos por `chat.py` **y** `admin.py`
+— la reanudación HITL vía `POST /api/admin/.../approve|reject` también
+invoca el grafo y necesita los mismos límites); `MAX_CONVERSATION_TURNS` es
+específico de `chat.py`.
 
 - **`recursion_limit`** explícito (`GRAPH_RECURSION_LIMIT`, vía `Settings`) en vez
   de depender del default implícito de LangGraph (25).
 - **Timeout por turno** (`GRAPH_TURN_TIMEOUT_SECONDS`): cancela el turno si
   algún nodo se queda colgado (LLM/MCP/BD sin responder); en streaming se
   aplica por paso (`__anext__`), no al generador completo.
-- **Tope de turnos por conversación** (`MAX_CONVERSATION_TURNS`): corta
-  conversaciones sin fin en el mismo `thread_id`.
-- **Lock por `thread_id`** (`_ThreadLockRegistry`): serializa peticiones
-  solapadas al mismo hilo (doble clic, reintento de red) para no invocar el
-  grafo dos veces en paralelo sobre el mismo checkpoint; expulsa entradas
-  inactivas para no crecer sin límite.
+- **Tope de turnos por conversación** (`MAX_CONVERSATION_TURNS`, solo
+  `chat.py`): corta conversaciones sin fin en el mismo `thread_id`.
+- **Lock por `thread_id`** (`ThreadLockRegistry`, singleton `thread_locks`):
+  serializa peticiones solapadas al mismo hilo (doble clic, reintento de red)
+  para no invocar el grafo dos veces en paralelo sobre el mismo checkpoint;
+  expulsa entradas inactivas para no crecer sin límite.
 - **Guard de HITL pendiente**: si `graph.aget_state(...).next` no está vacío
   (el grafo está pausado en un `interrupt()`), no se reinvoca el grafo; se
   informa al cliente que su solicitud sigue en revisión.
