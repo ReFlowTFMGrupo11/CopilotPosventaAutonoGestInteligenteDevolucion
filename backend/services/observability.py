@@ -12,7 +12,7 @@ Expone estos helpers:
                                langfuse_session_id/langfuse_user_id, para que
                                LangFuse agregue coste (tokens) por sesión y
                                por cliente sin necesidad de un contador propio.
-  - langfuse_links()         → URLs del dashboard para el panel de admin
+  - get_langfuse_links()         → URLs del dashboard para el panel de admin
                                (ver frontend/pages/1_Admin.py).
 
 Todos devuelven None/deshabilitado si LANGFUSE_SECRET_KEY no está en el
@@ -32,8 +32,8 @@ Variables de entorno necesarias (ver .env):
     LANGFUSE_PROJECT_ID   opcional. LangFuse (cloud y self-hosted) no tiene
                           una ruta /sessions a nivel de host que redirija
                           sola al proyecto — da 404 sin el id (ver
-                          langfuse_links()). Por eso, si no se fija esta
-                          variable, langfuse_links() lo resuelve solo
+                          get_langfuse_links()). Por eso, si no se fija esta
+                          variable, get_langfuse_links() lo resuelve solo
                           llamando a la API de LangFuse con las credenciales
                           configuradas (GET /api/public/projects); fíjala
                           solo si esa llamada falla o hay varios proyectos
@@ -370,7 +370,7 @@ def _resolve_project_id() -> Optional[str]:
     return _project_id
 
 
-def langfuse_links() -> dict[str, Any]:
+def get_langfuse_links() -> dict[str, Any]:
     """URLs del dashboard de LangFuse para monitorizar gasto por sesión/cliente.
 
     Si no se puede resolver el project_id (ver `_resolve_project_id`),

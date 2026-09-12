@@ -160,7 +160,7 @@ async def get_observability_links():
     se veía en los logs de consola del proceso.
     """
     return {
-        **observability.langfuse_links(),
+        **observability.get_langfuse_links(),
         "checkpointer": get_checkpointer_status(),
     }
 
