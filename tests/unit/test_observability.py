@@ -172,7 +172,9 @@ class TestWithLangfuse:
         ):
             result = observability.with_langfuse(config, thread_id="t1")
         assert result == config
-        assert result is config  # no copia si no hay nada que añadir... o al menos misma info
+        assert (
+            result is config
+        )  # no copia si no hay nada que añadir... o al menos misma info
 
     def test_con_callback_anade_callbacks_y_metadata(self):
         fake_callback = MagicMock()
@@ -242,9 +244,7 @@ class TestScoreRagSimilarity:
             {"chunk_text": "chunk peor", "similarity": 0.5},
             {"chunk_text": "chunk mejor", "similarity": 0.9},
         ]
-        with patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             observability.score_rag_similarity(
                 "thread-1", "query", "cosmetica_perfumeria", semantic_results
             )
@@ -258,9 +258,7 @@ class TestScoreRagSimilarity:
 
     def test_sin_resultados_registra_value_cero(self):
         fake_lf = MagicMock()
-        with patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             observability.score_rag_similarity("thread-1", "query", "categoria", [])
 
         kwargs = fake_lf.create_score.call_args.kwargs
@@ -270,9 +268,7 @@ class TestScoreRagSimilarity:
     def test_un_fallo_al_registrar_no_se_propaga(self):
         fake_lf = MagicMock()
         fake_lf.create_score.side_effect = Exception("Langfuse caído")
-        with patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             # No debe lanzar ninguna excepción.
             observability.score_rag_similarity("thread-1", "query", "categoria", [])
 
@@ -285,9 +281,7 @@ class TestScoreError:
 
     def test_con_thread_id_y_langfuse_registra_el_error(self):
         fake_lf = MagicMock()
-        with patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             observability.score_error("thread-1", "timeout")
 
         fake_lf.create_score.assert_called_once_with(
@@ -306,9 +300,7 @@ class TestScoreResolution:
 
     def test_con_resolution_registra_el_score(self):
         fake_lf = MagicMock()
-        with patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             observability.score_resolution("thread-1", "approved")
 
         fake_lf.create_score.assert_called_once_with(
@@ -345,9 +337,7 @@ class TestResolveProjectId:
         )
         with patch(
             "backend.services.observability.get_settings", return_value=settings
-        ), patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        ), patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             result = observability._resolve_project_id()
 
         assert result == "proj-abc"
@@ -360,9 +350,7 @@ class TestResolveProjectId:
         )
         with patch(
             "backend.services.observability.get_settings", return_value=settings
-        ), patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        ), patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             observability._resolve_project_id()
             observability._resolve_project_id()
 
@@ -374,17 +362,13 @@ class TestResolveProjectId:
         fake_lf.api.projects.get.side_effect = Exception("timeout")
         with patch(
             "backend.services.observability.get_settings", return_value=settings
-        ), patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        ), patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             assert observability._resolve_project_id() is None
 
 
 class TestLangfuseLinks:
     def test_no_configurado(self):
-        with patch(
-            "backend.services.observability._is_configured", return_value=False
-        ):
+        with patch("backend.services.observability._is_configured", return_value=False):
             assert observability.langfuse_links() == {"configured": False}
 
     def test_configurado_sin_project_id_resuelto(self):
@@ -422,8 +406,7 @@ class TestLangfuseLinks:
             == "https://cloud.langfuse.com/project/proj-abc/sessions"
         )
         assert (
-            result["users_url"]
-            == "https://cloud.langfuse.com/project/proj-abc/users"
+            result["users_url"] == "https://cloud.langfuse.com/project/proj-abc/users"
         )
 
 
@@ -434,16 +417,12 @@ class TestFlush:
 
     def test_con_langfuse_llama_a_flush(self):
         fake_lf = MagicMock()
-        with patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             observability.flush()
         fake_lf.flush.assert_called_once()
 
     def test_un_fallo_en_flush_no_se_propaga(self):
         fake_lf = MagicMock()
         fake_lf.flush.side_effect = Exception("red caída")
-        with patch(
-            "backend.services.observability.get_langfuse", return_value=fake_lf
-        ):
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
             observability.flush()  # no debe lanzar

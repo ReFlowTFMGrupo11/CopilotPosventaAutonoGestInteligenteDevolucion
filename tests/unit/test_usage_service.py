@@ -286,9 +286,7 @@ class TestGetUsageDetail:
         with patcher:
             await usage_service.get_usage_detail("thread-123")
 
-        client.table.return_value.eq.assert_called_once_with(
-            "thread_id", "thread-123"
-        )
+        client.table.return_value.eq.assert_called_once_with("thread_id", "thread-123")
 
     @pytest.mark.asyncio
     async def test_anade_cost_eur_a_cada_fila(self, monkeypatch):
@@ -313,9 +311,7 @@ class TestGetUsageDetail:
 
     @pytest.mark.asyncio
     async def test_modelo_desconocido_da_cost_eur_none(self, monkeypatch):
-        monkeypatch.delenv(
-            "LLM_PRICE_MODELO_RARO_INPUT_PER_1M", raising=False
-        )
+        monkeypatch.delenv("LLM_PRICE_MODELO_RARO_INPUT_PER_1M", raising=False)
         rows = [
             {
                 "id": "req-1",

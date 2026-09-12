@@ -73,9 +73,7 @@ class TestBuildChatLlm:
         llm = build_chat_llm("RESOLVER_MODEL", temperature=0.0, max_tokens=1024)
         assert llm.max_tokens == 1024
 
-    def test_env_var_de_max_tokens_especifica_del_nodo_gana_a_todo(
-        self, monkeypatch
-    ):
+    def test_env_var_de_max_tokens_especifica_del_nodo_gana_a_todo(self, monkeypatch):
         monkeypatch.setenv("RESOLVER_MODEL_MAX_TOKENS", "2048")
         llm = build_chat_llm("RESOLVER_MODEL", temperature=0.0, max_tokens=1024)
         assert llm.max_tokens == 2048

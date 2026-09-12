@@ -121,9 +121,7 @@ class TestCallToolBusquedaDeTool:
     async def test_pasa_los_args_correctos_a_la_tool(self):
         tool = _make_tool("get_order_details", "{}")
         with _patch_tools({"supabase": [tool]}):
-            await mcp_client.call_tool(
-                "get_order_details", {"order_number": "ORD-001"}
-            )
+            await mcp_client.call_tool("get_order_details", {"order_number": "ORD-001"})
         tool.ainvoke.assert_awaited_once_with({"order_number": "ORD-001"})
 
     @pytest.mark.asyncio
@@ -176,9 +174,7 @@ class TestGetServerClient:
 
     @pytest.mark.asyncio
     async def test_reutiliza_el_mismo_cliente_en_llamadas_sucesivas(self):
-        with patch(
-            "backend.agents.infra.mcp_client.MultiServerMCPClient"
-        ) as mock_cls:
+        with patch("backend.agents.infra.mcp_client.MultiServerMCPClient") as mock_cls:
             mock_cls.return_value = MagicMock()
             first = await mcp_client._get_server_client("supabase")
             second = await mcp_client._get_server_client("supabase")
@@ -210,9 +206,7 @@ class TestSearchReturnPolicyWrapper:
         with patch(
             "backend.agents.infra.mcp_client.call_tool",
             new=AsyncMock(return_value=fake_result),
-        ), patch(
-            "backend.agents.infra.mcp_client.score_rag_similarity"
-        ) as mock_score:
+        ), patch("backend.agents.infra.mcp_client.score_rag_similarity") as mock_score:
             result = await mcp_client.search_return_policy(
                 query="política de devolución",
                 category="electronica_informatica",
@@ -233,9 +227,7 @@ class TestSearchReturnPolicyWrapper:
         with patch(
             "backend.agents.infra.mcp_client.call_tool",
             new=AsyncMock(return_value=fake_result),
-        ), patch(
-            "backend.agents.infra.mcp_client.score_rag_similarity"
-        ) as mock_score:
+        ), patch("backend.agents.infra.mcp_client.score_rag_similarity") as mock_score:
             await mcp_client.search_return_policy(query="q", category="c")
 
         mock_score.assert_called_once_with(None, "q", "c", [])
