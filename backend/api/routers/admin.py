@@ -23,13 +23,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from langgraph.types import Command
 
 from backend.agents.graph import get_checkpointer_status
-from backend.api.dependencies import get_graph
+from backend.api.dependencies import (
+    GRAPH_RECURSION_LIMIT,
+    GRAPH_TURN_TIMEOUT_SECONDS,
+    get_graph,
+)
 from backend.api.schemas import (
     AdminDecisionRequest,
     OrderDetailResponse,
     ReturnHistoryResponse,
 )
-from backend.config import get_settings
 from backend.services import observability, supabase_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -38,15 +41,10 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 # ver docstring del módulo.
 public_router = APIRouter(prefix="/api", tags=["orders"])
 
-# Mismo Settings (fuente única) que backend/api/routers/chat.py: antes,
-# GRAPH_RECURSION_LIMIT/GRAPH_TURN_TIMEOUT_SECONDS se definían por
-# duplicado en cada router con el mismo default — cambiar uno sin el otro
-# los desincronizaba sin ningún aviso. Sin timeout/límite, un `ainvoke` de
-# reanudación colgado (LLM/MCP/BD sin responder) dejaba la petición del
-# admin esperando para siempre, sin ninguna excepción capturable.
-_settings = get_settings()
-GRAPH_RECURSION_LIMIT = _settings.graph_recursion_limit
-GRAPH_TURN_TIMEOUT_SECONDS = _settings.graph_turn_timeout_seconds
+# GRAPH_RECURSION_LIMIT/GRAPH_TURN_TIMEOUT_SECONDS: ver
+# backend/api/dependencies.py -- fuente única compartida con chat.py, ya no
+# se definen aquí (antes se duplicaban en los dos routers, con el mismo
+# riesgo de desincronizarlas sin aviso si se cambiaba solo una).
 
 
 @router.get("/pending")

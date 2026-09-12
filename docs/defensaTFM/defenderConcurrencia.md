@@ -9,12 +9,35 @@ simultáneas para el mismo `thread_id`**. Sin protección, ambas invocarían
 `graph.astream()` sobre el mismo checkpoint de LangGraph, pudiendo corromper el
 estado conversacional o generar respuestas duplicadas.
 
-El lock resuelve este caso:
+El lock resuelve este caso. **Corrección respecto a una versión anterior de este
+documento**: aquí se mostraba un `defaultdict(asyncio.Lock)` plano — más simple,
+pero nunca fue la implementación real; un `dict` así crece con cada `thread_id`
+nuevo y nunca se libera solo, una fuga de memoria lenta en un proceso de larga
+duración. La implementación real (`ThreadLockRegistry`, movida a
+`backend/api/dependencies.py` — compartida con `admin.py`, ya que la
+reanudación HITL también invoca el grafo) expulsa entradas inactivas (no
+adquiridas, sin uso reciente) cada vez que se pide un lock nuevo:
 
 ```python
-_thread_locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+# backend/api/dependencies.py
+class ThreadLockRegistry:
+    def __init__(self, ttl_seconds: float = 3600.0) -> None:
+        self._ttl = ttl_seconds
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._last_used: dict[str, float] = {}
 
-lock = _thread_locks[thread_id]
+    def get(self, thread_id: str) -> asyncio.Lock:
+        self._evict_stale()  # expulsa locks sin uso reciente y no adquiridos
+        self._last_used[thread_id] = time.monotonic()
+        if thread_id not in self._locks:
+            self._locks[thread_id] = asyncio.Lock()
+        return self._locks[thread_id]
+
+
+thread_locks = ThreadLockRegistry()
+
+# backend/api/routers/chat.py
+lock = thread_locks.get(thread_id)
 if lock.locked():
     # Rechaza la segunda petición educadamente
     yield ChatStreamEvent(type="awaiting_admin", content="Ya procesando...")

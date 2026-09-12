@@ -7,7 +7,6 @@ Dos modos de consumo:
 
 import asyncio
 import logging
-import time
 import uuid
 from typing import AsyncIterator
 
@@ -15,7 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import HumanMessage
 
-from backend.api.dependencies import get_graph
+from backend.api.dependencies import (
+    GRAPH_TURN_TIMEOUT_SECONDS,
+    get_graph,
+    thread_locks,
+    with_graph_limits,
+)
 from backend.api.schemas import (
     ChatRequest,
     ChatResponse,
@@ -29,31 +33,16 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
-# ── Controles de ciclos/timeout/gasto ──────────────────────────────────────
+# ── Control de turnos de conversación ───────────────────────────────────
 #
-# Ninguno de los tres existía antes: el grafo en sí es acíclico dentro de un
-# mismo turno, pero nada impedía (a) una conversación de cientos de turnos en
-# el mismo thread_id, (b) un `ainvoke`/`astream` colgado para siempre si el
-# LLM o un MCP server dejaban de responder sin lanzar excepción, ni (c) que
-# LangGraph corriera con el `recursion_limit` implícito del SDK (25) en vez
-# de uno explícito y documentado.
-
-# Fuente única: backend/config.py (Settings). Antes, estas tres constantes
-# se definían por duplicado aquí Y en admin.py con el mismo default cada
-# una — cambiar una sin la otra las desincronizaba sin ningún aviso.
+# GRAPH_RECURSION_LIMIT/GRAPH_TURN_TIMEOUT_SECONDS/with_graph_limits() y el
+# registro de locks por thread_id viven en backend/api/dependencies.py (los
+# usa también admin.py) — ver su docstring para el porqué del traslado.
+#
+# MAX_CONVERSATION_TURNS es específico de este router (protege frente a
+# conversaciones sin fin en el mismo thread_id, que harían crecer coste y
+# contexto sin límite) — admin.py no lo necesita, así que se queda aquí.
 _settings = get_settings()
-
-# Explícito en vez de depender del default implícito de LangGraph (25).
-GRAPH_RECURSION_LIMIT = _settings.graph_recursion_limit
-
-# Tiempo máximo para que el grafo complete un turno completo (todas las
-# llamadas a LLM/MCP/BD que ese turno dispare). Si se agota, se cancela la
-# tarea y se informa al cliente en vez de dejar la petición colgada.
-GRAPH_TURN_TIMEOUT_SECONDS = _settings.graph_turn_timeout_seconds
-
-# Tope de turnos de usuario por conversación (thread_id). Protege frente a
-# conversaciones sin fin (bug de frontend, o un cliente reenviando el mismo
-# hilo indefinidamente) que harían crecer coste y contexto sin límite.
 MAX_CONVERSATION_TURNS = _settings.max_conversation_turns
 
 _TURN_LIMIT_MSG = (
@@ -63,13 +52,6 @@ _TURN_LIMIT_MSG = (
 _TURN_TIMEOUT_MSG = (
     "El agente ha tardado demasiado en responder. Por favor, inténtalo de nuevo."
 )
-
-
-def _with_graph_limits(config: dict) -> dict:
-    """Añade el `recursion_limit` explícito a un config de LangGraph."""
-    merged = dict(config)
-    merged["recursion_limit"] = GRAPH_RECURSION_LIMIT
-    return merged
 
 
 async def _conversation_turn_limit_reached(graph, config: dict) -> bool:
@@ -97,64 +79,6 @@ async def _known_customer_and_order_id(
     return values.get("customer_id"), values.get("order_id")
 
 
-# Un lock por thread_id: si dos peticiones para el MISMO hilo llegan
-# solapadas (doble clic, doble envío del frontend, reintento de red...),
-# la segunda espera a que la primera termine en vez de invocar el grafo
-# dos veces en paralelo sobre el mismo checkpoint. Sin esto, la segunda
-# podía toparse con un estado a medias y devolver el mensaje generico de
-# "sigue pendiente de revisión" sin haber creado ningún registro en BD.
-#
-# _ThreadLockRegistry en vez de un defaultdict(asyncio.Lock) plano: un
-# dict así crece con cada thread_id nuevo y nunca se libera solo (una
-# fuga de memoria lenta en un proceso de larga duración). El registro
-# expulsa entradas inactivas (no locked() y sin uso reciente) cada vez
-# que se pide un lock nuevo.
-_THREAD_LOCK_TTL_SECONDS = 3600.0  # 1 hora sin actividad
-
-
-class _ThreadLockRegistry:
-    """Registro de ``asyncio.Lock`` por ``thread_id`` con expulsión de
-    entradas inactivas, para no crecer sin límite en un proceso de larga
-    duración."""
-
-    def __init__(self, ttl_seconds: float = _THREAD_LOCK_TTL_SECONDS) -> None:
-        """Inicializa el registro vacío.
-
-        Args:
-            ttl_seconds: Tiempo de inactividad tras el cual una entrada
-                (lock no adquirido) se considera obsoleta y se expulsa.
-        """
-        self._ttl = ttl_seconds
-        self._locks: dict[str, asyncio.Lock] = {}
-        self._last_used: dict[str, float] = {}
-
-    def get(self, thread_id: str) -> asyncio.Lock:
-        """Devuelve el lock de ``thread_id``, creándolo si es la primera vez.
-
-        De paso, expulsa entradas obsoletas del registro (ver `_evict_stale`).
-        """
-        self._evict_stale()
-        self._last_used[thread_id] = time.monotonic()
-        if thread_id not in self._locks:
-            self._locks[thread_id] = asyncio.Lock()
-        return self._locks[thread_id]
-
-    def _evict_stale(self) -> None:
-        """Elimina del registro los locks sin actividad reciente y no adquiridos."""
-        now = time.monotonic()
-        stale = [
-            tid
-            for tid, last_used in self._last_used.items()
-            if now - last_used > self._ttl and not self._locks[tid].locked()
-        ]
-        for tid in stale:
-            del self._locks[tid]
-            del self._last_used[tid]
-
-
-_thread_locks = _ThreadLockRegistry()
-
-
 @router.post("/new", response_model=NewChatResponse)
 async def create_chat():
     """Crea una nueva sesión de chat y devuelve el thread_id."""
@@ -174,7 +98,7 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
     known_customer_id, known_order_id = await _known_customer_and_order_id(
         graph, request.thread_id
     )
-    config = _with_graph_limits(
+    config = with_graph_limits(
         with_langfuse(
             {
                 "configurable": {"thread_id": request.thread_id},
@@ -257,7 +181,7 @@ async def _stream_chat_events(
     known_customer_id, known_order_id = await _known_customer_and_order_id(
         graph, thread_id
     )
-    config = _with_graph_limits(
+    config = with_graph_limits(
         with_langfuse(
             {
                 "configurable": {"thread_id": thread_id},
@@ -267,7 +191,7 @@ async def _stream_chat_events(
             order_id=known_order_id,
         )
     )
-    lock = _thread_locks.get(thread_id)
+    lock = thread_locks.get(thread_id)
 
     if lock.locked():
         logger.warning(
