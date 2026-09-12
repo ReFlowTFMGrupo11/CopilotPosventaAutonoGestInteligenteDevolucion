@@ -119,7 +119,9 @@ class TestPolicyEvaluatorMixedCategories:
             "backend.agents.nodes.evaluator.get_policy_info",
             new_callable=AsyncMock,
             side_effect=policy_info_side_effect,
-        ), patch("backend.agents.nodes.evaluator.search_return_policy", search_mock):
+        ), patch(
+            "backend.agents.nodes.evaluator.search_return_policy", search_mock
+        ):
             await evaluator_agent(state)
 
         assert search_mock.await_count == 2

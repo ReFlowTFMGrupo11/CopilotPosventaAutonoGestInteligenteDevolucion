@@ -215,7 +215,9 @@ async def evaluator_agent(state: ReturnState) -> dict[str, Any]:
     # embedding ni búsqueda vectorial, solo lee la fila estructurada de
     # return_policies (plazo, condiciones admitidas, recargo).
     policy_info_by_category: dict[str, Any] = {}
-    predetermined: dict[str, dict[str, Any]] = {}  # order_item_id -> ya decidido (invalid)
+    predetermined: dict[str, dict[str, Any]] = (
+        {}
+    )  # order_item_id -> ya decidido (invalid)
     pending_items: list[dict[str, Any]] = []  # necesitan RAG narrativo + LLM
     pending_verdicts: dict[str, tuple[str, list[str], float]] = {}
 
