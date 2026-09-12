@@ -26,7 +26,7 @@ async def list_usage_sessions(limit: int = 100):
 
     Ver backend/agents/usage_tracking.py para de dónde sale cada fila.
     """
-    sessions = await usage_service.get_usage_by_session(limit=limit)
+    sessions = await usage_service.list_usage_sessions(limit=limit)
     return {"sessions": sessions, "count": len(sessions)}
 
 

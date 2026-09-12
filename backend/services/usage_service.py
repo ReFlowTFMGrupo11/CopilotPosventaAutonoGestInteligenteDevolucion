@@ -43,7 +43,7 @@ async def log_llm_usage(
     ).execute()
 
 
-async def get_usage_by_session(limit: int = 100) -> list[dict]:
+async def list_usage_sessions(limit: int = 100) -> list[dict]:
     """Agrega el uso por sesión (thread_id): tokens totales, nº de peticiones
     y latencia media/máxima, con el cliente y pedido asociados (el último
     conocido en esa sesión, ya que puede haber filas sin ellos en los

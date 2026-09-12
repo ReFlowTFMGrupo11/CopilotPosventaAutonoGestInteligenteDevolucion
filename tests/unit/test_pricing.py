@@ -27,23 +27,23 @@ class TestEnvKey:
 
 class TestPricePerMillionUsd:
     def test_modelo_conocido_devuelve_precio_por_defecto(self):
-        assert pricing.price_per_million_usd("gpt-5-mini") == (0.25, 2.00)
-        assert pricing.price_per_million_usd("gpt-5-nano") == (0.05, 0.40)
+        assert pricing.get_price_per_million_usd("gpt-5-mini") == (0.25, 2.00)
+        assert pricing.get_price_per_million_usd("gpt-5-nano") == (0.05, 0.40)
 
     def test_modelo_desconocido_sin_env_devuelve_none(self, monkeypatch):
         monkeypatch.delenv("LLM_PRICE_GPT_9_ULTRA_INPUT_PER_1M", raising=False)
         monkeypatch.delenv("LLM_PRICE_GPT_9_ULTRA_OUTPUT_PER_1M", raising=False)
-        assert pricing.price_per_million_usd("gpt-9-ultra") is None
+        assert pricing.get_price_per_million_usd("gpt-9-ultra") is None
 
     def test_env_var_sobreescribe_precio_de_modelo_conocido(self, monkeypatch):
         monkeypatch.setenv("LLM_PRICE_GPT_5_MINI_INPUT_PER_1M", "1.5")
         monkeypatch.setenv("LLM_PRICE_GPT_5_MINI_OUTPUT_PER_1M", "3.0")
-        assert pricing.price_per_million_usd("gpt-5-mini") == (1.5, 3.0)
+        assert pricing.get_price_per_million_usd("gpt-5-mini") == (1.5, 3.0)
 
     def test_env_var_da_de_alta_modelo_no_listado(self, monkeypatch):
         monkeypatch.setenv("LLM_PRICE_GPT_9_ULTRA_INPUT_PER_1M", "10.0")
         monkeypatch.setenv("LLM_PRICE_GPT_9_ULTRA_OUTPUT_PER_1M", "20.0")
-        assert pricing.price_per_million_usd("gpt-9-ultra") == (10.0, 20.0)
+        assert pricing.get_price_per_million_usd("gpt-9-ultra") == (10.0, 20.0)
 
     def test_solo_una_env_var_fijada_cae_al_default_no_falla(self, monkeypatch):
         """Documenta el comportamiento real: deben fijarse las DOS env vars o
@@ -51,17 +51,17 @@ class TestPricePerMillionUsd:
         usa el default (o None si el modelo no tiene default)."""
         monkeypatch.setenv("LLM_PRICE_GPT_5_MINI_INPUT_PER_1M", "1.5")
         monkeypatch.delenv("LLM_PRICE_GPT_5_MINI_OUTPUT_PER_1M", raising=False)
-        assert pricing.price_per_million_usd("gpt-5-mini") == (0.25, 2.00)
+        assert pricing.get_price_per_million_usd("gpt-5-mini") == (0.25, 2.00)
 
 
 class TestUsdToEurRate:
     def test_default_sin_env_var(self, monkeypatch):
         monkeypatch.delenv("USD_TO_EUR_RATE", raising=False)
-        assert pricing.usd_to_eur_rate() == 0.86
+        assert pricing.get_usd_to_eur_rate() == 0.86
 
     def test_env_var_sobreescribe_el_tipo_de_cambio(self, monkeypatch):
         monkeypatch.setenv("USD_TO_EUR_RATE", "0.90")
-        assert pricing.usd_to_eur_rate() == 0.90
+        assert pricing.get_usd_to_eur_rate() == 0.90
 
 
 class TestEstimateCostEur:
