@@ -1,4 +1,21 @@
-"""Router admin: panel de gestión y HITL (Human-in-the-Loop)."""
+"""Router admin: panel de gestión, HITL (Human-in-the-Loop) y consultas usadas
+por el panel de administración del frontend (``frontend/pages/1_Admin.py``).
+
+Dos ``APIRouter`` en este mismo fichero, no uno: ``router`` (prefijo
+``/api/admin``) para las acciones propias de administración, y
+``public_router`` (prefijo ``/api``, sin cambiar sus rutas históricas) para
+``get_order``/``get_customer_history``/``get_stats`` — movidos aquí desde el
+extinto ``routers/orders.py`` porque el ÚNICO consumidor real de esos tres
+endpoints es el panel de admin (búsqueda de pedido + KPIs superiores en
+``1_Admin.py``), nunca el chat de cliente. Mantener las URLs (``/api/orders/...``,
+``/api/stats``) intactas evita tocar tests, `README.md` y `frontend/lib/api.py`
+que ya las referencian; lo que cambia es solo en qué fichero vive el código,
+no el contrato HTTP. Ver docs/defensaTFM/defenderFastAPI.md.
+
+Los endpoints de coste (``/usage/sessions*``) NO están aquí — viven en
+``routers/usage.py``, porque su único consumidor es la pestaña de Costes
+(``2_Costes.py``), no el panel de admin.
+"""
 
 import asyncio
 
@@ -7,11 +24,19 @@ from langgraph.types import Command
 
 from backend.agents.graph import get_checkpointer_status
 from backend.api.dependencies import get_graph
-from backend.api.schemas import AdminDecisionRequest
+from backend.api.schemas import (
+    AdminDecisionRequest,
+    OrderDetailResponse,
+    ReturnHistoryResponse,
+)
 from backend.config import get_settings
-from backend.services import observability, supabase_service, usage_service
+from backend.services import observability, supabase_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+# Prefijo "/api" (no "/api/admin"): mismas URLs que tenía routers/orders.py,
+# ver docstring del módulo.
+public_router = APIRouter(prefix="/api", tags=["orders"])
 
 # Mismo Settings (fuente única) que backend/api/routers/chat.py: antes,
 # GRAPH_RECURSION_LIMIT/GRAPH_TURN_TIMEOUT_SECONDS se definían por
@@ -119,32 +144,15 @@ async def get_return_detail(return_id: str):
     return data
 
 
-@router.get("/usage/sessions")
-async def list_usage_sessions(limit: int = 100):
-    """Coste (tokens) y latencia agregados por sesión, con cliente/pedido asociados.
-
-    Ver backend/agents/usage_tracking.py para de dónde sale cada fila.
-    """
-    sessions = await usage_service.get_usage_by_session(limit=limit)
-    return {"sessions": sessions, "count": len(sessions)}
-
-
-@router.get("/usage/sessions/{thread_id}")
-async def get_usage_session_detail(thread_id: str):
-    """Detalle petición a petición (tokens/latencia) de una sesión concreta."""
-    requests = await usage_service.get_usage_detail(thread_id)
-    return {"thread_id": thread_id, "requests": requests, "count": len(requests)}
-
-
 @router.get("/observability")
 async def get_observability_links():
     """Enlaces al dashboard de LangFuse + estado del checkpointer del grafo.
 
-    Los enlaces de LangFuse complementan el dashboard propio (usage/sessions
-    arriba): LangFuse ya trackea tokens/coste por `langfuse_session_id` y
-    `langfuse_user_id` (ver with_langfuse en backend/services/observability.py),
-    así que este endpoint enlaza a su dashboard en vez de reimplementar esa
-    agregación.
+    Los enlaces de LangFuse complementan el dashboard propio de coste
+    (``routers/usage.py::list_usage_sessions``): LangFuse ya trackea
+    tokens/coste por `langfuse_session_id` y `langfuse_user_id` (ver
+    with_langfuse en backend/services/observability.py), así que este
+    endpoint enlaza a su dashboard en vez de reimplementar esa agregación.
 
     `checkpointer` (ver backend/agents/graph.py) se incluye aquí, no solo en
     `/health`, para que el panel de admin pueda mostrar un aviso visible si
@@ -155,3 +163,35 @@ async def get_observability_links():
         **observability.langfuse_links(),
         "checkpointer": get_checkpointer_status(),
     }
+
+
+# ── Endpoints movidos desde el extinto routers/orders.py (ver docstring del
+#    módulo) — mismas URLs, mismo comportamiento, solo cambia el fichero ──
+
+
+@public_router.get("/orders/{order_id}", response_model=OrderDetailResponse)
+async def get_order(order_id: str):
+    """Detalle de un pedido (productos, cliente, fechas)."""
+    try:
+        result = await supabase_service.get_order_details(order_id)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Pedido no encontrado: {exc}")
+    return result
+
+
+@public_router.get(
+    "/customers/{customer_id}/history", response_model=ReturnHistoryResponse
+)
+async def get_customer_history(customer_id: str):
+    """Historial de devoluciones de un cliente."""
+    try:
+        result = await supabase_service.get_customer_return_history(customer_id)
+    except Exception as exc:
+        raise HTTPException(status_code=404, detail=f"Cliente no encontrado: {exc}")
+    return result
+
+
+@public_router.get("/stats")
+async def get_stats():
+    """KPIs generales del sistema de devoluciones."""
+    return await supabase_service.get_return_stats()

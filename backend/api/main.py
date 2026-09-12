@@ -1,12 +1,14 @@
 """
 FastAPI backend para ReFlow.
 
-Endpoints:
-- /api/chat       → Interacción con el grafo de agentes (LangGraph)
-- /api/admin      → Panel de gestión y HITL
-- /api/orders     → Consultas de pedidos y clientes (directo a services)
-- /api/stats      → KPIs del sistema
-- /health         → Health check
+Endpoints (cada router corresponde 1:1 con una página del frontend, ver
+docs/defensaTFM/defenderFastAPI.md):
+- /api/chat                 → Chat.py — interacción con el grafo de agentes (LangGraph)
+- /api/admin/*              → 1_Admin.py — HITL, listado de devoluciones, y
+                               (bajo /api, no /api/admin) /api/orders, /api/customers,
+                               /api/stats — búsqueda de pedido + KPIs del panel
+- /api/admin/usage/sessions → 2_Costes.py — coste/latencia por sesión
+- /health                   → Health check
 
 Ejecutar:
     python -m backend.api.run --reload --port 8000
@@ -36,7 +38,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.agents.graph import get_checkpointer_status, get_return_graph
-from backend.api.routers import admin, chat, orders
+from backend.api.routers import admin, chat, usage
 from backend.services.observability import flush as langfuse_flush, get_langfuse
 
 logger = logging.getLogger(__name__)
@@ -71,10 +73,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Routers
+# Routers — cada uno corresponde 1:1 a una página del frontend (ver
+# docstring del módulo). admin.py expone dos routers: `router` (acciones de
+# administración) y `public_router` (búsqueda de pedido + KPIs, movidos aquí
+# desde el extinto routers/orders.py — ver docstring de admin.py).
 app.include_router(chat.router)
 app.include_router(admin.router)
-app.include_router(orders.router)
+app.include_router(admin.public_router)
+app.include_router(usage.router)
 
 
 @app.exception_handler(Exception)
