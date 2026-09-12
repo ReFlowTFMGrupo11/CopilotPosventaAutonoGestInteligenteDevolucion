@@ -238,21 +238,23 @@ y ahora se sabe exactamente por qué.
 
 ---
 
-## 7. ¿Por qué no está conectado a CI (todavía)?
+## 7. Conectado a CI: `qa-golden-dataset-dry-run`
 
-`evaluate_evaluator_agent.py` está **diseñado** para funcionar como gate de CI: en modo `--dry-run`
+`evaluate_evaluator_agent.py` está diseñado para funcionar como gate de CI: en modo `--dry-run`
 (sin LLM, sin red) devuelve un exit code según la accuracy obtenida:
 
 ```python
 sys.exit(0 if accuracy >= 0.70 else 1)   # evaluate_evaluator_agent.py
 ```
 
-Pero un hallazgo relevante para la defensa: **no existe ningún pipeline de CI en el
-repositorio** (no hay `.github/workflows/`, ni ningún otro sistema de CI configurado). El
-script está listo — el problema no es de código, es que no hay ningún sitio al que
-conectarlo todavía. Es un paso deliberadamente pospuesto, no un olvido: antes de
-automatizarlo había que corregir primero la fidelidad del input (§5), porque conectar un
-examen mal planteado a CI solo automatiza una señal poco fiable.
+**Corrección respecto a una versión anterior de este documento**: aquí decía *"no existe
+ningún pipeline de CI en el repositorio"* — era cierto cuando se escribió esta sección
+(27 ago), pero quedó desactualizado el 29 ago al añadirse `.github/workflows/ci.yml` (ver
+[`defenderCI.md`](defenderCI.md) para el pipeline completo), y nadie volvió a esta
+sección para corregirla. Hoy el job `qa-golden-dataset-dry-run` ejecuta exactamente este
+script en cada PR, reutilizando ese mismo exit code sin inventar un umbral nuevo — el
+orden real de los hechos fue: corregir primero la fidelidad del input (§5, `condition` no
+se exportaba) y solo después conectarlo a CI, para no automatizar una señal poco fiable.
 
 ---
 
