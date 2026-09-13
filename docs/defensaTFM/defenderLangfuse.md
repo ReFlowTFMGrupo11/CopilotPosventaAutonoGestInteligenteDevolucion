@@ -14,14 +14,14 @@ tool calls) y las agrupa por conversación en un panel web navegable.
 | Alternativa | Por qué se descartó |
 |-------------|----------------------|
 | `logging` / prints a consola | Sin estructura ni UI: para reconstruir una conversación de 3 agentes hay que grepear timestamps a mano. No compara ejecuciones entre sí |
-| LangSmith | Mismo propósito, pero acoplado al ecosistema LangChain de forma más cerrada y sin opción self-hosted gratuita viable para un proyecto académico |
+| LangSmith | Mismo propósito, pero acoplado al ecosistema LangChain de forma más cerrada |
 | Weights & Biases (Prompts) | Pensado para tracking de experimentos ML clásicos (hiperparámetros, curvas de entrenamiento); el modelo de "traces" de conversación es secundario |
 | Construir un dashboard propio | Reinventar tracing distribuido (spans, ingestión, UI de comparación) no aporta nada a la tesis del proyecto (agentes de devoluciones) y consume tiempo que sí aporta valor en otras partes |
 
 **Decisión**: LangFuse es open-source, tiene SDK oficial para LangChain/LangGraph
-(un solo `CallbackHandler`, sin instrumentar cada nodo a mano) y soporta tanto
-Cloud como self-hosted — relevante para un TFM donde a veces interesa no
-depender de un servicio de terceros con datos de clientes ficticios.
+(un solo `CallbackHandler`, sin instrumentar cada nodo a mano) y ofrece un
+tier Cloud gratuito — cero infraestructura propia que levantar/mantener
+para un TFM.
 
 ---
 
@@ -52,76 +52,26 @@ automáticamente sin tocar su código.
 
 ---
 
-## 3. LangFuse Cloud vs self-hosted: una decisión que se tomó dos veces
+## 3. Solo LangFuse Cloud — sin self-hosted
 
-Este proyecto terminó con **dos implementaciones paralelas** de LangFuse
-construidas de forma independiente en ramas distintas del equipo, cada una
-optimizada para un caso de uso real:
+El proyecto tuvo, en algún punto, un stack self-hosted vía Docker
+(`langfuse_infra/`: Postgres + ClickHouse + Redis + MinIO + langfuse-web/worker)
+además del SDK apuntando a Cloud — dos formas de llegar a lo mismo,
+mantenidas en paralelo. Se eliminó el self-hosted y se quedó **solo con
+Cloud**, por simplicidad: un TFM no necesita gestionar 5 contenedores
+Docker para una capacidad que el tier gratuito de Cloud ya cubre, y mantener
+una sola vía reduce la superficie a explicar/defender sin perder nada
+funcional (el SDK de código es idéntico contra cualquiera de los dos hosts).
 
-| | Cloud SDK (`backend/services/observability.py`) | Self-hosted Docker (`langfuse_infra/`) |
-|---|---|---|
-| Backend | `cloud.langfuse.com`, cero infraestructura propia | Stack propio: Postgres + ClickHouse + Redis + MinIO + langfuse-web/worker |
-| Coste operativo | Ninguno (tier gratuito) | 5 contenedores Docker en local |
-| Terceros con acceso a los datos trazados | Suma **un** SaaS más a los que ya existen (ver más abajo) | No añade ninguno nuevo |
-| Capacidades expuestas | `CallbackHandler` **+** cliente `Langfuse` crudo (scores manuales) | Solo `CallbackHandler` |
-
-### El argumento de "privacidad" hay que matizarlo, no venderlo como absoluto
-
-Es tentador decir "self-hosted = los datos no salen de la máquina", pero es
-**falso** en este proyecto: `SUPABASE_URL` apunta a Supabase Cloud (plan
-gratuito, no self-hosted) y `OPENAI_API_KEY` es la API de OpenAI. Los datos
-de un cliente (pedido, email, dirección) ya viven en un Postgres de terceros,
-y **cada llamada al LLM manda ese mismo contenido** (prompt con
-`order_details`, historial, políticas RAG) a OpenAI. Lo que LangFuse traza es,
-literalmente, una copia de ese prompt/respuesta que ya salió hacia OpenAI —
-no es una categoría nueva de dato expuesto.
-
-El self-hosted sí aporta algo, pero más concreto: reduce el número de
-terceros con esos datos de 3 (Supabase + OpenAI + LangFuse Cloud) a 2
-(Supabase + OpenAI), y evita que un tercero *adicional* vea algo que ni
-Supabase ni OpenAI ven por separado — **la sesión completa correlacionada**
-(las tres llamadas Triage → Policy → Resolution de una conversación,
-enlazadas bajo el mismo `thread_id`, con el resultado final). Es "una empresa
-menos con la vista agregada del caso", no "los datos no salen".
-
-Si el objetivo fuera proteger de verdad el dato sensible dentro de las
-trazas, la palanca correcta no es dónde vive el servidor de LangFuse, sino
-el parámetro `mask` que acepta el constructor de `Langfuse()` (permite
-redactar campos como email/dirección antes de convertirlos en un span) —
-funciona igual contra Cloud o contra self-hosted. No está implementado en
-este proyecto (dataset sintético, sin datos reales de clientes), pero es la
-respuesta correcta si preguntan "¿y si esto fuera producción con clientes
-reales?".
-
-**Por qué no era trivial elegir una y descartar la otra**: la versión
-self-hosted evita sumar un tercer SaaS a la lista de quien ve los datos
-correlacionados por sesión, y la versión Cloud SDK resuelve un problema real
-de evaluación (los scripts de QA en `tests/qa/golden/scripts/` necesitan el cliente
-`Langfuse` crudo para escribir métricas, no solo el callback).
-
-**Decisión final**: mantener **una sola** implementación de código
-(`backend/services/observability.py`, la más completa) pero dejar que
-apunte a **cualquiera de los dos backends** vía variable de entorno —
-así no hay que elegir entre las dos capacidades, es una decisión de
-infraestructura (`LANGFUSE_BASE_URL`) y no de código.
-
-```python
-def _host() -> str:
-    """LANGFUSE_BASE_URL (nombre actual del SDK) con fallback a LANGFUSE_HOST
-    (nombre usado en la documentación de langfuse_infra/), y por último
-    LangFuse Cloud."""
-    return (
-        os.getenv("LANGFUSE_BASE_URL")
-        or os.getenv("LANGFUSE_HOST")
-        or "https://cloud.langfuse.com"
-    )
-```
-
-`langfuse_infra/` (el stack Docker) se mantuvo como carpeta de infraestructura
-independiente — no como código Python — precisamente para no forzar esa
-elección: quien quiera self-hosted levanta ese stack y apunta
-`LANGFUSE_BASE_URL=http://localhost:3000`; quien no, usa el default de
-LangFuse Cloud sin tocar nada.
+**¿Y la privacidad?** Es tentador pensar "self-hosted = los datos no salen
+de la máquina", pero ya era falso antes de quitarlo: `SUPABASE_URL` apunta a
+Supabase Cloud y cada llamada al LLM manda ese mismo contenido a OpenAI. Lo
+que LangFuse traza es una copia de un prompt/respuesta que ya salió hacia
+OpenAI, no una categoría nueva de dato expuesto — así que usar Cloud no
+cambia la superficie de exposición real del proyecto. Si en el futuro esto
+fuera producción con datos reales, la palanca correcta sería el parámetro
+`mask` del constructor de `Langfuse()` (redacta campos sensibles antes de
+convertirlos en span), no dónde vive el servidor.
 
 ---
 
@@ -142,9 +92,8 @@ mismo orden de prioridad a mano, porque `get_langfuse()` /
 `get_langfuse_callback()` pasan `host=` **explícitamente** al construir el
 cliente — y un parámetro explícito no cae automáticamente al fallback de
 variables de entorno del SDK. Sin esta función, un `.env` con solo
-`LANGFUSE_HOST` (como documenta `langfuse_infra/README.md` para el stack
-self-hosted) sería ignorado en silencio y el tracing iría siempre a
-LangFuse Cloud sin avisar.
+`LANGFUSE_HOST` (nombre usado en documentación/tutoriales antiguos) sería
+ignorado en silencio y el tracing iría siempre al default sin avisar.
 
 ---
 
@@ -279,12 +228,11 @@ para un control de gasto que debe estar siempre disponible — ver
 además un dashboard propio de coste por pedido/cliente, y cuándo usar cada uno
 de los dos.
 
-### Las API keys y el host se comprueban por separado — no hay fallback automático
+### Las API keys deciden si se traza; el host decide a dónde
 
-Malentendido habitual: **`LANGFUSE_BASE_URL`/`LANGFUSE_HOST` no es un
-interruptor "usa Docker si no hay Cloud"**. `_is_configured()` (§9) y
-`_host()` (§4) son dos comprobaciones independientes, y la primera se evalúa
-**antes** de mirar la segunda:
+Dos comprobaciones independientes: `_is_configured()` (§9) mira solo las
+keys; `_host()` (§4) solo decide a qué URL apuntar, y ni se evalúa si las
+keys faltan:
 
 ```python
 def get_langfuse_callback() -> Optional[Any]:
@@ -294,18 +242,8 @@ def get_langfuse_callback() -> Optional[Any]:
         host=_host(),              # ← solo decide A DÓNDE mandar, no SI mandar
 ```
 
-Consecuencias concretas, para no confundirse configurando el `.env`:
-
-| `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY` | `LANGFUSE_BASE_URL` | Resultado |
-|---|---|---|
-| ❌ Ausentes | (cualquiera, o ausente) | Sin tracing. Da igual el host — nunca se llega a mirarlo |
-| ✅ Presentes | Ausente | Traza a **LangFuse Cloud** (default de `_host()`) |
-| ✅ Presentes | `http://localhost:3000` | Traza al **stack Docker** de `langfuse_infra/` |
-
-Es decir: las keys deciden **si** se traza; el host decide **a dónde**. Poner
-solo `LANGFUSE_BASE_URL=http://localhost:3000` sin keys no activa nada — y
-poner las keys sin `LANGFUSE_BASE_URL` sí traza, pero a Cloud, no al Docker
-local que se acaba de levantar.
+Sin `LANGFUSE_PUBLIC_KEY`/`SECRET_KEY` no hay tracing, sin importar qué diga
+`LANGFUSE_BASE_URL` — ese valor solo importa una vez que las keys ya están.
 
 ---
 
@@ -323,24 +261,12 @@ excepción de inicialización y devuelve `None`; `with_langfuse()` entonces
 devuelve el `config` original sin el callback. El grafo de agentes no
 depende de LangFuse para ejecutar.
 
-**¿El self-hosted evita que los datos de los clientes salgan de la máquina?**
-No del todo, y hay que tener cuidado con esta pregunta: `SUPABASE_URL` en
-este proyecto ya apunta a Supabase **Cloud**, y cada llamada al LLM manda el
-mismo contenido a **OpenAI**. El self-hosted de LangFuse solo evita sumar
-un tercer SaaS a esa lista, y evita que ese tercero vea la sesión completa
-correlacionada (las tres llamadas de una conversación enlazadas). No hace
-que "los datos no salgan" — eso ya no es cierto desde que existen Supabase y
-OpenAI en el stack. Para el día a día, Cloud sin infraestructura propia es
-más rápido de levantar; el self-hosted queda disponible para quien quiera
-reducir el número de terceros con la vista agregada del caso.
-
-**Si levanto el Docker de `langfuse_infra/` pero no toco el `.env` de la
-raíz, ¿empieza a trazar ahí automáticamente?**
-No. Levantar el contenedor no basta: hay que copiar sus
-`LANGFUSE_INIT_PROJECT_PUBLIC_KEY`/`SECRET_KEY` al `.env` de la raíz **y**
-añadir `LANGFUSE_BASE_URL=http://localhost:3000` ahí también. Sin las keys
-en el `.env` de la raíz, la app sigue sin trazar nada, tenga Docker
-levantado o no — los dos pasos son independientes.
+**¿Por qué no self-hosted, si evitaría sumar un SaaS más?**
+Porque ya no cambia gran cosa: `SUPABASE_URL` apunta a Supabase Cloud y cada
+llamada al LLM manda el mismo contenido a OpenAI, así que "los datos no
+salen de la máquina" ya no era cierto con o sin self-hosted. Lo poco que
+aportaba (una empresa menos viendo la sesión correlacionada) no compensaba
+mantener 5 contenedores Docker para un TFM — ver §3.
 
 ---
 
@@ -368,17 +294,17 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
 
 - La latencia se ve en LangFuse porque el `CallbackHandler` la captura
   **pasivamente** (viene del SDK, no es instrumentación propia).
-- El código sí tiene timeouts reales (`GRAPH_TURN_TIMEOUT_SECONDS` y
-  `_astream_with_timeout` en `chat.py`, `llm_timeout_seconds` en
-  `llm_factory.py`, `mcp_timeout_seconds` en `mcp_client.py`), pero
-  **ninguno se marca explícitamente hacia LangFuse** — si salta un timeout,
-  solo queda un `logger.warning`/`logger.exception` en el log de consola.
-- Cero usos de `level="ERROR"` o `status_message` de LangFuse en todo el
-  repo. No hay ningún score ni evento de tasa de error, y no hay retries
-  instrumentados en las llamadas a LLM/MCP.
-- Honesto para la defensa: LangFuse ve la traza rota si una excepción de
-  LangChain llega hasta el `CallbackHandler`, pero no hay instrumentación
-  deliberada de errores — es una mejora identificada, no implementada.
+- `score_error(thread_id, "timeout"|"exception")` (`observability.py`,
+  llamado desde `chat.py`) marca en LangFuse cuándo un *turno completo*
+  terminó en error — filtrable/contable por sesión en la UI de Scores.
+- **Gap real, no ese**: el error se registra a nivel de *turno*, no de
+  *tool*. Si `create_return_record`/`generate_shipping_label`/etc. falla,
+  la excepción sube y en el mejor caso marca el turno como "exception" —
+  no queda registro de *qué tool* falló. "¿Qué tools fallan más?" no tiene
+  respuesta hoy, ni en LangFuse ni en ningún otro sitio — es una mejora
+  identificada, no implementada (instrumentar `call_tool()` en
+  `mcp_client.py`, el único punto de paso de las 10 tools MCP).
+- No hay retries instrumentados en las llamadas a LLM/MCP.
 
 ### Calidad y evaluación — la más fuerte de las cuatro
 
@@ -414,6 +340,3 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
   prompt hoy es un commit de git, no un cambio gestionado en LangFuse — si
   preguntan por A/B testing o rollback de prompts, la respuesta honesta es
   que no existe ese mecanismo todavía.
-
----
-levantado o no — las keys son las del backend Python, no las del contenedor.

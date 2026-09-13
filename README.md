@@ -24,7 +24,7 @@ como motor de razonamiento.
 | Tests unitarios e integración — `tests/` | ✅ |
 | Backend FastAPI (endpoints de chat y panel admin/HITL) — `backend/api/` | ✅ |
 | Frontend Streamlit (chat cliente + dashboard admin) — `frontend/` | ✅ |
-| Observabilidad LLM (Langfuse self-hosted vía Docker) — `langfuse_infra/` | ✅ (opcional) |
+| Observabilidad LLM (Langfuse Cloud) | ✅ (opcional) |
 
 ## Estructura del repositorio
 
@@ -58,7 +58,6 @@ backend/
   db/            # Cliente Supabase (singleton cacheado)
 data/         # Dataset sintético + corpus de 17 políticas para RAG + eval_cases.csv
 supabase/        # Migraciones SQL y seed de datos
-langfuse_infra/ # Observabilidad LLM (Langfuse self-hosted, opcional) — ver su README
 tests/
   unit/          # Tests de routing, logistics_service, supabase_service
   integration/   # Tests del grafo completo, triage, policy y resolution agents
@@ -294,13 +293,11 @@ de agentes (prompts, respuestas, tokens, latencia, coste) para poder
 depurar conversaciones desde un panel web. Es **opcional**: sin configurar,
 la app funciona exactamente igual, sin trazas.
 
-Todo lo relacionado vive en [`langfuse_infra/`](langfuse_infra/README.md)
-(stack self-hosted vía Docker: Postgres + ClickHouse + Redis + MinIO +
-langfuse-web/worker, más el pequeño adaptador Python que engancha el
-`CallbackHandler` en `backend/api/routers/chat.py`). Sigue el
-[README de esa carpeta](langfuse_infra/README.md) para levantarlo la
-primera vez; una vez configurado, `start_all.sh`/`stop_all.sh` ya lo
-arrancan y paran junto con el resto de servicios automáticamente.
+Usa **Langfuse Cloud** (tier gratuito, sin infraestructura propia que
+mantener): crea una cuenta en [cloud.langfuse.com](https://cloud.langfuse.com),
+copia `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` de tu proyecto al `.env` de
+la raíz (ver `.env.example`) y listo — el `CallbackHandler` se engancha solo
+en `backend/api/routers/chat.py`, sin tocar código.
 
 ## Guía rápida de arranque (todos los servicios)
 
@@ -329,12 +326,10 @@ backend en `http://localhost:8000` (Swagger en `/docs`).
 [`start_all.sh`](start_all.sh) (Git Bash) automatiza los 8 pasos anteriores:
 crea el `.venv` si no existe, instala dependencias, genera `.env` desde
 `.env.example` si falta, y abre los 4 procesos en ventanas de Git Bash
-separadas, en el orden correcto. Si ya tienes Langfuse configurado (ver
-sección anterior), también lo levanta; si no, lo salta sin bloquear el
-resto.
+separadas, en el orden correcto.
 
 ```bash
 ./start_all.sh
 ```
 
-Para pararlo todo (incluido Langfuse, si está corriendo): `./stop_all.sh`.
+Para pararlo todo: `./stop_all.sh`.

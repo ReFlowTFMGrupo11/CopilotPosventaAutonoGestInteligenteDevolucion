@@ -94,10 +94,10 @@ dashboard. Un campo de metadata arbitrario como `order_id` no tiene esa vista
 — LangFuse deja *filtrar* trazas por `metadata.order_id = X` una por una, no
 te da automáticamente "coste total por pedido, de mayor a menor". Conseguir
 eso exigiría o bien la función de *custom dashboards* de LangFuse (no
-garantizada en el tier self-hosted community que usa `langfuse_infra/`), o
-consultar su API y construir la agregación a mano — que es exactamente el
-mismo trabajo que ya se hizo, solo que contra Supabase en vez de contra un
-servicio externo.
+disponible en el tier gratuito que usa este proyecto, ver
+`defenderLangfuse.md` §3), o consultar su API y construir la agregación a
+mano — que es exactamente el mismo trabajo que ya se hizo, solo que contra
+Supabase en vez de contra un servicio externo.
 
 **LangFuse es opcional y fail-open por diseño; el control de gasto no puede
 serlo.** Si `LANGFUSE_SECRET_KEY`/`PUBLIC_KEY` no están en `.env` — durante la

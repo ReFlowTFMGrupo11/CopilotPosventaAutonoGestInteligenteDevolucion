@@ -31,11 +31,10 @@ Langfuse" (dataset + experiment runs comparables en la UI).
 
 ### Requisitos previos
 
-- Langfuse corriendo en local (`langfuse_infra/`, ver su README) y accesible
-  en `localhost:3000`.
-- `.env` de la raíz del repo con `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`,
-  `LANGFUSE_HOST` ya rellenos (los usa `backend/services/observability.py`
-  para el tracing normal de la app; los mismos valores sirven aquí).
+- `.env` de la raíz del repo con `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`
+  de tu proyecto en [Langfuse Cloud](https://cloud.langfuse.com) (los mismos
+  valores que usa `backend/services/observability.py` para el tracing normal
+  de la app).
 - Para los pasos con LLM real: `OPENAI_API_KEY` en `.env`.
 
 ### Paso 1 — Subir el golden dataset a Langfuse
@@ -61,7 +60,7 @@ cada fila, un **dataset item** en el dataset `policy-eval-golden-set`:
 Es **idempotente**: si vuelves a ejecutarlo, salta los `case_id` que ya
 existen (usa `--force` para subirlos de nuevo igualmente).
 
-**Verificar en la UI**: `localhost:3000` → proyecto → *Datasets* →
+**Verificar en la UI**: [cloud.langfuse.com](https://cloud.langfuse.com) → proyecto → *Datasets* →
 `policy-eval-golden-set` → deberías ver los items con sus columnas
 Input / Expected Output / Metadata.
 
