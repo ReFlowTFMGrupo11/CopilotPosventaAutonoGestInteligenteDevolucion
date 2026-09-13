@@ -34,9 +34,7 @@ class TestPricePerMillionUsd:
         monkeypatch.delenv("LLM_PRICES_JSON", raising=False)
         assert pricing.get_price_per_million_usd("gpt-9-ultra") is None
 
-    def test_llm_prices_json_sobreescribe_precio_de_modelo_conocido(
-        self, monkeypatch
-    ):
+    def test_llm_prices_json_sobreescribe_precio_de_modelo_conocido(self, monkeypatch):
         monkeypatch.setenv("LLM_PRICES_JSON", '{"gpt-5-mini": [1.5, 3.0]}')
         assert pricing.get_price_per_million_usd("gpt-5-mini") == (1.5, 3.0)
 
@@ -44,9 +42,7 @@ class TestPricePerMillionUsd:
         monkeypatch.setenv("LLM_PRICES_JSON", '{"gpt-9-ultra": [10.0, 20.0]}')
         assert pricing.get_price_per_million_usd("gpt-9-ultra") == (10.0, 20.0)
 
-    def test_llm_prices_json_puede_traer_varios_modelos_a_la_vez(
-        self, monkeypatch
-    ):
+    def test_llm_prices_json_puede_traer_varios_modelos_a_la_vez(self, monkeypatch):
         monkeypatch.setenv(
             "LLM_PRICES_JSON",
             '{"gpt-5-mini": [1.5, 3.0], "gpt-9-ultra": [10.0, 20.0]}',
@@ -111,9 +107,7 @@ class TestConfiguredModelsMissingPrice:
     El fixture `_clear_settings_cache` ya limpia la cache antes/después de
     cada test; aquí solo hace falta fijar las env vars."""
 
-    def test_configuracion_por_defecto_no_tiene_modelos_sin_precio(
-        self, monkeypatch
-    ):
+    def test_configuracion_por_defecto_no_tiene_modelos_sin_precio(self, monkeypatch):
         """Los tres nodos caen a "gpt-5-mini" por defecto (ver config.py),
         que sí tiene precio en _DEFAULT_PRICES_USD_PER_MILLION."""
         monkeypatch.delenv("TRIAGE_MODEL", raising=False)
