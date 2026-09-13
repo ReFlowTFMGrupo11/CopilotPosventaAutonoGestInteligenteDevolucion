@@ -348,6 +348,31 @@ def _items_key(items: list[dict[str, Any]]) -> frozenset[tuple[str, str]]:
     )
 
 
+# Mapeo determinista motivo → condición más probable. Fuente única usada
+# tanto por el atajo de pedido con un solo artículo (_auto_select_single_item)
+# como por la selección explícita vía checkboxes (_apply_deterministic_selection)
+# — antes solo la usaba el primero, así que un pedido con varios artículos
+# nunca se beneficiaba de ella y siempre acababa preguntando la condición
+# explícitamente aunque el motivo ya la insinuara.
+_CONDITION_MAP: dict[str, str] = {
+    "defective": "defective",
+    "wrong_item": "wrong_item",
+    "not_as_described": "defective",
+    "no_longer_needed": "unopened",
+    "arrived_late": "unopened",
+}
+_CONDITION_LABELS: dict[str, str] = {
+    "defective": "defectuoso",
+    "wrong_item": "artículo incorrecto",
+    "unopened": "sin abrir",
+}
+
+
+def _infer_condition_from_reason(reason_category: str) -> str:
+    """Condición más probable dado el motivo, o "" si no se puede derivar."""
+    return _CONDITION_MAP.get(reason_category, "")
+
+
 def _apply_deterministic_selection(
     state: ReturnState,
     result: Any,
@@ -355,9 +380,15 @@ def _apply_deterministic_selection(
 ) -> None:
     """Sobreescribe `items_to_return` con la selección explícita del usuario.
 
-    Si el cliente marcó checkboxes (`selected_item_ids`), se usa esa lista
-    en vez de la inferencia del LLM. Si la condición aún no es conocida,
-    pide al usuario que la indique.
+    Si el cliente marcó checkboxes (`selected_item_ids`), se usa esa lista en
+    vez de la inferencia del LLM sobre QUÉ artículo devolver. La condición se
+    resuelve en este orden:
+      1. Lo que el cliente ya dijo en este mismo mensaje (inferido por el LLM,
+         y distinto de "unknown") → se toma como confirmado sin más.
+      2. El mapeo determinista motivo→condición (``_infer_condition_from_reason``)
+         → se propone al cliente, pendiente de confirmar (igual que hace
+         ``_auto_select_single_item`` para pedidos de un solo artículo).
+      3. Si ninguna de las dos resuelve la condición, se pide explícitamente.
 
     Args:
         result: Salida estructurada del LLM de triaje (``TriageOutput``),
@@ -371,8 +402,17 @@ def _apply_deterministic_selection(
         return
 
     valid_items_by_id = {item.get("id"): item for item in order_items if item.get("id")}
+    llm_condition = (
+        result.items_to_return[0].condition if result.items_to_return else ""
+    )
+    stated_by_customer = bool(llm_condition) and llm_condition != "unknown"
     condition = (
-        result.items_to_return[0].condition if result.items_to_return else "unknown"
+        llm_condition
+        if stated_by_customer
+        else (
+            _infer_condition_from_reason(state.get("reason_category") or "")
+            or "unknown"
+        )
     )
 
     normalized = [
@@ -385,14 +425,18 @@ def _apply_deterministic_selection(
 
     updates["items_to_return"] = normalized
 
+    if stated_by_customer:
+        # El cliente ya dijo el estado en este mismo mensaje: la selección
+        # por checkbox + su propia frase son confirmación suficiente.
+        updates["items_confirmed"] = True
+        return
+
+    updates["items_confirmed"] = False
+    names = [
+        ((valid_items_by_id.get(i) or {}).get("product") or {}).get("name", "Artículo")
+        for i in selected_item_ids
+    ]
     if condition == "unknown":
-        names = [
-            ((valid_items_by_id.get(i) or {}).get("product") or {}).get(
-                "name", "Artículo"
-            )
-            for i in selected_item_ids
-        ]
-        updates["items_confirmed"] = False
         updates["messages"] = [
             AIMessage(
                 content=(
@@ -404,9 +448,16 @@ def _apply_deterministic_selection(
             )
         ]
     else:
-        # Selección explícita por checkboxes de UI: ya es una confirmación
-        # determinista del usuario, no hace falta pedir un "sí" adicional.
-        updates["items_confirmed"] = True
+        label = _CONDITION_LABELS.get(condition, condition)
+        updates["messages"] = [
+            AIMessage(
+                content=(
+                    f"Perfecto, he marcado {', '.join(names)} para la devolución. "
+                    f"Por el motivo indicado, entiendo que el estado es "
+                    f"**{label}**. ¿Es correcto?"
+                )
+            )
+        ]
 
 
 def _parse_mcp_response(raw: Any) -> dict:
@@ -498,22 +549,9 @@ def _auto_select_single_item(
         updates, o ``None`` si no se puede auto-seleccionar (varios
         artículos o categoría desconocida).
     """
-    _CONDITION_MAP = {
-        "defective": "defective",
-        "wrong_item": "wrong_item",
-        "not_as_described": "defective",
-        "no_longer_needed": "unopened",
-        "arrived_late": "unopened",
-    }
-    _CONDITION_LABELS = {
-        "defective": "defectuoso",
-        "wrong_item": "artículo incorrecto",
-        "unopened": "sin abrir",
-    }
-
     if len(items) != 1:
         return None
-    condition = _CONDITION_MAP.get(reason_category, "")
+    condition = _infer_condition_from_reason(reason_category)
     if not condition:
         return None
 
