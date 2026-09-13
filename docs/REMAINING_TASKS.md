@@ -216,3 +216,42 @@ en `chat.py` una comprobación análoga a
 `llm_usage` para el `thread_id` actual y cortar el turno (mismo patrón que
 `MAX_CONVERSATION_TURNS`) si supera un umbral configurable
 (`MAX_SESSION_COST_EUR` o `MAX_SESSION_TOKENS` en `Settings`).
+
+## 8. [Mantenimiento — prioridad baja] Precios de LLM y tipo de cambio no se sincronizan solos
+
+### El problema
+
+`backend/services/pricing.py` resuelve el precio de un modelo en dos
+niveles: 1º `Settings.llm_prices_json` (override vía env var
+`LLM_PRICES_JSON`), 2º si no está ahí, `_DEFAULT_PRICES_USD_PER_MILLION` —
+un diccionario **hardcodeado en el código fuente**, anotado como "correcto
+a fecha 2026-08-28" en el docstring del fichero. `Settings.usd_to_eur_rate`
+(env var `USD_TO_EUR_RATE`) tiene el mismo problema con un único valor
+(`0.86`, misma fecha de referencia).
+
+Ninguno de los dos se actualiza solo: si OpenAI cambia el precio de
+`gpt-5-mini`/`gpt-5-nano`, o el tipo de cambio USD→EUR real se mueve,
+**nadie se entera** hasta que alguien lo nota y corrige a mano — editando
+`_DEFAULT_PRICES_USD_PER_MILLION` en el código (requiere desplegar) o
+fijando `LLM_PRICES_JSON`/`USD_TO_EUR_RATE` en `.env` (no requiere
+desplegar, pero sigue siendo una acción manual que alguien tiene que
+acordarse de hacer). No hay ninguna alerta ni comprobación de "cuánto
+tiempo lleva sin actualizarse este precio".
+
+Mitigante ya existente que acota el daño: gracias al fix de la sección 2
+de este backlog, un precio desactualizado solo afecta a las llamadas
+*nuevas* mientras esté desactualizado — nunca reescribe retroactivamente
+el coste ya congelado de llamadas pasadas.
+
+### El fix (no urgente, dos opciones)
+
+1. **Más simple**: nada de código, solo proceso — anotar en el propio
+   fichero (o en un recordatorio externo) una fecha de "revisar precios"
+   cada N meses, y comprobar a mano contra la página de precios de OpenAI.
+2. **Más automatizado** (si se quiere evitar el olvido humano): un job
+   periódico (o un check en el mismo `lifespan` que ya valida
+   `configured_models_missing_price()`) que compare la fecha del docstring
+   de `pricing.py` contra la fecha actual y loguee un warning si han pasado
+   más de N meses desde la última revisión conocida — no soluciona el
+   precio en sí, pero al menos convierte "nadie se acuerda" en una señal
+   activa en los logs de arranque.
