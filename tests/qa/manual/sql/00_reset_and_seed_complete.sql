@@ -8,8 +8,6 @@
 -- ── STEP 1: Limpiar tablas (orden inverso por FK) ─────────────────────────
 DELETE FROM return_items;
 DELETE FROM return_requests;
-DELETE FROM chat_messages;
-DELETE FROM chat_sessions;
 DELETE FROM order_items;
 DELETE FROM orders;
 DELETE FROM products;

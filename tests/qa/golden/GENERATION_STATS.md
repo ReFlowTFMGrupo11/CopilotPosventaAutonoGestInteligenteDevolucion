@@ -6,7 +6,6 @@
 - Pedidos: 1100
 - Solicitudes de devolución: 480
 - Clientes marcados como devolvedores frecuentes: 16
-- Conversaciones de chat sintéticas: 140 (765 mensajes)
 
 ## Distribución de casos por etiqueta esperada (golden dataset)
 
@@ -36,11 +35,3 @@
 | alimentacion | 26 |
 | joyeria_relojes | 26 |
 | drogueria_salud | 22 |
-
-## Muestra de conversaciones de chat por etiqueta (de las devoluciones que ilustran)
-
-| Etiqueta | Nº conversaciones | % sobre las conversaciones | % sobre esa etiqueta en el total |
-|---|---|---|---|
-| valid | 33 | 23.6% | 25.2% |
-| invalid | 42 | 30.0% | 31.1% |
-| human_review | 65 | 46.4% | 30.4% |

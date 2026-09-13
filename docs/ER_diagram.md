@@ -89,24 +89,6 @@ erDiagram
         TIMESTAMPTZ created_at
     }
 
-    chat_sessions {
-        UUID id PK
-        UUID customer_id FK
-        TEXT status
-        TIMESTAMPTZ started_at
-        TIMESTAMPTZ ended_at
-        JSONB metadata
-    }
-
-    chat_messages {
-        UUID id PK
-        UUID session_id FK
-        TEXT role
-        TEXT content
-        JSONB metadata
-        TIMESTAMPTZ created_at
-    }
-
     llm_usage {
         UUID id PK
         TEXT thread_id
@@ -123,7 +105,6 @@ erDiagram
 
     customers ||--o{ orders : "places"
     customers ||--o{ return_requests : "submits"
-    customers ||--o{ chat_sessions : "starts"
     customers ||--o{ llm_usage : "generates (opcional)"
 
     orders ||--o{ order_items : "contains"
@@ -138,26 +119,23 @@ erDiagram
     return_requests ||--o{ return_items : "includes"
 
     return_policies ||--o{ policy_embeddings : "chunked into"
-
-    chat_sessions ||--o{ chat_messages : "contains"
 ```
 
 ## Notas sobre tablas que no reflejan el uso real
 
-- **`chat_sessions`/`chat_messages`**: existen en el esquema (migración
-  `010_create_chat_sessions.sql`) y se siembran con datos sintéticos
-  (`data/generate_dataset.py`), pero **ningún código de `backend/` las
-  consulta ni las escribe en runtime** — comprobado con `grep` sobre
-  `backend/`. El estado real de cada conversación no vive aquí: vive en las
-  tablas propias del checkpointer de LangGraph (`checkpoints`,
-  `checkpoint_blobs`, `checkpoint_writes`, `checkpoint_migrations`), creadas
-  dinámicamente por `AsyncPostgresSaver.setup()` (ver `backend/agents/graph.py`)
-  la primera vez que arranca el backend — **no** por ningún fichero de
+- **El estado real de cada conversación no vive en ninguna tabla de este
+  diagrama**: vive en las tablas propias del checkpointer de LangGraph
+  (`checkpoints`, `checkpoint_blobs`, `checkpoint_writes`,
+  `checkpoint_migrations`), creadas dinámicamente por
+  `AsyncPostgresSaver.setup()` (ver `backend/agents/graph.py`) la primera vez
+  que arranca el backend — **no** por ningún fichero de
   `supabase/migrations/`, así que no aparecen en este diagrama. `thread_id`
   (columna TEXT en `return_requests` y `llm_usage`, migraciones 012/014) es
-  el identificador que conecta ambos mundos, sin ser una FK real a
-  `chat_sessions.id` (son espacios de identificadores distintos: UUID vs. el
-  `thread_id` de LangGraph).
+  el identificador que conecta ambos mundos. (Existió una tabla
+  `chat_sessions`/`chat_messages` — migración `010` — pensada para esto
+  mismo, pero nunca la consultó ni la escribió ningún código de `backend/`;
+  se eliminó en la migración `015_drop_chat_sessions.sql`. Ver
+  `docs/defensaTFM/defenderAgentes.md` §15.)
 - **`llm_usage`**: `customer_id`/`order_id` son `NULL` en los turnos de
   triaje anteriores a conocer el `order_number` del cliente (ver
   `fetch_order_data` en `triage.py`) — de ahí "(opcional)" en las relaciones.
