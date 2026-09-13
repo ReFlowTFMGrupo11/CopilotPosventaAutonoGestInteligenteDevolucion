@@ -61,6 +61,15 @@ class AdminDecisionRequest(BaseModel):
     """Decisión del administrador sobre una devolución pendiente."""
 
     reason: str = Field(default="", description="Motivo opcional de la decisión.")
+    override_refund_amount: Optional[float] = Field(
+        default=None,
+        description=(
+            "Decisión 'Edit' del HITL: importe de reembolso corregido por el "
+            "admin, en vez del calculado por el Evaluador. Solo tiene efecto "
+            "en /approve (no en /reject, que no reembolsa nada). None (por "
+            "defecto) aprueba con el importe calculado, sin editar."
+        ),
+    )
 
 
 class PendingReturn(BaseModel):

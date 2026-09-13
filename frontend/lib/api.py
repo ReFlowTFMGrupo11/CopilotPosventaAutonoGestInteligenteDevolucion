@@ -118,19 +118,26 @@ def list_returns(status: str = "") -> list[dict]:
     return r.json().get("returns", [])
 
 
-def approve(thread_id: str, reason: str = "") -> dict:
+def approve(
+    thread_id: str, reason: str = "", override_refund_amount: float | None = None
+) -> dict:
     """Llama a POST /api/admin/{thread_id}/approve para aprobar una devolución pendiente y reanudar el grafo.
 
     Args:
         thread_id: Sesión de chat cuya devolución se aprueba.
         reason: Motivo opcional que registra el administrador.
+        override_refund_amount: Decisión "Edit" del HITL -- importe
+            corregido en vez del calculado por el Evaluador. ``None``
+            (por defecto) aprueba sin editar el importe.
 
     Returns:
         Dict con el resultado tras reanudar el grafo (``thread_id``,
-        ``resolution``, ``tracking_number``).
+        ``resolution``, ``tracking_number``, ``refund_amount``).
     """
     r = httpx.post(
-        f"{API_BASE}/api/admin/{thread_id}/approve", json={"reason": reason}, timeout=30
+        f"{API_BASE}/api/admin/{thread_id}/approve",
+        json={"reason": reason, "override_refund_amount": override_refund_amount},
+        timeout=30,
     )
     r.raise_for_status()
     return r.json()

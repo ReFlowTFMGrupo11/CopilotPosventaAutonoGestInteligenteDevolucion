@@ -254,6 +254,26 @@ async def resolution_agent(
                 goto="__end__",
             )
 
+        # ── Decisión "Edit": el admin puede corregir el importe calculado
+        #    antes de aprobar, en vez de solo aprobar/rechazar en bloque (los
+        #    otros 3 tipos de decisión del HITL: Approve/Reject ya estaban;
+        #    falta Respond, que no aplica aquí -- no hay ninguna tool tipo
+        #    "preguntar al humano" donde su respuesta sea el resultado). Se
+        #    aplica ANTES de cualquier uso de `refund_amount` a partir de
+        #    aquí (BD, email, mensaje final, `admin_decision`), para que el
+        #    importe corregido se propague de forma consistente a todos los
+        #    sitios sin tener que tocarlos uno a uno. ─────────────────────
+        override_refund_amount = admin_response.get("override_refund_amount")
+        if override_refund_amount is not None:
+            logger.info(
+                "HITL: admin corrigió el reembolso de %.2f€ a %.2f€ (thread_id=%s, return_id=%s).",
+                refund_amount,
+                override_refund_amount,
+                state.get("thread_id", ""),
+                existing_return_id,
+            )
+            refund_amount = override_refund_amount
+
     # Admin aprobó (o no hacía falta HITL): continuar con etiqueta + notificación.
     # ── Mapeo order_item_id -> nombre, para etiquetas y mensajes ────────
     order_items = state.get("order_details", {}).get("items", [])
@@ -289,6 +309,10 @@ async def resolution_agent(
             status="approved",
             resolution="approved_by_admin",
             notes=f"Aprobado por administrador. Tracking: {label_result['tracking_number']}",
+            # None si el admin no editó el importe (no reescribe la columna
+            # ya guardada); el valor corregido si sí lo hizo (ver bloque
+            # "Edit" más arriba, que ya reasignó `refund_amount`).
+            refund_amount=refund_amount if override_refund_amount is not None else None,
         )
         return_request_id = existing_return_id
     else:
@@ -415,10 +439,14 @@ async def resolution_agent(
             "tracking_number": label_result["tracking_number"],
             "label_path": label_result.get("label_path"),
             "return_request_id": return_request_id,
-            "admin_decision": (
-                "auto_approved" if refund_amount <= hitl_threshold else "approved"
-            ),
+            # Basado en `needs_admin_approval` (si pasó por HITL), no en
+            # comparar `refund_amount` contra el umbral: tras la decisión
+            # "Edit" el importe corregido puede caer por debajo del umbral
+            # aunque SÍ hubo revisión humana -- comparar importes aquí
+            # etiquetaría mal una aprobación HITL como "auto_approved".
+            "admin_decision": "approved" if needs_admin_approval else "auto_approved",
             "resolution": "partially_approved" if rejected_items else "approved",
+            "refund_amount": refund_amount,
             "current_agent": "resolver",
         },
         goto="__end__",

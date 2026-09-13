@@ -69,7 +69,13 @@ async def approve_return(
     try:
         result = await asyncio.wait_for(
             graph.ainvoke(
-                Command(resume={"approved": True, "reason": body.reason}),
+                Command(
+                    resume={
+                        "approved": True,
+                        "reason": body.reason,
+                        "override_refund_amount": body.override_refund_amount,
+                    }
+                ),
                 config={
                     "configurable": {"thread_id": thread_id},
                     "recursion_limit": GRAPH_RECURSION_LIMIT,
@@ -88,6 +94,7 @@ async def approve_return(
         "thread_id": thread_id,
         "resolution": result.get("resolution"),
         "tracking_number": result.get("tracking_number"),
+        "refund_amount": result.get("refund_amount"),
     }
 
 

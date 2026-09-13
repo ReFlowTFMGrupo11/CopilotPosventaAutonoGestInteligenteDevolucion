@@ -261,6 +261,43 @@ class TestUpdateReturnStatus:
         assert "resolution" not in update_call_args
         assert "notes" not in update_call_args
 
+    @pytest.mark.asyncio
+    async def test_no_sobreescribe_refund_amount_si_no_se_pasa(self):
+        """Sin refund_amount explícito, no se toca la columna ya guardada."""
+        mock_client, query = _make_sync_supabase_client()
+        query.execute = AsyncMock(return_value=MagicMock(data=[{"id": "ret-1"}]))
+
+        with _patched_client(mock_client):
+            await update_return_status("ret-1", "approved")
+
+        update_call_args = query.update.call_args[0][0]
+        assert "refund_amount" not in update_call_args
+
+    @pytest.mark.asyncio
+    async def test_actualiza_refund_amount_si_se_pasa(self):
+        """Decisión 'Edit' del HITL: el importe corregido se persiste."""
+        mock_client, query = _make_sync_supabase_client()
+        query.execute = AsyncMock(return_value=MagicMock(data=[{"id": "ret-1"}]))
+
+        with _patched_client(mock_client):
+            await update_return_status("ret-1", "approved", refund_amount=42.5)
+
+        update_call_args = query.update.call_args[0][0]
+        assert update_call_args["refund_amount"] == 42.5
+
+    @pytest.mark.asyncio
+    async def test_permite_refund_amount_cero(self):
+        """0.0 es un importe válido (reembolso corregido a cero por el admin),
+        no debe confundirse con 'no proporcionado' (ese caso usa None)."""
+        mock_client, query = _make_sync_supabase_client()
+        query.execute = AsyncMock(return_value=MagicMock(data=[{"id": "ret-1"}]))
+
+        with _patched_client(mock_client):
+            await update_return_status("ret-1", "approved", refund_amount=0.0)
+
+        update_call_args = query.update.call_args[0][0]
+        assert update_call_args["refund_amount"] == 0.0
+
 
 # ---------------------------------------------------------------------------
 # get_pending_return_request_id / get_latest_return_request
