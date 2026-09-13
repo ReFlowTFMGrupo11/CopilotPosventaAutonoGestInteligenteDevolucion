@@ -26,8 +26,17 @@ async def log_llm_usage(
     customer_id: str | None = None,
     order_id: str | None = None,
 ) -> None:
-    """Inserta una fila de uso para una llamada individual al LLM."""
+    """Inserta una fila de uso para una llamada individual al LLM.
+
+    El coste se calcula AQUÍ, una sola vez, con los precios vigentes en el
+    momento de la llamada, y se persiste en `cost_eur` (ver
+    supabase/migrations/016_add_cost_to_llm_usage.sql). Queda congelado para
+    siempre: si más adelante se corrige un precio en pricing.py, el histórico
+    ya escrito no cambia -- solo afecta a las llamadas nuevas. `cost_eur` es
+    NULL si el modelo no tiene precio configurado (ver pricing.py).
+    """
     client = await get_supabase_client()
+    cost_eur = pricing.estimate_cost_eur(model, input_tokens, output_tokens)
     await client.table("llm_usage").insert(
         {
             "thread_id": thread_id,
@@ -39,6 +48,7 @@ async def log_llm_usage(
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
             "latency_ms": latency_ms,
+            "cost_eur": cost_eur,
         }
     ).execute()
 
@@ -60,14 +70,16 @@ async def list_usage_sessions(limit: int = 100) -> list[dict]:
     Returns:
         Lista de dicts, uno por sesión, con tokens/coste/latencia
         agregados y `cost_complete=False` si algún modelo de la sesión no
-        tiene precio configurado (ver pricing.py).
+        tenía precio configurado EN EL MOMENTO DE LA LLAMADA (ver
+        `cost_eur` en pricing.py / log_llm_usage, congelado por fila --
+        aquí solo se suma, nunca se recalcula).
     """
     client = await get_supabase_client()
     resp = await (
         client.table("llm_usage")
         .select(
             "thread_id, customer_id, order_id, node, model, input_tokens, "
-            "output_tokens, total_tokens, latency_ms, created_at, "
+            "output_tokens, total_tokens, latency_ms, cost_eur, created_at, "
             "customers(full_name, email), orders(order_number)"
         )
         .order("created_at", desc=True)
@@ -112,12 +124,11 @@ async def list_usage_sessions(limit: int = 100) -> list[dict]:
         session["output_tokens"] += row.get("output_tokens") or 0
         session["latencies_ms"].append(row.get("latency_ms") or 0)
 
-        row_cost = pricing.estimate_cost_eur(
-            row["model"], row.get("input_tokens") or 0, row.get("output_tokens") or 0
-        )
+        row_cost = row.get("cost_eur")
         if row_cost is None:
-            # Precio del modelo no configurado (ver pricing.py): el total
-            # queda incompleto, no se puede pretender que sea exacto.
+            # Precio del modelo no configurado EN SU MOMENTO (ver
+            # pricing.py): el total queda incompleto, no se puede pretender
+            # que sea exacto rellenándolo con el precio de hoy.
             session["cost_complete"] = False
         else:
             session["cost_eur"] += row_cost
@@ -139,24 +150,20 @@ async def get_usage_detail(thread_id: str) -> list[dict]:
     """Detalle de cada petición individual (una fila por llamada al LLM) de una sesión.
 
     Returns:
-        Filas de `llm_usage` ordenadas cronológicamente, cada una con un
-        `cost_eur` añadido (``None`` si el modelo no tiene precio
-        configurado, ver pricing.py).
+        Filas de `llm_usage` ordenadas cronológicamente, cada una con el
+        `cost_eur` congelado en el momento de la llamada (``None`` si el
+        modelo no tenía precio configurado entonces, ver pricing.py /
+        log_llm_usage). No se recalcula aquí con los precios de hoy.
     """
     client = await get_supabase_client()
     resp = await (
         client.table("llm_usage")
         .select(
             "id, node, model, input_tokens, output_tokens, total_tokens, "
-            "latency_ms, created_at"
+            "latency_ms, cost_eur, created_at"
         )
         .eq("thread_id", thread_id)
         .order("created_at", desc=False)
         .execute()
     )
-    rows = resp.data or []
-    for row in rows:
-        row["cost_eur"] = pricing.estimate_cost_eur(
-            row["model"], row.get("input_tokens") or 0, row.get("output_tokens") or 0
-        )
-    return rows
+    return resp.data or []

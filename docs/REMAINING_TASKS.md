@@ -49,52 +49,52 @@ este proyecto (no hay ningún sistema de usuarios/roles hoy):
 
 ---
 
-## 2. [Corrección de datos — prioridad alta] El coste del dashboard se recalcula con el precio de HOY, no el de cuando se hizo la llamada
+## 2. [Corrección de datos — prioridad alta] ~~El coste del dashboard se recalcula con el precio de HOY, no el de cuando se hizo la llamada~~ — RESUELTO
 
-### El problema
+### El problema (ya corregido)
 
-`llm_usage` (`supabase/migrations/014_create_llm_usage.sql`) no tiene columna
+`llm_usage` (`supabase/migrations/014_create_llm_usage.sql`) no tenía columna
 de coste. `usage_service.py::list_usage_sessions()`/`get_usage_detail()`
-calculan `cost_eur` **en el momento de leer**, llamando a
+calculaban `cost_eur` **en el momento de leer**, llamando a
 `pricing.estimate_cost_eur()` con los precios **configurados ahora**
 (`backend/services/pricing.py`).
 
-Consecuencia real: si se corrige un precio desactualizado o cambia el tipo de
-cambio USD→EUR, **todo el histórico de coste mostrado en el dashboard cambia
-retroactivamente** — una llamada de hace 3 meses "cuesta" hoy lo que cuesta el
-modelo hoy, no lo que costaba entonces. El dashboard de coste (pensado para
-justificar gasto real ante quien financia el proyecto) puede estar mintiendo
-sobre el pasado sin que se note.
+Consecuencia real: si se corregía un precio desactualizado o cambiaba el tipo
+de cambio USD→EUR, **todo el histórico de coste mostrado en el dashboard
+cambiaba retroactivamente** — una llamada de hace 3 meses "costaba" hoy lo que
+cuesta el modelo hoy, no lo que costaba entonces. El dashboard de coste
+(pensado para justificar gasto real ante quien financia el proyecto) podía
+estar mintiendo sobre el pasado sin que se notara.
 
-### El fix (dos pasos, en este orden)
+### El fix (dos pasos, ambos aplicados)
 
-1. **Congelar el coste en el momento de la llamada** (el más urgente,
-   corrige la incorrección de fondo, no solo el hardcoding):
-   - Migración: `ALTER TABLE llm_usage ADD COLUMN cost_eur numeric;`
-   - `backend/agents/usage_tracking.py::_log_usage()` calcula
-     `pricing.estimate_cost_eur(...)` **antes** de llamar a
-     `usage_service.log_llm_usage()`, y lo pasa como argumento nuevo.
-   - `usage_service.py::list_usage_sessions()`/`get_usage_detail()` dejan de
-     llamar a `pricing.estimate_cost_eur()` — leen la columna ya guardada.
-   - Una vez hecho esto, cambiar un precio en el futuro **no** afecta a datos
-     ya registrados.
+1. **Congelar el coste en el momento de la llamada:**
+   - Migración `016_add_cost_to_llm_usage.sql`: `ALTER TABLE llm_usage ADD
+     COLUMN cost_eur numeric;`
+   - `usage_service.py::log_llm_usage()` calcula
+     `pricing.estimate_cost_eur(...)` **antes** de insertar y lo persiste.
+   - `list_usage_sessions()`/`get_usage_detail()` ya no llaman a
+     `pricing.estimate_cost_eur()` — leen la columna ya guardada (verificado
+     explícitamente con `mock_pricing.estimate_cost_eur.assert_not_called()`
+     en `test_usage_service.py`).
+   - Cambiar un precio en el futuro ya **no** afecta a datos ya registrados.
 
-2. **Sacar los precios del código** (menos urgente tras el paso 1, pero
-   sigue mereciendo la pena para no tener que redeployar cada vez que OpenAI
-   cambia un precio):
-   - `pricing.py` usa `os.getenv()` suelto (`get_usd_to_eur_rate()`,
-     `get_price_per_million_usd()`) — viola la regla ya documentada del
-     proyecto de centralizar todo en `Settings` (`backend/config.py`). Los
-     precios por modelo necesitan clave dinámica
-     (`LLM_PRICE_{MODEL}_INPUT_PER_1M`), que no encaja limpio en un campo
-     Pydantic normal: opción más simple, una única env var JSON
-     (`LLM_PRICES_JSON='{"gpt-5-mini": [0.25, 2.0]}'`) parseada a un campo
-     `dict[str, tuple[float, float]]` en `Settings`.
-   - Alternativa más robusta (si se quiere cambiar precios sin redeploy):
-     tabla `llm_pricing` en Supabase (modelo, precio entrada, precio salida,
-     activo) — con el paso 1 ya hecho, esta tabla solo necesita el precio
-     **vigente**, no un historial (el historial ya vive congelado en cada
-     fila de `llm_usage`).
+2. **Sacar los precios del código:**
+   - `pricing.py` ya no usa `os.getenv()` suelto — `Settings`
+     (`backend/config.py`) tiene dos campos nuevos: `usd_to_eur_rate: float`
+     y `llm_prices_json: dict[str, tuple[float, float]]`, este último servido
+     desde una única env var JSON
+     (`LLM_PRICES_JSON='{"gpt-5-mini": [0.25, 2.0]}'`) que pydantic-settings
+     deserializa automáticamente.
+   - Añadido además `pricing.configured_models_missing_price()`, que cruza
+     los modelos configurados (`triage_model`/`evaluator_model`/
+     `resolver_model`) contra los precios conocidos y avisa por log al
+     arrancar la API si alguno no tiene precio — hueco que no estaba
+     contemplado en el planteamiento original de esta tarea.
+   - No implementada la alternativa de tabla `llm_pricing` en Supabase (queda
+     descartada: el JSON en `Settings` ya resuelve el problema sin añadir una
+     migración/tabla adicional para un caso de uso que hoy es solo 2-3
+     modelos).
 
 ---
 

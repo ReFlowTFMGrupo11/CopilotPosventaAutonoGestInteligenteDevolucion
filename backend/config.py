@@ -91,6 +91,22 @@ class Settings(BaseSettings):
     resolver_model_temperature: float | None = None
     resolver_model_max_tokens: int | None = None
 
+    # ── Pricing (coste estimado del uso de LLM, ver backend/services/pricing.py) ─
+    # OpenAI no expone precios vía API: hay que fijarlos a mano en algún
+    # sitio. Los precios por modelo necesitan clave dinámica (nombre de
+    # modelo arbitrario), que no encaja en un campo Pydantic con nombre
+    # fijo: se resuelve con un único campo dict, servido desde una sola env
+    # var JSON. Pydantic-settings deserializa automáticamente un valor JSON
+    # de env var a un campo de tipo complejo (dict/tuple) sin configuración
+    # extra.
+    #
+    # Ej.: LLM_PRICES_JSON='{"gpt-5-mini": [0.25, 2.00], "gpt-5-nano": [0.05, 0.40]}'
+    # (input $/1M tokens, output $/1M tokens). Sobreescribe/añade a los
+    # precios por defecto de pricing.py; no hace falta listar todos los
+    # modelos, solo los que se quieran corregir o dar de alta.
+    llm_prices_json: dict[str, tuple[float, float]] = {}
+    usd_to_eur_rate: float = 0.86
+
     # ── MCP servers ──────────────────────────────────────────────────────
     mcp_supabase_url: str = "http://localhost:8001/mcp"
     mcp_logistics_url: str = "http://localhost:8002/mcp"

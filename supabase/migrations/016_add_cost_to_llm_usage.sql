@@ -1,0 +1,20 @@
+-- Congela el coste en euros en el momento de la llamada, en vez de
+-- recalcularlo en cada lectura con los precios de HOY (ver
+-- docs/REMAINING_TASKS.md §2 y backend/services/pricing.py).
+--
+-- Antes: usage_service.py llamaba a pricing.estimate_cost_eur() dentro de
+-- list_usage_sessions()/get_usage_detail(), es decir, en el momento de
+-- servir la petición HTTP del panel admin -- con los precios configurados
+-- ENTONCES, no los que estaban vigentes cuando se hizo la llamada real al
+-- LLM. Si se corrige un precio desactualizado en pricing.py (o cambia
+-- USD_TO_EUR_RATE), todo el histórico de coste mostrado cambiaba
+-- retroactivamente sin que nadie lo notara -- el dashboard podía "mentir"
+-- sobre el pasado.
+--
+-- Ahora: usage_tracking.py::_log_usage() calcula el coste UNA VEZ, antes de
+-- insertar, y usage_service.py se limita a leer esta columna ya calculada.
+-- NULL significa "el modelo de esta fila no tenía precio configurado en el
+-- momento de la llamada" (ver pricing.get_price_per_million_usd) -- mismo
+-- significado que el `cost_eur=None` que devolvía antes get_usage_detail()
+-- para un modelo desconocido, ahora persistido en vez de recalculado.
+ALTER TABLE llm_usage ADD COLUMN IF NOT EXISTS cost_eur NUMERIC;

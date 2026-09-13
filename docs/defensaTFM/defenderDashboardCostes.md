@@ -57,16 +57,26 @@ los 4 puntos donde ya invocaban al modelo — sin cambiar su lógica de negocio.
 ### El planteamiento
 `backend/services/pricing.py` fija a mano los precios por token de
 `gpt-5-nano`/`gpt-5-mini` (USD/1M) y el tipo de cambio USD→EUR, ambos
-sobreescribibles por env var. Si una sesión usa un modelo sin precio
-configurado, se marca como coste incompleto en vez de mostrar una cifra.
+sobreescribibles vía `Settings` (`backend/config.py`). Si una sesión usa un
+modelo sin precio configurado, se marca como coste incompleto en vez de
+mostrar una cifra.
 
 ### Argumentos para defenderlo
 - **OpenAI no expone precios vía API** — no hay alternativa a fijarlos a mano
   en algún sitio; la pregunta relevante no es "¿por qué a mano?" sino "¿por qué
   aquí, en este servicio, y no en otro sitio?" (ver sección 4, punto 3).
-- **Override por env var sin tocar código:** si un precio cambia o se añade un
-  modelo nuevo, `LLM_PRICE_<MODELO>_INPUT_PER_1M`/`_OUTPUT_PER_1M` lo corrige
-  sin desplegar código nuevo.
+- **Override centralizado en `Settings`, sin tocar código:** si un precio
+  cambia o se añade un modelo nuevo, `LLM_PRICES_JSON` (una única env var con
+  todos los overrides, ver `backend/config.py`) lo corrige sin desplegar
+  código nuevo.
+- **Validado contra los modelos realmente en uso:** `Settings`
+  (qué modelo usa cada nodo) y `pricing.py` (qué cuesta cada modelo) son dos
+  fuentes de verdad independientes que antes no se cruzaban entre sí —
+  `pricing.configured_models_missing_price()` se comprueba al arrancar la
+  API (`backend/api/main.py::lifespan`) y avisa por log si algún
+  `TRIAGE_MODEL`/`EVALUATOR_MODEL`/`RESOLVER_MODEL` configurado no tiene
+  precio conocido, en vez de descubrirlo como "coste incompleto" silencioso
+  en el dashboard.
 - **"Coste incompleto" en vez de 0€ o una cifra inventada:** un panel que
   muestre confiadamente "2,50€" cuando en realidad no sabe el precio de un
   modelo es peor que uno que admita "no lo sé" — la primera decisión de
@@ -98,6 +108,13 @@ disponible en el tier gratuito que usa este proyecto, ver
 `defenderLangfuse.md` §3), o consultar su API y construir la agregación a
 mano — que es exactamente el mismo trabajo que ya se hizo, solo que contra
 Supabase en vez de contra un servicio externo.
+
+*(Nota sobre dimensiones de agregación, independiente del tier: los widgets
+de custom dashboards de LangFuse agrupan por usuario/modelo/tiempo/nombre de
+traza, no por una clave de metadata arbitraria como `order_id`. Aunque se
+tuviera acceso a esa función, seguiría exigiendo filtrar pedido a pedido en
+la UI o construir la agregación a mano contra la API — el problema de fondo
+no es solo de plan/tier.)*
 
 **LangFuse es opcional y fail-open por diseño; el control de gasto no puede
 serlo.** Si `LANGFUSE_SECRET_KEY`/`PUBLIC_KEY` no están en `.env` — durante la
@@ -164,15 +181,29 @@ evitable era otro: el docstring de `with_langfuse()` seguía diciendo "sin
 tracking propio" cuando ya existía — eso sí era una inconsistencia a corregir,
 no el diseño en sí.
 
-**¿Por qué no calcular el coste al vuelo en cada llamada en vez de guardar
-tokens crudos y calcular el precio después?**
-Porque los precios cambian y `pricing.py` ya lo prevé (override por env var).
-Si el coste se calculara y guardara en el momento de la llamada, una
-corrección de precio posterior no podría aplicarse retroactivamente a las
-filas ya insertadas. Guardando `input_tokens`/`output_tokens` crudos en
-`llm_usage` y calculando el coste en `get_usage_by_session()` en tiempo de
-lectura, corregir un precio en `pricing.py` corrige automáticamente el coste
-mostrado de todo el historial, sin migrar datos.
+**¿Por qué se calcula el coste en el momento de la llamada (`log_llm_usage()`)
+y se congela en `cost_eur`, en vez de guardar solo tokens crudos y calcular el
+precio en cada lectura?**
+Esta pregunta tuvo la respuesta contraria en una versión anterior de este
+documento: se defendía calcular el precio en tiempo de lectura como ventaja
+("corregir un precio en `pricing.py` corrige automáticamente todo el
+histórico, sin migrar datos"). Era un error de diseño, no una ventaja: ese
+mismo comportamiento significa que si se corrige un precio desactualizado o
+cambia `USD_TO_EUR_RATE`, **el coste mostrado de una llamada de hace meses
+cambia retroactivamente** — el dashboard, pensado para justificar gasto real
+ante quien financia el proyecto, podía mostrar un número distinto del que
+realmente costó esa llamada, sin que nadie lo notara (ver
+`docs/REMAINING_TASKS.md` §2, ya resuelto: `supabase/migrations/
+016_add_cost_to_llm_usage.sql` añade la columna `cost_eur`, calculada una
+única vez en `usage_service.log_llm_usage()` con los precios vigentes
+entonces; `list_usage_sessions()`/`get_usage_detail()` ya no llaman a
+`pricing.py`, solo agregan/leen el valor ya congelado).
+
+Guardar tokens crudos seguía siendo necesario por otra razón —
+`input_tokens`/`output_tokens` no dependen del precio y permiten reconstruir
+el coste si algún día cambia la fórmula—, pero el precio en sí debe fijarse
+una vez, no en cada lectura: un histórico de coste que cambia solo no es
+"flexible", es poco fiable.
 
 **¿Qué pasa si `pricing.py` no conoce el modelo usado en una sesión?**
 `estimate_cost_eur()` devuelve `None` para esa llamada; la sesión se marca

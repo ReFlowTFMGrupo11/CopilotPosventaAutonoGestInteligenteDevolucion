@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- run_all.sql — Script de conveniencia: TODAS las migraciones en uno.
 -- ==============================================================================
--- Generado concatenando, en orden, supabase/migrations/001_*.sql .. 015_*.sql.
+-- Generado concatenando, en orden, supabase/migrations/001_*.sql .. 016_*.sql.
 -- La fuente de verdad de cada pieza es su fichero de origen en migrations/ —
 -- este fichero es una copia derivada para poder pegar/ejecutar todo de una
 -- vez en el SQL Editor de Supabase. Si se añade una migración nueva, hay que
@@ -310,4 +310,25 @@ CREATE INDEX IF NOT EXISTS idx_llm_usage_created_at ON llm_usage(created_at DESC
 -- que deshace el efecto de la anterior).
 DROP TABLE IF EXISTS chat_messages;
 DROP TABLE IF EXISTS chat_sessions;
+
+-- Congela el coste en euros en el momento de la llamada, en vez de
+-- recalcularlo en cada lectura con los precios de HOY (ver
+-- docs/REMAINING_TASKS.md §2 y backend/services/pricing.py).
+--
+-- Antes: usage_service.py llamaba a pricing.estimate_cost_eur() dentro de
+-- list_usage_sessions()/get_usage_detail(), es decir, en el momento de
+-- servir la petición HTTP del panel admin -- con los precios configurados
+-- ENTONCES, no los que estaban vigentes cuando se hizo la llamada real al
+-- LLM. Si se corrige un precio desactualizado en pricing.py (o cambia
+-- USD_TO_EUR_RATE), todo el histórico de coste mostrado cambiaba
+-- retroactivamente sin que nadie lo notara -- el dashboard podía "mentir"
+-- sobre el pasado.
+--
+-- Ahora: usage_tracking.py::_log_usage() calcula el coste UNA VEZ, antes de
+-- insertar, y usage_service.py se limita a leer esta columna ya calculada.
+-- NULL significa "el modelo de esta fila no tenía precio configurado en el
+-- momento de la llamada" (ver pricing.get_price_per_million_usd) -- mismo
+-- significado que el `cost_eur=None` que devolvía antes get_usage_detail()
+-- para un modelo desconocido, ahora persistido en vez de recalculado.
+ALTER TABLE llm_usage ADD COLUMN IF NOT EXISTS cost_eur NUMERIC;
 
