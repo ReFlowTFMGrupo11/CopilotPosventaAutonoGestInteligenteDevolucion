@@ -121,8 +121,18 @@ sequenceDiagram
 
 | Nodo | Archivo | Qué hace | Usa MCP |
 |------|---------|----------|---------|
-| `triage` | `nodes/triage.py` | LLM extrae info conversacionalmente; interpreta semánticamente el motivo → `condition`; exige confirmación explícita del cliente (`items_confirmed`) antes de dar por buena la inferencia; gestiona cambio de pedido (`switching_order`) y bloqueo si ya hay una devolución activa | ❌ |
+| `triage` | `nodes/triage.py` | LLM extrae info conversacionalmente; interpreta semánticamente el motivo → `condition`; exige confirmación explícita del cliente (`items_confirmed`) antes de dar por buena la inferencia; gestiona cambio de pedido (`switching_order`) y bloqueo si ya hay una devolución activa. Si el cliente selecciona artículo(s) por checkbox en la UI (`selected_item_ids`), `_apply_deterministic_selection` sobreescribe la inferencia del LLM sobre QUÉ artículo devolver | ❌ |
 | `fetch_order_data` | `nodes/triage.py` | Consulta pedido + historial en Supabase; detecta devolución activa duplicada (`_check_existing_return`); auto-selecciona artículo único si el `reason_category` ya es conocido (`_auto_select_single_item`); no-op si ya tiene los datos en estado | ✅ supabase:8001 |
+
+`_infer_condition_from_reason` (mapeo determinista `reason_category → condition`, p.ej.
+`no_longer_needed → unopened`) es la **fuente única** para el atajo de 1 artículo
+(`_auto_select_single_item`) y para la selección por checkbox con varios artículos
+(`_apply_deterministic_selection`) cuando el cliente no ha dicho la condición en su
+propio mensaje — antes solo la usaba el primero, así que un pedido de 2+ artículos
+seleccionado por checkbox siempre preguntaba la condición desde cero aunque el
+motivo ya la insinuara. En ambos casos, si la condición viene del mapeo (no de una
+frase explícita del cliente), se propone y se pide confirmación — nunca se marca
+`items_confirmed=True` sobre una condición inferida, ni por LLM ni por el mapeo.
 | `evaluator` | `nodes/evaluator.py` | Evalúa **cada artículo por separado**, en dos fases (ver `docs/defensaTFM/defenderRAG.md` §4.2): **(1)** pre-check barato con `get_policy_info()` (sin RAG narrativo) + `policy_rules.py::deterministic_check` — si el veredicto ya es `invalid` (plazo, higiene, condición), el artículo queda decidido aquí, sin gastar en RAG ni LLM; **(2)** solo para los artículos que quedan en zona gris (`valid`/`human_review`), búsqueda RAG (`search_return_policy`, una vez por categoría distinta) + LLM. `refund_amount` siempre sale de `compute_refund()`, nunca del LLM. Medido contra el golden dataset: 40.8% de los casos se resuelven sin ninguna llamada a OpenAI (fase 1 sola) | ✅ supabase:8001 |
 | `resolver` | `nodes/resolution.py` | Nodo `Command`: filtra solo artículos elegibles (`items_eligibility`), decide HITL (`needs_admin_approval` del Evaluador O `refund_amount > HITL_THRESHOLD_EUR`), llama `interrupt()` si aplica, genera etiqueta, registra devolución (con guard de duplicados), notifica al cliente y redacta mensaje final (puede ser mixto: aprobados + rechazados) | ✅ ambos |
 | `reject` | `nodes/resolution.py` | Genera mensaje empático de rechazo cuando **ningún** artículo es elegible | ❌ |
