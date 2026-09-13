@@ -229,6 +229,7 @@ async def update_return_status(
     status: str,
     resolution: str = "",
     notes: str = "",
+    refund_amount: float | None = None,
 ) -> dict:
     """Actualiza estado de devolución via MCP."""
     return await call_tool(
@@ -238,6 +239,7 @@ async def update_return_status(
             "status": status,
             "resolution": resolution,
             "notes": notes,
+            "refund_amount": refund_amount,
         },
     )
 

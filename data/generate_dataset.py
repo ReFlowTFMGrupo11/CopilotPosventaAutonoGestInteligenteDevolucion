@@ -2336,187 +2336,7 @@ def build_return_cases(
 
 
 # ---------------------------------------------------------------------------
-# 6. Conversaciones sintéticas (chat_sessions / chat_messages)
-#
-# Traza de conversación simulando el flujo de tres agentes descrito en
-# doc/guia.md (Triaje -> Evaluador -> Resolución): el cliente plantea el
-# problema con el mismo texto libre usado en return_requests.reason, el
-# agente confirma el pedido y anuncia el veredicto (aprobado / rechazado /
-# derivado a revisión humana) según la etiqueta ya calculada del caso.
-# Pensado para dar contenido conversacional real con el que probar el futuro
-# Agente de Triaje y para tener ejemplos de uso del RAG en contexto de chat,
-# no solo como filas aisladas de return_requests.
-# ---------------------------------------------------------------------------
-
-GREETINGS = [
-    "Hola, buenas, tengo un problema con un pedido.",
-    "Buenas tardes, quería tramitar una devolución.",
-    "Hola! necesito ayuda con un pedido mío",
-    "Buenos días, quiero devolver un artículo que me ha llegado.",
-    "Hola, ¿me podéis ayudar con una devolución?",
-]
-
-ASK_ORDER_NUMBER = [
-    "Claro, encantado/a de ayudarte. ¿Me indicas el número de tu pedido?",
-    "Sin problema. ¿Puedes pasarme el número de pedido para localizarlo?",
-    "Vale, para revisarlo necesito el número de pedido, ¿lo tienes a mano?",
-]
-
-CLOSING_BY_LABEL = {
-    "valid": [
-        "Perfecto, {order}: revisado el pedido, tu devolución de {product} queda "
-        "aprobada. Reembolso de {amount} € según la política de {category_label}. "
-        "En breve recibirás la etiqueta de envío.",
-        "Todo correcto: la devolución de {product} (pedido {order}) cumple el "
-        "plazo y las condiciones de la categoría {category_label}, así que queda "
-        "aprobada automáticamente con un reembolso de {amount} €.",
-    ],
-    "invalid": [
-        "He revisado el pedido {order} y, lo siento, la devolución de {product} "
-        "no es posible: {rationale_short} Según la política de {category_label} "
-        "no podemos tramitarla.",
-        "Sobre el pedido {order}: no puedo aprobar la devolución de {product} "
-        "porque {rationale_short}",
-    ],
-    "human_review": [
-        "He registrado tu solicitud sobre el pedido {order} ({product}). Este "
-        "caso concreto necesita revisión de un agente humano antes de darte una "
-        "respuesta definitiva ({rationale_short}) Te avisaremos en cuanto se "
-        "resuelva.",
-        "Gracias por la información. El pedido {order} ({product}) queda "
-        "pendiente de aprobación manual: {rationale_short} Un compañero del "
-        "equipo lo revisará en breve.",
-    ],
-}
-
-
-@dataclass
-class ChatMessage:
-    """Mensaje individual de una conversación de chat sintética."""
-
-    id: str
-    session_id: str
-    role: str
-    content: str
-    created_at: datetime
-
-
-@dataclass
-class ChatSession:
-    """Conversación de chat sintética asociada a un caso de devolución."""
-
-    id: str
-    customer_id: str
-    status: str
-    started_at: datetime
-    ended_at: datetime | None
-    messages: list[ChatMessage]
-    return_request_id: str
-    order_number: str
-    expected_label: str
-
-
-def build_chat_sessions(
-    return_cases: list["ReturnCase"], n_conversations: int
-) -> list[ChatSession]:
-    """Genera conversaciones de chat sintéticas que ilustran una muestra de casos de devolución.
-
-    Args:
-        return_cases: Casos de devolución disponibles para generar conversación.
-        n_conversations: Número de conversaciones a generar (se muestrean sin
-            repetición sobre `return_cases`).
-
-    Returns:
-        Lista de sesiones de chat con sus mensajes de usuario/asistente/sistema.
-    """
-    sample = rng.sample(return_cases, min(n_conversations, len(return_cases)))
-    sessions: list[ChatSession] = []
-
-    for case in sample:
-        product_name = case.return_items[0][0].product.name
-        category = case.return_items[0][0].product.category
-        category_label = CATEGORIES[category]["label"]
-        t = case.created_at - timedelta(minutes=rng.randint(5, 45))
-
-        messages: list[tuple[str, str]] = []
-        messages.append(("user", rng.choice(GREETINGS)))
-        t2 = t + timedelta(seconds=rng.randint(10, 40))
-        messages.append(("assistant", rng.choice(ASK_ORDER_NUMBER)))
-        t3 = t2 + timedelta(seconds=rng.randint(20, 90))
-        messages.append(
-            (
-                "user",
-                f"Es el pedido {case.order.order_number}. {render_reason_text(case)}",
-            )
-        )
-        t4 = t3 + timedelta(seconds=rng.randint(30, 120))
-        messages.append(
-            (
-                "assistant",
-                f"Gracias, dame un momento para revisar el pedido {case.order.order_number} "
-                f"y comprobar la política de devolución de {category_label.lower()}.",
-            )
-        )
-        t5 = t4 + timedelta(seconds=rng.randint(20, 60))
-
-        rationale_short = case.rationale
-        if len(rationale_short) > 160:
-            rationale_short = rationale_short[:157].rsplit(" ", 1)[0] + "..."
-
-        closing_template = rng.choice(CLOSING_BY_LABEL[case.label])
-        closing_text = closing_template.format(
-            order=case.order.order_number,
-            product=product_name,
-            amount=f"{case.refund_amount:.2f}",
-            category_label=category_label,
-            rationale_short=rationale_short,
-        )
-        messages.append(("assistant", closing_text))
-        if case.label == "human_review":
-            t6 = t5 + timedelta(seconds=rng.randint(5, 15))
-            messages.append(
-                (
-                    "system",
-                    f"Caso derivado a HITL: return_request_id={case.id}, "
-                    f"motivo={case.reason_category}, importe={case.refund_amount:.2f} EUR.",
-                )
-            )
-
-        timestamps = [t, t2, t3, t4, t5]
-        while len(timestamps) < len(messages):
-            timestamps.append(timestamps[-1] + timedelta(seconds=rng.randint(5, 15)))
-
-        session_id = str(uuid.uuid4())
-        chat_messages = [
-            ChatMessage(
-                id=str(uuid.uuid4()),
-                session_id=session_id,
-                role=role,
-                content=content,
-                created_at=timestamps[i],
-            )
-            for i, (role, content) in enumerate(messages)
-        ]
-
-        sessions.append(
-            ChatSession(
-                id=session_id,
-                customer_id=case.customer.id,
-                status="closed",
-                started_at=t,
-                ended_at=timestamps[len(messages) - 1],
-                messages=chat_messages,
-                return_request_id=case.id,
-                order_number=case.order.order_number,
-                expected_label=case.label,
-            )
-        )
-
-    return sessions
-
-
-# ---------------------------------------------------------------------------
-# 7. Utilidades SQL
+# 6. Utilidades SQL
 # ---------------------------------------------------------------------------
 
 
@@ -2545,7 +2365,7 @@ def load_policy_text(filename: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 8. Generación principal
+# 7. Generación principal
 # ---------------------------------------------------------------------------
 
 
@@ -2561,7 +2381,6 @@ def main() -> None:
     n_orders = 1100
     target_returns = 480
     n_frequent_returners = 16
-    n_chat_conversations = 140
 
     customers = build_customers(n_customers)
     products = build_products()
@@ -2570,7 +2389,6 @@ def main() -> None:
 
     orders = build_orders(customers, products, n_orders, frequent_customer_ids)
     return_cases = build_return_cases(orders, target_returns, frequent_customer_ids)
-    chat_sessions = build_chat_sessions(return_cases, n_chat_conversations)
 
     # --- return_policies: un id por categoría, texto = documento markdown completo ---
     policy_ids = {cat: str(uuid.uuid4()) for cat in CATEGORIES}
@@ -2583,8 +2401,7 @@ def main() -> None:
     lines.append("-- Generado por dataset/generate_dataset.py -- NO EDITAR A MANO")
     lines.append(
         f"-- Semilla: {SEED} | Clientes: {len(customers)} | Productos: {len(products)} | "
-        f"Pedidos: {len(orders)} | Devoluciones: {len(return_cases)} | "
-        f"Conversaciones de chat: {len(chat_sessions)}"
+        f"Pedidos: {len(orders)} | Devoluciones: {len(return_cases)}"
     )
     lines.append("--")
     lines.append(
@@ -2753,53 +2570,6 @@ def main() -> None:
     lines.append(",\n".join(rows) + ";")
     lines.append("")
 
-    # chat_sessions
-    lines.append(
-        "-- ---------------------------------------------------------------------------"
-    )
-    lines.append("-- chat_sessions")
-    lines.append(
-        "-- ---------------------------------------------------------------------------"
-    )
-    lines.append(
-        "INSERT INTO chat_sessions (id, customer_id, status, started_at, ended_at, metadata) VALUES"
-    )
-    rows = []
-    for session in chat_sessions:
-        metadata = (
-            f'{{"return_request_id": "{session.return_request_id}", '
-            f'"order_number": "{session.order_number}", '
-            f'"expected_label": "{session.expected_label}", '
-            f'"source": "synthetic_dataset"}}'
-        )
-        rows.append(
-            f"    ({esc(session.id)}, {esc(session.customer_id)}, {esc(session.status)}, "
-            f"{ts(session.started_at)}, {ts(session.ended_at)}, {esc(metadata)}::jsonb)"
-        )
-    lines.append(",\n".join(rows) + ";")
-    lines.append("")
-
-    # chat_messages
-    lines.append(
-        "-- ---------------------------------------------------------------------------"
-    )
-    lines.append("-- chat_messages")
-    lines.append(
-        "-- ---------------------------------------------------------------------------"
-    )
-    lines.append(
-        "INSERT INTO chat_messages (id, session_id, role, content, created_at) VALUES"
-    )
-    rows = []
-    for session in chat_sessions:
-        for msg in session.messages:
-            rows.append(
-                f"    ({esc(msg.id)}, {esc(msg.session_id)}, {esc(msg.role)}, "
-                f"{esc(msg.content)}, {ts(msg.created_at)})"
-            )
-    lines.append(",\n".join(rows) + ";")
-    lines.append("")
-
     OUT_SQL.write_text("\n".join(lines), encoding="utf-8")
 
     # --- eval_cases.csv --------------------------------------------------
@@ -2873,8 +2643,6 @@ def main() -> None:
         f"- Pedidos: {len(orders)}",
         f"- Solicitudes de devolución: {len(return_cases)}",
         f"- Clientes marcados como devolvedores frecuentes: {n_frequent_returners}",
-        f"- Conversaciones de chat sintéticas: {len(chat_sessions)} "
-        f"({sum(len(s.messages) for s in chat_sessions)} mensajes)",
         "",
         "## Distribución de casos por etiqueta esperada (golden dataset)",
         "",
@@ -2896,28 +2664,6 @@ def main() -> None:
     for cat, count in sorted(category_counts.items(), key=lambda kv: -kv[1]):
         stats_lines.append(f"| {cat} | {count} |")
 
-    chat_label_counts: dict[str, int] = {}
-    for session in chat_sessions:
-        chat_label_counts[session.expected_label] = (
-            chat_label_counts.get(session.expected_label, 0) + 1
-        )
-    total_chats = len(chat_sessions) or 1
-
-    stats_lines += [
-        "",
-        "## Muestra de conversaciones de chat por etiqueta (de las devoluciones que ilustran)",
-        "",
-        "| Etiqueta | Nº conversaciones | % sobre las conversaciones | % sobre esa etiqueta en el total |",
-        "|---|---|---|---|",
-    ]
-    for label in ("valid", "invalid", "human_review"):
-        count = chat_label_counts.get(label, 0)
-        total_label = label_counts.get(label, 0) or 1
-        stats_lines.append(
-            f"| {label} | {count} | {100 * count / total_chats:.1f}% | "
-            f"{100 * count / total_label:.1f}% |"
-        )
-
     OUT_STATS.write_text("\n".join(stats_lines) + "\n", encoding="utf-8")
 
     print(f"OK -> {OUT_SQL}")
@@ -2925,7 +2671,7 @@ def main() -> None:
     print(f"OK -> {OUT_STATS}")
     print(
         f"customers={len(customers)} products={len(products)} orders={len(orders)} "
-        f"returns={len(return_cases)} chat_sessions={len(chat_sessions)}"
+        f"returns={len(return_cases)}"
     )
     print("label distribution:", label_counts)
 

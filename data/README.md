@@ -38,8 +38,7 @@ data/
     policies/                     16 políticas de categoría + 1 marco general (markdown)
 supabase/
   seed_synthetic.sql              INSERTs generados (customers, products, orders, order_items,
-                                   return_policies, return_requests, return_items,
-                                   chat_sessions, chat_messages)
+                                   return_policies, return_requests, return_items)
 tests/qa/golden/
   eval_cases.csv                   Golden dataset etiquetado para evaluar al Agente Evaluador
   GENERATION_STATS.md              Estadísticas de la última generación (recuento, distribución)
@@ -158,22 +157,6 @@ política aplicada — pensado para trazabilidad y para depurar visualmente el
 dataset directamente en la tabla `return_requests` sin tener que cruzar con
 el CSV.
 
-### 5. Conversaciones sintéticas (`chat_sessions` / `chat_messages`)
-
-140 conversaciones (765 mensajes) que simulan el flujo de tres agentes
-descrito en `doc/guia.md` (Triaje → Evaluador → Resolución), asociadas a un
-subconjunto de las 480 devoluciones: saludo del cliente, petición del número
-de pedido, el cliente explica el motivo (reutilizando la misma variedad de
-texto libre de la sección 4), el asistente confirma que va a revisar la
-política de la categoría, y cierra con el veredicto real del caso (aprobado
-con importe de reembolso, rechazado con el motivo concreto, o derivado a
-revisión humana). Los casos `human_review` añaden además un mensaje de
-`role = 'system'` registrando el `return_request_id` derivado a HITL.
-
-Pensado para dar contenido conversacional real (no solo filas tabulares) con
-el que probar el futuro Agente de Triaje y para tener ejemplos de uso del RAG
-en contexto de chat.
-
 ## Cómo regenerar el dataset
 
 ```bash
@@ -232,64 +215,16 @@ entorno de desarrollo o de pruebas de RAG, se recomienda:
 
 ## Qué queda fuera de este dataset (decisión deliberada)
 
-- **`chat_sessions`/`chat_messages` es una muestra ilustrativa, no una
-  cobertura exhaustiva.** Cubre 140 de las 480 devoluciones (~29%), elegidas
-  con muestreo aleatorio uniforme sobre el conjunto completo — no filtrado
-  por categoría ni por etiqueta, así que la mezcla de la muestra reproduce
-  aproximadamente la del dataset entero. En la última generación:
-
-  | Etiqueta | Conversaciones | % de la muestra | % de esa etiqueta cubierto |
-  |---|---|---|---|
-  | `valid` | 33 | 23.6% | 25.2% de las 131 `valid` |
-  | `invalid` | 42 | 30.0% | 31.1% de las 135 `invalid` |
-  | `human_review` | 65 | 46.4% | 30.4% de las 214 `human_review` |
-
-  (cifras exactas de la última ejecución en la tabla correspondiente de
-  [`GENERATION_STATS.md`](../tests/qa/golden/GENERATION_STATS.md)). Es decir, aproximadamente
-  **1 de cada 3 devoluciones de cada etiqueta** tiene una conversación
-  asociada; las otras ~2 de cada 3 solo existen como fila de
-  `return_requests` + `return_items`, sin traza de chat.
-
-  **Por qué no se generó una conversación por cada una de las 480**: el
-  valor añadido de una conversación es demostrar el *patrón* de diálogo
-  (saludo → petición de nº de pedido → motivo del cliente → confirmación →
-  veredicto), no producir 480 variaciones casi idénticas de ese mismo patrón
-  para casos que ya son estructuralmente equivalentes (p. ej. dos
-  devoluciones `valid` de calzado por `wrong_size` con importes parecidos
-  generarían conversaciones casi calcadas). El texto libre del cliente ya
-  varía por sí solo vía `REASON_TEXT_VARIANTS` (sección 4); las
-  conversaciones añaden el envoltorio narrativo completo encima de eso para
-  un subconjunto representativo, no para el 100%.
-
-  **Qué SÍ hay para trazar cada conversación con su devolución**: cada
-  `chat_sessions.metadata` (JSONB) incluye `return_request_id`,
-  `order_number` y `expected_label`, por ejemplo:
-
-  ```json
-  {"return_request_id": "946c611c-...", "order_number": "ORD-2026-00369",
-   "expected_label": "invalid", "source": "synthetic_dataset"}
-  ```
-
-  Esto permite hacer `JOIN`/filtrar en Supabase entre `chat_sessions` y
-  `return_requests` sin ambigüedad, y usar el par (conversación, fila
-  tabular) como caso de prueba conjunto cuando exista.
-
-  **Qué patrones de conversación NO cubre esta muestra** (limitación real,
-  no solo de volumen): cada conversación tiene exactamente un turno de
-  veredicto final y no modela ida y vuelta — no hay casos donde el cliente
-  insiste tras un rechazo, pide hablar con una persona, aporta una foto a
-  mitad de conversación, se equivoca primero de número de pedido, o donde un
-  administrador retoma la conversación para resolver un `human_review` (ese
-  cierre por parte del admin no existe en ningún mensaje: la conversación
-  del cliente termina en "pendiente de revisión" y ahí se corta). Todos esos
-  patrones son contenido válido para ampliar más adelante, pero no están
-  generados aquí.
-
-  **Cómo ampliar la cobertura** si hiciera falta más adelante: subir
-  `n_chat_conversations` en `main()` de `generate_dataset.py` (hoy en 140)
-  hasta el máximo de 480, o añadir nuevas plantillas en `CLOSING_BY_LABEL` /
-  turnos adicionales en `build_chat_sessions()` para cubrir los patrones de
-  ida y vuelta mencionados arriba.
+- **Conversaciones de chat sintéticas (`chat_sessions`/`chat_messages`,
+  eliminadas)**: el generador incluyó en su momento 140 conversaciones
+  sintéticas en dos tablas dedicadas, pensadas para "probar el futuro Agente
+  de Triaje" — pero una vez ese agente existió, nunca se conectó ningún
+  consumidor real a esas tablas (ni un test, ni una página de admin). Se
+  eliminaron (migración `015_drop_chat_sessions.sql`) porque el propósito
+  original ya está cubierto, y mejor: el historial real de cada conversación
+  vive en el checkpointer de LangGraph, y es trazable por `thread_id` en
+  Langfuse (con tokens/coste/latencia, que esas tablas nunca tuvieron). Ver
+  el análisis completo en `docs/defensaTFM/defenderAgentes.md` §15.
 
 - **Nuances muy finas de cada política** (por ejemplo, la excepción de
   colchones sin funda protectora en `muebles`, o el accidente de tráfico en

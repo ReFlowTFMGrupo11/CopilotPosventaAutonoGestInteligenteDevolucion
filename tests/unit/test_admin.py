@@ -65,6 +65,52 @@ async def test_approve_return(async_client, mock_graph):
 
 
 @pytest.mark.asyncio
+async def test_approve_return_with_override_refund_amount(async_client, mock_graph):
+    """Decisión 'Edit' del HITL: el admin puede corregir el importe antes
+    de aprobar -- se propaga al resume del grafo para que resolution_agent
+    lo use en vez del calculado por el Evaluador."""
+    mock_graph.ainvoke.return_value = {
+        "resolution": "approved",
+        "tracking_number": "TRK-12345",
+        "refund_amount": 80.0,
+    }
+
+    async with async_client as client:
+        resp = await client.post(
+            "/api/admin/test-thread-123/approve",
+            json={
+                "reason": "Importe corregido: el cliente solo pagó el envío",
+                "override_refund_amount": 80.0,
+            },
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["refund_amount"] == 80.0
+
+    # El resume del grafo debe llevar el importe corregido.
+    resume_command = mock_graph.ainvoke.call_args[0][0]
+    assert resume_command.resume["override_refund_amount"] == 80.0
+    assert resume_command.resume["approved"] is True
+
+
+@pytest.mark.asyncio
+async def test_approve_return_sin_override_no_edita_importe(async_client, mock_graph):
+    """Aprobar sin `override_refund_amount` (caso normal) manda None -- no
+    edita el importe calculado por el Evaluador."""
+    mock_graph.ainvoke.return_value = {"resolution": "approved"}
+
+    async with async_client as client:
+        await client.post(
+            "/api/admin/test-thread-123/approve",
+            json={"reason": "Cliente VIP"},
+        )
+
+    resume_command = mock_graph.ainvoke.call_args[0][0]
+    assert resume_command.resume["override_refund_amount"] is None
+
+
+@pytest.mark.asyncio
 async def test_reject_return(async_client, mock_graph):
     """Verifica que rechazar una devolución vía HITL devuelve resolution='rejected'."""
     mock_graph.ainvoke.return_value = {

@@ -124,11 +124,25 @@ else:
 
     for row in pending:
         thread_id = row.get("thread_id") or row.get("id")
+        original_amount = float(row.get("refund_amount") or 0.0)
         c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([2, 2, 2.2, 1.3, 3, 2.2, 1, 1])
         c1.write(row.get("order_number") or row.get("order_id", "—"))
         c2.write(row.get("customer_id", "—"))
         c3.write(row.get("product_names") or "—")
-        c4.write(money(row.get("refund_amount")))
+        # Editable (decisión "Edit" del HITL, no solo Approve/Reject en
+        # bloque): el admin puede corregir el importe antes de aprobar.
+        # Solo se manda como override si de verdad cambió -- así se
+        # distingue "aprobado sin tocar el importe" de "aprobado con
+        # importe corregido" (ver AdminDecisionRequest.override_refund_amount).
+        edited_amount = c4.number_input(
+            "Importe",
+            key=f"amount_{thread_id}",
+            value=original_amount,
+            min_value=0.0,
+            step=0.01,
+            format="%.2f",
+            label_visibility="collapsed",
+        )
         c5.write(row.get("reason", "—"))
         reason = c6.text_input(
             "Motivo",
@@ -136,8 +150,11 @@ else:
             placeholder="Motivo (opcional)",
             label_visibility="collapsed",
         )
+        override = (
+            edited_amount if abs(edited_amount - original_amount) > 0.001 else None
+        )
         if c7.button("Aprobar", key=f"approve_{thread_id}", type="primary"):
-            api.approve(thread_id, reason)
+            api.approve(thread_id, reason, override_refund_amount=override)
             st.rerun()
         if c8.button("Rechazar", key=f"reject_{thread_id}"):
             api.reject(thread_id, reason)

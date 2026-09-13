@@ -172,6 +172,7 @@ async def update_return_status(
     status: str,
     resolution: str = "",
     notes: str = "",
+    refund_amount: float | None = None,
 ) -> dict:
     """
     Actualiza el estado de la devolución desde el panel de control manual.
@@ -182,12 +183,15 @@ async def update_return_status(
         status: Nuevo estado ("approved", "rejected", "processing", "completed").
         resolution: Resolución aplicada (e.g., "full_refund", "partial_refund", "replacement").
         notes: Notas adicionales del administrador.
+        refund_amount: Importe corregido por el admin (decisión "Edit" del
+            HITL). ``None`` no toca el importe ya guardado.
     """
     return await returns_service.update_return_status(
         return_id=return_id,
         status=status,
         resolution=resolution,
         notes=notes,
+        refund_amount=refund_amount,
     )
 
 

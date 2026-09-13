@@ -198,6 +198,7 @@ async def update_return_status(
     status: str,
     resolution: str = "",
     notes: str = "",
+    refund_amount: float | None = None,
 ) -> dict:
     """Actualiza el estado de la devolución desde el panel de control manual.
 
@@ -206,16 +207,23 @@ async def update_return_status(
         status: Nuevo estado ("approved", "rejected", "processing", "completed").
         resolution: Resolución aplicada (e.g., "full_refund", "partial_refund", "replacement").
         notes: Notas adicionales del administrador.
+        refund_amount: Si el admin corrigió el importe calculado (decisión
+            "Edit" del HITL, ver resolution.py), el nuevo importe a guardar.
+            ``None`` (por defecto) no toca la columna ya guardada.
     """
     client = await get_supabase_client()
 
     # resolution/notes solo se envían si el llamante los proporcionó, para no
-    # sobrescribir con cadenas vacías valores ya guardados.
+    # sobrescribir con cadenas vacías valores ya guardados. refund_amount usa
+    # None (no "") como sentinela de "no tocar" porque 0.0 es un valor válido
+    # (reembolso íntegramente rechazado por el admin, no "sin proporcionar").
     update_data: dict = {"status": status}
     if resolution:
         update_data["resolution"] = resolution
     if notes:
         update_data["notes"] = notes
+    if refund_amount is not None:
+        update_data["refund_amount"] = refund_amount
     if status in ("approved", "rejected", "completed"):
         # 'now()' (con paréntesis) es un valor especial reconocido por el
         # parser de fechas de Postgres al castear texto a timestamptz --
