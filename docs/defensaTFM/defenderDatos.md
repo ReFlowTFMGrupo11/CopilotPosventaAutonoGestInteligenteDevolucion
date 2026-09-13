@@ -128,14 +128,14 @@ solo "el agente aprueba o rechaza automáticamente casi todo".
 
 ---
 
-## 4. Dos caminos de evaluación: local vs Langfuse
+## 4. Dos caminos de evaluación, ambos en Langfuse
 
 | | `evaluate_evaluator_agent.py` | `run_langfuse_experiment.py` |
 |---|---|---|
-| Dónde queda el resultado | JSON/MD local en `tests/qa/golden/results/` | Dataset Run en Langfuse (UI) |
-| Historial entre ejecuciones | No — cada informe se sustituye | Sí — comparable entre versiones de prompt/modelo |
-| Traza del LLM por caso fallado | No | Sí — abre la traza completa desde la UI |
-| Requiere infraestructura externa | No | Sí — Langfuse corriendo (local o cloud) |
+| Dónde queda el resultado | Scores en una traza suelta de Langfuse (por caso y agregados) — no escribe ningún fichero local | Dataset Run en Langfuse (UI), vinculado al dataset `policy-eval-golden-set` |
+| Historial entre ejecuciones | Cada run es una traza nueva (nunca se sustituye), pero sin agrupar — comparar dos runs es abrir dos trazas sueltas | Sí, agrupado — comparable entre versiones de prompt/modelo desde la misma vista del dataset |
+| Traza del LLM por caso fallado | Sí — cada caso es un span con sus scores | Sí — abre la traza completa desde la UI |
+| Requiere infraestructura externa | No para el exit code (accuracy, en memoria); sí para ver cualquier métrica (fail-open, ver `defenderLangfuse.md`) | Sí — Langfuse corriendo (local o cloud) |
 | Lógica de evaluación | Propia (`_build_state`, `_build_mock_policy`) | **Reutiliza la misma** de `evaluate_evaluator_agent.py` (importada directamente) |
 
 No son dos implementaciones paralelas que puedan desincronizarse: `run_langfuse_experiment.py`

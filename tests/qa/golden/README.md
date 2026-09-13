@@ -17,7 +17,7 @@ relativos al paquete `backend`).
 
 | Script | Para qué | Requiere LLM/red |
 |---|---|---|
-| `evaluate_evaluator_agent.py` | Evaluador **local** de `evaluator_agent` contra los 480 casos golden (`eval_cases.csv`, en esta misma carpeta). Calcula precisión/recall/F1 (task success) + tool accuracy + contains + costo + latencia por caso, y escribe el informe en `results/*.json` y `*.md`. Pese a su nombre histórico ("evaluate_rag"), **no** ejecuta ninguna búsqueda vectorial real — mockea `search_return_policy()` a propósito para aislar la calidad de la decisión (LLM + reglas) de la calidad del retrieval. El test real del RAG (chunking/ingesta) vive en `tests/unit/test_ingest_policy_embeddings.py`. | Solo si no usas `--dry-run` |
+| `evaluate_evaluator_agent.py` | Evaluador de `evaluator_agent` contra los 480 casos golden (`eval_cases.csv`, en esta misma carpeta). Calcula precisión/recall/F1 (task success) + tool accuracy + contains + costo + latencia por caso, y manda todo como `score` a LangFuse (por caso y agregado en la traza raíz) — no escribe ningún fichero local; sin LangFuse configurado, solo el exit code (accuracy) y el log de consola son el resultado. Pese a su nombre histórico ("evaluate_rag"), **no** ejecuta ninguna búsqueda vectorial real — mockea `search_return_policy()` a propósito para aislar la calidad de la decisión (LLM + reglas) de la calidad del retrieval. El test real del RAG (chunking/ingesta) vive en `tests/unit/test_ingest_policy_embeddings.py`. | Solo si no usas `--dry-run` |
 | `migrate_eval_cases_to_langfuse.py` | Sube los 480 casos golden a Langfuse como **Dataset** (`policy-eval-golden-set`), reutilizando el mismo CSV que `evaluate_evaluator_agent.py`. | No (solo escribe en Langfuse) |
 | `run_langfuse_experiment.py` | Ejecuta `evaluator_agent` contra el dataset de Langfuse y sube los resultados como **Experiment Run**, con evaluación automática por item (`label_match`) y agregada (`accuracy`). Es el equivalente a `evaluate_evaluator_agent.py` pero con historial y comparación entre ejecuciones en la UI de Langfuse en vez de ficheros locales. | Solo si no usas `--dry-run` |
 
@@ -46,8 +46,10 @@ success sigue disponible siempre, vía `_deterministic_label()`).
 ## Guía: golden dataset + experimentos en Langfuse
 
 Esto documenta el flujo que estamos siguiendo para pasar de "evaluación
-local con ficheros JSON/MD" (`evaluate_evaluator_agent.py`) a "evaluación en
-Langfuse" (dataset + experiment runs comparables en la UI).
+local, un run suelto sin historial" (`evaluate_evaluator_agent.py`, que ya
+manda sus métricas a LangFuse como scores pero sin comparación entre
+ejecuciones) a "evaluación en Langfuse Datasets/Experiments" (dataset +
+experiment runs comparables en la UI, con historial entre versiones).
 
 ### Requisitos previos
 

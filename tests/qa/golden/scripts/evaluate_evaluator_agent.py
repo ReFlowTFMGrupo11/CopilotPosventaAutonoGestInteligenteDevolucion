@@ -11,11 +11,21 @@ tests/unit/test_ingest_policy_embeddings.py.
 
 Lee los 480 casos de tests/qa/golden/eval_cases.csv, construye un estado
 mínimo por caso, y ejecuta evaluator_agent con el LLM real (gpt-5-mini).
-Calcula precisión, recall y F1 por clase y por categoría, y vuelca el
-informe como JSON y tabla Markdown en:
+Calcula precisión, recall y F1 por clase y por categoría, más las 4
+métricas adicionales de más abajo.
 
-  tests/qa/golden/results/eval_report_<timestamp>.json
-  tests/qa/golden/results/eval_report_<timestamp>.md
+## Dónde se ven las métricas
+
+Este script NO escribe ningún fichero local (ni JSON ni Markdown): todas
+las métricas, por caso y agregadas, se mandan como `score` a LangFuse (si
+está configurado, ver requisitos más abajo) — la traza raíz agrupa toda la
+ejecución, cada caso es un span con sus propios scores. Sin LangFuse
+configurado (p. ej. en CI, `--dry-run`), el único resultado persistente es
+el exit code de `accuracy` (ver `if __name__ == "__main__"`, calculado en
+memoria); las métricas de esa ejecución concreta solo se ven en el log de
+consola, no se guardan en ningún sitio -- si el objetivo es guardar un
+histórico, hazlo vía LangFuse, no relanzando el script y mirando la
+terminal.
 
 Uso:
     python -m tests.qa.golden.scripts.evaluate_evaluator_agent                  # todos los casos
@@ -33,6 +43,9 @@ Requisitos (solo para el modo real):
 ## Métricas de evaluación (ver docs/defensaTFM/defenderDatos.md)
 
 De las 6 categorías de la tabla de evaluación del TFM, este script cubre:
+todas las que se implementan se mandan como `score` a LangFuse (por caso
+y/o agregado en la traza raíz, ver "Dónde se ven las métricas" más
+arriba) -- ninguna vive solo en un fichero local.
 
 - **Task success**: sí (accuracy/precision/recall/F1 por clase, la métrica
   original de este script).
@@ -78,7 +91,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
-import json
 import logging
 import os
 import sys
@@ -100,7 +112,6 @@ from backend.services import pricing  # noqa: E402 -- tras load_dotenv, ver Sett
 REPO_ROOT = Path(__file__).resolve().parents[4]
 EVAL_CSV = REPO_ROOT / "tests" / "qa" / "golden" / "eval_cases.csv"
 POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 
 # ── Umbrales deterministas (deben coincidir con la lógica del agente) ──────
 HITL_AMOUNT_THRESHOLD = 100.0  # €  → human_review
@@ -477,86 +488,6 @@ def _compute_extra_metrics(results: list[dict]) -> dict:
     }
 
 
-# ── Formatters ─────────────────────────────────────────────────────────────
-
-
-def _render_markdown(
-    overall: dict,
-    by_cat: dict[str, dict],
-    extra: dict,
-    timestamp: str,
-    mode: str,
-) -> str:
-    """Renderiza el informe de evaluación (métricas globales y por categoría) como tabla Markdown.
-
-    Args:
-        overall: Métricas globales, tal como las devuelve ``_compute_metrics``.
-        by_cat: Métricas por categoría, tal como las devuelve ``_metrics_by_category``.
-        extra: Tool accuracy/contains/costo/latencia, tal como las devuelve
-            ``_compute_extra_metrics`` (todo a None/0 en --dry-run).
-        timestamp: Marca de tiempo a mostrar en la cabecera del informe.
-        mode: Modo de ejecución ("dry-run" o "llm") a mostrar en la cabecera.
-    """
-    lines = [
-        f"# Informe de Evaluación RAG — ReFlow",
-        f"",
-        f"**Fecha:** {timestamp}  ",
-        f"**Modo:** {mode}  ",
-        f"**Casos evaluados:** {overall['total']}  ",
-        f"**Accuracy global:** {overall['accuracy']:.1%}  ",
-        f"",
-        f"## Métricas globales por clase",
-        f"",
-        f"| Clase | Precision | Recall | F1 | Support |",
-        f"|-------|-----------|--------|----|---------|",
-    ]
-    for lbl in LABELS:
-        m = overall["per_class"][lbl]
-        lines.append(
-            f"| {lbl} | {m['precision']:.3f} | {m['recall']:.3f} | {m['f1']:.3f} | {m['support']} |"
-        )
-    macro = overall["macro"]
-    lines += [
-        f"| **macro avg** | {macro['precision']:.3f} | {macro['recall']:.3f} | {macro['f1']:.3f} | {overall['total']} |",
-        f"",
-        f"## Accuracy por categoría",
-        f"",
-        f"| Categoría | Casos | Accuracy | F1 macro |",
-        f"|-----------|-------|----------|----------|",
-    ]
-    for cat, m in by_cat.items():
-        lines.append(
-            f"| {cat} | {m['total']} | {m['accuracy']:.1%} | {m['macro']['f1']:.3f} |"
-        )
-
-    lines += [
-        "",
-        "## Métricas adicionales (tool accuracy / contains / costo / latencia)",
-        "",
-    ]
-    if mode == "dry-run":
-        lines.append(
-            "_No aplica en --dry-run: no se llama a evaluator_agent ni a los "
-            "mocks (ver docstring del módulo)._"
-        )
-    else:
-        tool_acc = extra["tool_accuracy"]
-        contains_acc = extra["contains_accuracy"]
-        avg_latency = extra["avg_latency_ms"]
-        tool_acc_str = f"{tool_acc:.1%}" if tool_acc is not None else "—"
-        contains_acc_str = f"{contains_acc:.1%}" if contains_acc is not None else "—"
-        avg_latency_str = f"{avg_latency} ms" if avg_latency is not None else "—"
-        lines += [
-            "| Métrica | Valor | Casos evaluados |",
-            "|---------|-------|------------------|",
-            f"| Tool accuracy | {tool_acc_str} | {extra['tool_accuracy_n']} |",
-            f"| Contains (plazo) | {contains_acc_str} | {extra['contains_accuracy_n']} |",
-            f"| Coste total (~) | {extra['total_cost_eur']:.6f} € | {extra['llm_calls']} llamada(s) al LLM |",
-            f"| Latencia media por caso | {avg_latency_str} | {overall['total']} |",
-        ]
-    return "\n".join(lines) + "\n"
-
-
 # ── Runner principal ────────────────────────────────────────────────────────
 
 
@@ -571,12 +502,17 @@ async def run_evaluation(
     (reglas deterministas en ``dry_run``, o ``evaluator_agent`` con el LLM
     real y ``search_return_policy`` mockeado en caso contrario), comparándola
     con la etiqueta esperada del CSV. Si LangFuse está configurado, registra
-    un span y un score por caso, además de las métricas agregadas en la traza
-    raíz. Al final calcula precisión/recall/F1 globales y por categoría, y
-    escribe el informe como JSON y Markdown en ``tests/qa/golden/results/``.
+    un span y todas las métricas de ese caso (label_match, tool_match,
+    contains_match, cost_eur, latency_ms) como scores, más las métricas
+    agregadas (accuracy, precision/recall/F1 por clase, accuracy por
+    categoría, tool/contains accuracy, coste/latencia totales) en la traza
+    raíz. No escribe ningún fichero local: si LangFuse no está configurado,
+    el único resultado persistente es el exit code de ``__main__`` (basado
+    en accuracy, calculado en memoria) — ver docstring del módulo.
 
     Returns:
-        El informe completo (métricas, casos fallidos y metadatos de la ejecución).
+        ``{"mode": "dry-run"|"llm", "overall": <de _compute_metrics>}`` —
+        lo mínimo que necesita ``__main__`` para el exit code.
     """
     from backend.agents.nodes.evaluator import evaluator_agent
     from backend.services.observability import get_langfuse, flush as langfuse_flush
@@ -589,7 +525,6 @@ async def run_evaluation(
     )
 
     lf = get_langfuse()
-    run_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     # ID de traza raíz — se pasa como trace_id en cada span
     run_trace_id: str | None = None
     if lf:
@@ -704,6 +639,10 @@ async def run_evaluation(
         )
 
         # ── LangFuse: span + scores por caso ──────────────────────────────
+        # Todas las métricas por caso van aquí, no a un fichero local: si no
+        # se manda a Langfuse (o no cabe como score agregado, ver más abajo),
+        # no se calcula ni se guarda en ningún sitio (ver docstring del
+        # módulo, "Dónde se ven las métricas").
         if lf and run_trace_id:
             try:
                 obs = lf.start_observation(
@@ -735,6 +674,38 @@ async def run_evaluation(
                     value=1.0 if match else 0.0,
                     data_type="NUMERIC",
                 )
+                if tool_match is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="tool_match",
+                        value=1.0 if tool_match else 0.0,
+                        data_type="NUMERIC",
+                    )
+                if contains_match is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="contains_match",
+                        value=1.0 if contains_match else 0.0,
+                        data_type="NUMERIC",
+                    )
+                if cost_eur is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="cost_eur",
+                        value=cost_eur,
+                        data_type="NUMERIC",
+                    )
+                if latency_ms is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="latency_ms",
+                        value=float(latency_ms),
+                        data_type="NUMERIC",
+                    )
             except Exception as exc:
                 logger.debug("LangFuse span error (caso %s): %s", case_id, exc)
 
@@ -744,18 +715,13 @@ async def run_evaluation(
     overall = _compute_metrics(results)
     by_cat = _metrics_by_category(results)
     extra = _compute_extra_metrics(results)
-    mismatches = [r for r in results if not r["match"]]
-
-    report = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "mode": "dry-run" if dry_run else "llm",
-        "overall": overall,
-        "by_category": by_cat,
-        "extra_metrics": extra,
-        "mismatches": mismatches[:50],
-    }
 
     # ── LangFuse: scores agregados en la traza raíz ────────────────────────
+    # Cada métrica agregada calculada por este script se manda aquí -- es la
+    # única forma en que este script "guarda" un resultado (ver docstring
+    # del módulo). Sin LangFuse configurado (p. ej. en CI), estos scores
+    # simplemente no se mandan a ningún sitio; el exit code (accuracy, más
+    # abajo en __main__) sigue funcionando igual, en memoria.
     if lf and run_trace_id:
         try:
             for metric_name, value in [
@@ -763,30 +729,46 @@ async def run_evaluation(
                 ("macro_f1", overall["macro"]["f1"]),
                 ("macro_precision", overall["macro"]["precision"]),
                 ("macro_recall", overall["macro"]["recall"]),
+                ("tool_accuracy", extra["tool_accuracy"]),
+                ("contains_accuracy", extra["contains_accuracy"]),
+                ("total_cost_eur", extra["total_cost_eur"]),
+                ("avg_latency_ms", extra["avg_latency_ms"]),
             ]:
+                if value is None:
+                    continue
                 lf.create_score(
                     trace_id=run_trace_id,
                     name=metric_name,
                     value=value,
                     data_type="NUMERIC",
                 )
+            # Precision/recall/F1 por clase: mismo nombre de score para las
+            # 3 clases, diferenciadas por metadata -- evita crear un tipo de
+            # score distinto por clase (mismo criterio que score_tool_call en
+            # observability.py, ver su docstring).
+            for lbl in LABELS:
+                m = overall["per_class"][lbl]
+                for metric_name in ("precision", "recall", "f1"):
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        name=metric_name,
+                        value=m[metric_name],
+                        data_type="NUMERIC",
+                        metadata={"label": lbl},
+                    )
+            # Accuracy por categoría: mismo criterio, metadata={"category": cat}.
+            for cat, m in by_cat.items():
+                lf.create_score(
+                    trace_id=run_trace_id,
+                    name="category_accuracy",
+                    value=m["accuracy"],
+                    data_type="NUMERIC",
+                    metadata={"category": cat},
+                )
             langfuse_flush()
             logger.info("LangFuse: métricas enviadas → trace_id=%s", run_trace_id)
         except Exception as exc:
             logger.warning("LangFuse flush error: %s", exc)
-
-    # ── Guardar resultados ─────────────────────────────────────────────────
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = run_ts
-    json_path = RESULTS_DIR / f"eval_report_{ts}.json"
-    md_path = RESULTS_DIR / f"eval_report_{ts}.md"
-
-    json_path.write_text(
-        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    md_path.write_text(
-        _render_markdown(overall, by_cat, extra, ts, report["mode"]), encoding="utf-8"
-    )
 
     logger.info("─" * 60)
     logger.info(
@@ -818,10 +800,14 @@ async def run_evaluation(
                 else "—"
             ),
         )
-    logger.info("Informe JSON → %s", json_path)
-    logger.info("Informe MD  → %s", md_path)
+    if not lf:
+        logger.info(
+            "LangFuse no configurado: las métricas de esta ejecución solo se "
+            "ven en este log (nunca se guardan en un fichero local, ver "
+            "docstring del módulo)."
+        )
 
-    return report
+    return {"mode": "dry-run" if dry_run else "llm", "overall": overall}
 
 
 def _parse_args() -> argparse.Namespace:
