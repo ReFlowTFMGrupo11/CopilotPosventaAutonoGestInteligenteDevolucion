@@ -22,22 +22,19 @@ configurado.
 Variables de entorno necesarias (ver .env):
     LANGFUSE_PUBLIC_KEY   pk-lf-...
     LANGFUSE_SECRET_KEY   sk-lf-...
-    LANGFUSE_BASE_URL     https://cloud.langfuse.com  (default; usar
-                          http://localhost:3000 si usas el stack self-hosted
-                          de langfuse_infra/, ver su README)
+    LANGFUSE_BASE_URL     https://cloud.langfuse.com (default; no hace
+                          falta fijarla salvo que uses otro proyecto/región)
     LANGFUSE_HOST         alias antiguo de LANGFUSE_BASE_URL, se lee como
-                          fallback por compatibilidad con el resto de la
-                          documentación del repo (langfuse_infra/README.md,
-                          tests/qa/scripts/README.md)
-    LANGFUSE_PROJECT_ID   opcional. LangFuse (cloud y self-hosted) no tiene
-                          una ruta /sessions a nivel de host que redirija
-                          sola al proyecto — da 404 sin el id (ver
-                          get_langfuse_links()). Por eso, si no se fija esta
-                          variable, get_langfuse_links() lo resuelve solo
-                          llamando a la API de LangFuse con las credenciales
-                          configuradas (GET /api/public/projects); fíjala
-                          solo si esa llamada falla o hay varios proyectos
-                          bajo las mismas keys.
+                          fallback por compatibilidad
+    LANGFUSE_PROJECT_ID   opcional. LangFuse no tiene una ruta /sessions a
+                          nivel de host que redirija sola al proyecto — da
+                          404 sin el id (ver get_langfuse_links()). Por eso,
+                          si no se fija esta variable, get_langfuse_links()
+                          lo resuelve solo llamando a la API de LangFuse con
+                          las credenciales configuradas
+                          (GET /api/public/projects); fíjala solo si esa
+                          llamada falla o hay varios proyectos bajo las
+                          mismas keys.
 """
 
 from __future__ import annotations
@@ -64,8 +61,7 @@ def _is_configured() -> bool:
 
 def _host() -> str:
     """Resuelve el host de LangFuse: LANGFUSE_BASE_URL (nombre actual del SDK)
-    con fallback a LANGFUSE_HOST (nombre usado en el resto de la docs del
-    repo, p.ej. langfuse_infra/README.md), y por último LangFuse Cloud."""
+    con fallback a LANGFUSE_HOST (alias antiguo), y por último LangFuse Cloud."""
     settings = get_settings()
     return (
         settings.langfuse_base_url
@@ -344,9 +340,8 @@ def _resolve_project_id() -> Optional[str]:
     """Resuelve el project_id de LangFuse asociado a las API keys configuradas.
 
     LangFuse exige /project/{id}/... en la URL para sus vistas (Sessions,
-    Users): no hay un /sessions a nivel de host que redirija solo, da 404
-    (visto en local con el stack self-hosted de langfuse_infra/). En vez de
-    exigir configurar `LANGFUSE_PROJECT_ID` a mano, se pide una vez a la API
+    Users): no hay un /sessions a nivel de host que redirija solo, da 404.
+    En vez de exigir configurar `LANGFUSE_PROJECT_ID` a mano, se pide una vez a la API
     pública de LangFuse (unas API keys casi siempre pertenecen a un único
     proyecto) y se cachea en memoria del proceso.
     """

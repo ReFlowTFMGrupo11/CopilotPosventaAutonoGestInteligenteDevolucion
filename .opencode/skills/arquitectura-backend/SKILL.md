@@ -1,6 +1,6 @@
 ---
 name: arquitectura-backend
-description: Documents this project's backend architecture decisions and layering rules -- database access must flow through the services layer, the responsibilities of db/ vs services/ vs agents/infra/, why supabase/ and langfuse_infra/ live at the repo root instead of under a shared infra/ folder, and how environment variables must be centralized via pydantic-settings. Use when writing or reviewing backend code, adding a new router/service/agent node, deciding where a new file belongs, touching env vars, or considering folder-structure changes.
+description: Documents this project's backend architecture decisions and layering rules -- database access must flow through the services layer, the responsibilities of db/ vs services/ vs agents/infra/, why supabase/ lives at the repo root instead of under a shared infra/ folder, and how environment variables must be centralized via pydantic-settings. Use when writing or reviewing backend code, adding a new router/service/agent node, deciding where a new file belongs, touching env vars, or considering folder-structure changes.
 ---
 
 # Arquitectura del backend
@@ -57,16 +57,18 @@ cliente HTTP hacia los MCP servers). No debe contener:
   adaptador, es una decisión de negocio sobre qué modelo/parámetros usar).
 - Esquema o migraciones de base de datos (eso vive en `supabase/`, ver punto 4).
 
-## 4. `supabase/` y `langfuse_infra/` en la raíz, no bajo un `infra/` compartido
+## 4. `supabase/` en la raíz, no bajo un `infra/` compartido
 
 - `supabase/` (migraciones SQL, seed) debe quedarse en la raíz del repo, sin
   anidar bajo `infra/`. Es una convención de la CLI de Supabase: busca
   `supabase/config.toml` subiendo desde el cwd, y anidarlo obligaría a pasar
   `--workdir` en cada comando si el proyecto adopta la CLI.
-- El repo ya sigue el patrón "una carpeta top-level por cada infraestructura
-  externa" (`langfuse_infra/` es su propio hermano de `backend/`,
-  `frontend/`, etc.), no "una carpeta `infra/` compartida con subcarpetas".
-  Mantener esa consistencia; no introducir un `infra/` nuevo.
+- El repo sigue el patrón "una carpeta top-level por cada infraestructura
+  externa" (hermana de `backend/`, `frontend/`, etc.), no "una carpeta
+  `infra/` compartida con subcarpetas". Mantener esa consistencia si se añade
+  infraestructura nueva; no introducir un `infra/` genérico. (Langfuse ya no
+  tiene carpeta propia — se usa Langfuse Cloud, sin stack local que
+  mantener.)
 
 ## 5. Variables de entorno: centralizadas, tipadas, una sola fuente de verdad
 

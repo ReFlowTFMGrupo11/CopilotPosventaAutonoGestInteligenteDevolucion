@@ -21,13 +21,6 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Langfuse (opcional): si está configurado y corriendo, se para también.
-# No usa -v, así que los datos (trazas, usuarios, proyectos) no se borran.
-if [ -f "$SCRIPT_DIR/langfuse_infra/.env" ]; then
-    echo "==> Parando Langfuse..."
-    "$SCRIPT_DIR/langfuse_infra/stop_langfuse.sh" || echo "    AVISO: no se pudo parar Langfuse (¿ya estaba parado?)."
-fi
-
 KILLED=0
 
 close_window_for_port() {

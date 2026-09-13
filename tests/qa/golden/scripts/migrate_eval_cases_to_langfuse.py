@@ -20,9 +20,9 @@ Uso:
     python -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse --force
 
 Requisitos:
-    LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_HOST en .env
-    (ya están si el tracing de backend/services/observability.py funciona;
-    ver langfuse_infra/README.md para levantar Langfuse en local)
+    LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY en .env (ya están si el
+    tracing de backend/services/observability.py funciona; se usa el mismo
+    proyecto de Langfuse Cloud)
 """
 
 from __future__ import annotations
