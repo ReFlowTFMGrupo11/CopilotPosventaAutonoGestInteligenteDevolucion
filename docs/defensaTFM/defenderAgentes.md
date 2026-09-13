@@ -20,9 +20,16 @@
 
 | Agente | Rol | Temperature | Justificación |
 |--------|-----|-------------|---------------|
-| **Triaje** | Empatía + extracción de datos | 0.3 | Necesita creatividad para conversar naturalmente |
-| **Evaluador** | Auditoría de políticas | 0.0 | Debe ser determinista y objetivo |
-| **Resolución** | Ejecutar acciones + comunicar | 0.4 | Balance entre claridad y calidez |
+| **Triaje** | Empatía + extracción de datos | 0 (`triage.py::_build_llm`) | Prioriza la fiabilidad de la extracción estructurada (`order_number`, `reason_category`, `condition`...) sobre la variedad de la redacción — un `order_number` mal extraído por "creatividad" del modelo rompe el turno; una frase de `response_to_customer` algo menos variada no |
+| **Evaluador** | Auditoría de políticas | 0.0 (`evaluator.py::_build_llm`) | Debe ser determinista y objetivo |
+| **Resolución** | Ejecutar acciones + comunicar | 0.4 (`resolution.py::_build_llm`) | Balance entre claridad y calidez |
+
+> Corrección: una versión anterior de esta tabla indicaba `0.3` para Triaje
+> ("necesita creatividad para conversar"). Comprobado el código
+> (`triage.py::_build_llm` → `build_chat_llm("TRIAGE_MODEL", temperature=0)`):
+> es `0`, no `0.3` — no hay override en `.env.example` para
+> `TRIAGE_MODEL_TEMPERATURE`, así que `0` es el valor real en desarrollo y
+> producción salvo que se configure explícitamente lo contrario.
 
 ### Ventajas de la separación
 
@@ -30,6 +37,17 @@
 2. **Seguridad**: El agente de Triaje no puede ejecutar acciones (crear devoluciones, generar etiquetas). Solo el Resolución tiene acceso a esas herramientas.
 3. **Testabilidad**: Se puede testear cada nodo de forma aislada con mocks.
 4. **Auditoría**: El Evaluador siempre devuelve JSON estructurado con `is_eligible` + `eligibility_reason`, trazable y auditable.
+
+### Contraste con las 4 razones "por qué multi-agente" del framework docente (EBIS)
+
+| Razón (framework) | ¿Aplica en ReFlow? |
+|---|---|
+| **1. Especialización** ("cada agente domina una tarea específica") | ✅ Sí, en pleno — es exactamente la tabla de arriba: Triaje/Evaluador/Resolución, cada uno con su propio prompt, modelo configurable (`{triage,evaluator,resolver}_model`) y `temperature` propia (0, 0.0, 0.4 respectivamente) |
+| **2. Escalabilidad** ("tareas complejas → múltiples subtareas"; "procesamiento **paralelo**, necesitan diferente contexto o tools") | ⚠️ Solo la mitad — la descomposición en subtareas con contexto/tools distintos sí aplica (punto 1, "Contexto acotado"). El **procesamiento paralelo NO aplica**: los 3 agentes son estrictamente **secuenciales** (`graph.py`: `START → triage → fetch_order_data → evaluator → resolver/reject`), cada uno depende del `state` que dejó el anterior. No hay ningún tramo del grafo donde dos agentes corran a la vez |
+| **3. Mantenibilidad** ("modificar un agente sin afectar otros"; "reutilización de componentes") | ✅ Sí — cada agente vive en su propio módulo (`nodes/triage.py`, `nodes/evaluator.py`, `nodes/resolution.py`), con el `ReturnState` como único contrato entre ellos. El punto 3 ("Testabilidad") ya lo evidencia: se testea cada nodo con mocks sin tocar los demás |
+| **4. Resiliencia** ("si un agente falla, otros continúan"; "redundancia y backup") | ❌ **No aplica, y es importante no fingir que sí**: al ser un pipeline secuencial (no un enjambre de agentes independientes), si `evaluator_agent` lanza una excepción, `resolution_agent` sencillamente no se ejecuta — no hay ningún agente redundante que lo sustituya. Lo que sí existe es **degradación elegante dentro de cada nodo** (no entre nodos): `evaluator_agent` cae a "no elegible" si el structured output devuelve `None` (ver §9); el checkpointer cae a `InMemorySaver` si Postgres no responde (ver §6). Es tolerancia a fallos a nivel de infraestructura/nodo individual, no la resiliencia por redundancia entre agentes que describe el framework |
+
+**Por qué esta arquitectura no busca resiliencia por redundancia**: el pipeline es intencionalmente una cadena de dependencia estricta (Triaje decide el pedido → Evaluador decide elegibilidad → Resolución actúa sobre esa decisión) — cada etapa necesita el resultado exacto de la anterior para tener sentido, así que "que el Evaluador falle y el Resolución continúe sin él" no es una opción de diseño válida en este dominio (actuaría sobre una elegibilidad que no existe). La resiliencia que sí tiene sentido aquí es la que hay: fallar de forma controlada y visible (excepción/log/LangFuse), no silenciosamente ni con un agente sustituto improvisado.
 
 ---
 
@@ -388,6 +406,27 @@ except (RuntimeError, ValueError):
 
 Esto sigue el principio de **diseño para fallos** (*design for failure*): el nodo no asume que es la primera vez que se ejecuta.
 
+### Los cuatro tipos de decisión del framework docente: cuáles implementamos
+
+| Tipo | ¿Lo tenemos? | Detalle |
+|---|---|---|
+| **Approve** | ✅ `POST /api/admin/{thread_id}/approve` | Ejecuta con los datos calculados por el Evaluador |
+| **Reject** | ✅ `POST /api/admin/{thread_id}/reject` | No ejecuta nada; rechazo total, con `reason` opcional informativo |
+| **Edit** | ✅ **Implementado** — `AdminDecisionRequest.override_refund_amount` en `/approve` | El admin corrige `refund_amount` antes de aprobar. Se propaga por `Command(resume={"override_refund_amount": ...})` → `resolution_agent` lo aplica ANTES de cualquier uso posterior del importe (BD, email, mensaje final) — ver `resolution.py`, bloque *"Decisión Edit"* justo después del `interrupt()`. Persistido en BD vía `update_return_status(..., refund_amount=...)` (nuevo parámetro, `None` = no tocar la columna) |
+| **Respond** | ❌ No aplica | No hay ninguna tool tipo "preguntar al humano" donde la respuesta del humano sea directamente el resultado (ver framework: *"el humano ES la herramienta"*) — no existe ese patrón en el dominio de devoluciones |
+
+**Antes de esta iteración, el HITL era binario** (solo Approve/Reject) — un admin que creyera que el reembolso calculado debía ser distinto no podía corregirlo, solo aprobar tal cual o rechazar la solicitud completa. Con `Edit`, el flujo real es: el panel de admin (`frontend/pages/1_Admin.py`) muestra el importe calculado en un campo editable; si el admin lo cambia, se manda como `override_refund_amount`; si no lo toca, se manda `None` y no se edita nada (mismo importe que calculó el Evaluador). Este es el nivel de HITL que usan sistemas reales de aprobación de reembolsos — no un simple sí/no.
+
+**Corrección de un bug latente que introdujo `Edit`**: `admin_decision` (en el `Command` final) comparaba `refund_amount <= hitl_threshold` para distinguir `"auto_approved"` de `"approved"`. Como `Edit` puede corregir el importe a un valor por debajo del umbral *después* de que el HITL ya se disparó, esa comparación habría etiquetado mal una aprobación humana como automática. Corregido para basarse en `needs_admin_approval` (si realmente pasó por `interrupt()`), no en el importe final.
+
+### ¿Por qué no usamos `HumanInTheLoopMiddleware`?
+
+Es un patrón real (LangChain/LangGraph, API `create_agent()`), pero pensado para un paradigma distinto al nuestro: declarar la política de pausa como configuración externa (`interrupt_on={tool: {...}}`) para que el LLM, que elige dinámicamente entre *muchas* tools, no necesite que cada tool sepa que existe supervisión humana.
+
+ReFlow no tiene ese paradigma — no hay un LLM eligiendo entre tools (§4: *"¿Por qué NO dejamos que el LLM elija qué tool llamar?"*), y solo hay **un punto de pausa real** (`resolution_agent`, umbral configurable). Con un solo punto de decisión, una capa de configuración genérica para *N* tools no aporta nada que no tengamos ya con un `if needs_admin_approval: interrupt(...)` directamente en el nodo. El middleware escala bien de 1 a muchas tools; nosotros nunca tuvimos "muchas", así que no pagamos ese coste de abstracción.
+
+Si en el futuro ReFlow adoptara `create_agent()` con un LLM eligiendo libremente entre las 10 tools MCP actuales, ahí sí el middleware seria la herramienta correcta — y sabríamos exactamente qué tools marcar (`create_return_record`, `update_return_status`, `generate_shipping_label`, `send_customer_notification` → requieren aprobación; las 6 de solo lectura → no).
+
 ---
 
 ## 13. Los tres ámbitos de memoria multiagente, aplicados a ReFlow
@@ -570,3 +609,54 @@ de eso hoy.
 acotada al alcance del producto (transacciones de devolución de una sola
 sesión + una señal cross-sesión de abuso). El único gap real que había
 (esquema sin consumidor) ya está eliminado, no solo documentado.
+
+---
+
+## 16. Patrones multiagente y control de agentes: contraste con el framework docente
+
+### 16.1 Lab 3 — ¿Router o Pipeline?
+
+| Patrón (lab) | ¿Lo seguimos? |
+|---|---|
+| **Router** (especialistas como tools de un router; memoria compartida vía `store`) | ❌ No — no hay un router/supervisor que despache dinámicamente a especialistas independientes. Descartado explícitamente en §1 (*"¿Por qué LangGraph y no LangChain secuencial?"*) a favor de un grafo explícito |
+| **Pipeline** (extractor → enriquecedor → resumidor, con "expediente" explícito; memoria de trabajo se tira, la del usuario persiste) | ✅ **Es nuestro patrón exacto**: Triaje (extrae) → Evaluador (enriquece con elegibilidad) → Resolución (resume/actúa), con `ReturnState` como "expediente". Las "dos memorias" del lab son literalmente §13/§15: `ReturnState` (de trabajo, muere con el `thread_id`) vs. `return_history` (del cliente, persiste) |
+| **Strands Agents** (mismo patrón, otro framework) | N/D — usamos LangGraph, no Strands (decisión ya justificada en §1) |
+
+### 16.2 Best Practices - Control: contraste DO/DON'T
+
+| DO (framework) | ¿Lo hacemos? |
+|---|---|
+| Límites claros desde el inicio | ⚠️ Existen hoy (`GRAPH_RECURSION_LIMIT`, `GRAPH_TURN_TIMEOUT_SECONDS`, §14), pero varios se añadieron **reactivamente** tras detectar el problema (p. ej. degradación silenciosa del checkpointer), no estaban desde el diseño inicial |
+| Logging exhaustivo | ✅ Langfuse + `llm_usage` (`usage_tracking.py`) + `logger` en todos los nodos |
+| Validación en múltiples capas | ✅ Pydantic structured output + `policy_rules.py` determinista + overrides de UI (`_apply_deterministic_selection`) |
+| Plan de rollback | ❌ No existe — una devolución auto-aprobada (etiqueta generada, email enviado) no tiene ningún mecanismo de "deshacer". Un rollback real aquí sería una *transacción compensatoria* (nueva acción que revierte el efecto), no un "undo" literal — no implementado |
+| Monitorear costos en tiempo real | ⚠️ Dashboard de Costes existe (`2_Costes.py`), pero es *on-demand* (se consulta al abrir la página), no un stream en vivo ni alertas si el gasto se dispara |
+| Documentar comportamientos esperados | ✅ Todo `docs/defensaTFM/` |
+
+| DON'T (framework) | ¿Lo evitamos? |
+|---|---|
+| Confiar ciegamente en salidas del agente | ✅ Evitado con fuerza — `refund_amount` nunca del LLM (siempre `compute_refund()`), `items_confirmed` nunca en el mismo turno de la inferencia, overrides deterministas por todo el código |
+| Permitir acceso ilimitado a recursos | ⚠️ **Parcial** — CORS abierto a todo + **cero autenticación** en `/api/admin/*` (gap crítico ya trackeado, `REMAINING_TASKS.md` §1): cualquiera que alcance la API puede aprobar/rechazar/editar reembolsos sin login |
+| Ignorar señales de alerta temprana | ✅ Evitado — la degradación del checkpointer se loguea Y lanza excepción en producción, nunca en silencio (`graph.py::_fail_or_degrade`) |
+| Implementar solo después de problemas | ⚠️ Parcialmente cierto — varios guardarraíles (recursion limit, timeout) se añadieron reactivamente, no proactivamente desde el diseño inicial (mismo caso que la fila 1 de DO) |
+
+### 16.3 Control de agentes: los 7 mecanismos
+
+| Mecanismo | ¿Lo tenemos? |
+|---|---|
+| **Límites de recursos** (contadores, timeouts) | ✅ `GRAPH_RECURSION_LIMIT`, `GRAPH_TURN_TIMEOUT_SECONDS`, `MAX_CONVERSATION_TURNS`, `llm_timeout_seconds` — §14 |
+| **Permisos** (RBAC, whitelists) | ❌ No existe RBAC real. Que Triaje no pueda crear devoluciones (§2) es porque su código no importa esa función — no hay ningún check de permisos en runtime que lo impida si alguien añadiera ese import. `/api/admin/*` no tiene autenticación (`REMAINING_TASKS.md` §1) |
+| **Validación** (guardrails, validators) | ✅ Extenso — structured output + `policy_rules.py` + overrides deterministas (§9, §2) |
+| **Logging** (structured logs) | ✅ Langfuse + `llm_usage` + `logger` |
+| **HITL** (approval queues) | ✅ Núcleo del proyecto — `interrupt()` + `/api/admin/pending`, con los 3 tipos de decisión aplicables (Approve/Edit/Reject) — ver §12 |
+| **Circuit Breakers** (estado y umbrales) | ❌ No existe (comprobado: `grep circuit_breaker` sin resultados). Si un MCP server falla repetidamente, cada llamada se reintenta igual hasta el timeout — no hay un estado que "abra el circuito" temporalmente |
+| **Monitoreo** (dashboards, alertas) | ⚠️ Dashboards sí (Langfuse, Costes); alertas proactivas no — visibilidad pasiva, hay que ir a mirar |
+
+### 16.4 ¿Merece la pena cerrar estos gaps?
+
+Criterio aplicado (mismo que en §14/§15: no implementar por implementar):
+
+- **Circuit Breakers, alertas proactivas, rollback**: **NO** implementar — resuelven problemas de *escala/tráfico real* o de *operación 24/7* que un TFM sin tráfico de producción no tiene. Documentar como límite consciente del alcance.
+- **`Respond`**: no aplica al dominio (ya explicado en §12) — no es un gap, es un patrón no aplicable.
+- **`Edit`**: ✅ **implementado** (ver §12) — barato, y refuerza el argumento central del proyecto (HITL realista, no binario).
+- **Permisos/RBAC en `/api/admin/*`**: pendiente, trackeado como prioridad alta en `REMAINING_TASKS.md` §1 — el único gap de esta lista con severidad real (dinero sin autenticación), recomendado cerrarlo con una API key simple antes de cualquier despliegue, aunque no bloquea la defensa académica del TFM.
