@@ -92,7 +92,6 @@ import argparse
 import asyncio
 import csv
 import logging
-import os
 import sys
 import time
 from collections import defaultdict
@@ -115,7 +114,6 @@ POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
 
 # ── Umbrales deterministas (deben coincidir con la lógica del agente) ──────
 HITL_AMOUNT_THRESHOLD = 100.0  # €  → human_review
-HITL_FREQUENT_RETURNER = True  # is_frequent_returner=True → human_review
 BORDER_ZONE_DAYS = 5  # plazo ± 5 días → human_review (zona frontera)
 
 LABELS = ["valid", "invalid", "human_review"]
@@ -395,8 +393,6 @@ def _result_to_label(result: dict[str, Any]) -> str:
 
 def _compute_metrics(results: list[dict]) -> dict:
     """Calcula accuracy, precision, recall y F1 por clase y macro-average."""
-    from collections import Counter
-
     per_class: dict[str, dict] = {lbl: {"tp": 0, "fp": 0, "fn": 0} for lbl in LABELS}
     correct = 0
 
@@ -544,7 +540,6 @@ async def run_evaluation(
         tool_match: bool | None = None
         contains_match: bool | None = None
         cost_eur: float | None = None
-        total_tokens_case = 0
         latency_ms: int | None = None
         llm_called = False
 
@@ -601,9 +596,6 @@ async def run_evaluation(
                     contains_match = all(kw in reason_text for kw in expected_kw)
 
                 llm_called = bool(captured_usage)
-                total_tokens_case = sum(
-                    u.get("total_tokens", 0) for u in captured_usage
-                )
                 cost_eur = sum(
                     (
                         pricing.estimate_cost_eur(
@@ -621,18 +613,21 @@ async def run_evaluation(
                 predicted = "error"
 
         match = expected == predicted
+        # Solo se guardan los campos que _compute_metrics()/_metrics_by_category()/
+        # _compute_extra_metrics() leen de verdad más abajo -- "case_id",
+        # "match" y "rationale" NO se guardan aquí porque nada los vuelve a
+        # leer del dict (case_id/rationale ya se usan directamente de
+        # row/variables locales para el score de LangFuse de abajo; "match"
+        # también se recalcula desde expected/predicted, nunca desde este
+        # dict). Guardarlos sería código muerto.
         results.append(
             {
-                "case_id": case_id,
                 "category": cat,
                 "expected": expected,
                 "predicted": predicted,
-                "match": match,
-                "rationale": row.get("rationale", ""),
                 "tool_match": tool_match,
                 "contains_match": contains_match,
                 "cost_eur": cost_eur,
-                "total_tokens": total_tokens_case,
                 "latency_ms": latency_ms,
                 "llm_called": llm_called,
             }
