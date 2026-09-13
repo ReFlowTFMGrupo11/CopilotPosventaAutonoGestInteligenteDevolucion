@@ -1,9 +1,11 @@
 """Tests unitarios de backend/services/pricing.py.
 
-Código puro (sin I/O, sin red) -- el candidato más barato y de mayor valor
-para cerrar el hueco de cobertura detectado en tests/qa/*: la aritmética
-de coste que alimenta la pestaña de Costes (frontend/pages/2_Costes.py,
-vía usage_service.py) no tenía ningún test dedicado.
+Depende de Settings (backend/config.py) para los overrides de precio
+(LLM_PRICES_JSON) y tipo de cambio (USD_TO_EUR_RATE) -- ver
+docs/REMAINING_TASKS.md §2, paso 2. get_settings() está cacheado con
+@lru_cache: sin limpiar la cache antes/después de cada test que cambie
+estas env vars, el override de monkeypatch no tendría ningún efecto (mismo
+patrón que tests/unit/test_llm_factory.py).
 
 Usa monkeypatch (no os.environ directo) para que cada test quede aislado
 sin ensuciar variables de entorno entre tests.
@@ -11,47 +13,49 @@ sin ensuciar variables de entorno entre tests.
 
 import pytest
 
+from backend.config import get_settings
 from backend.services import pricing
 
 
-class TestEnvKey:
-    def test_normaliza_guiones_a_guion_bajo(self):
-        assert pricing._env_key("gpt-5-mini") == "GPT_5_MINI"
-
-    def test_normaliza_puntos_a_guion_bajo(self):
-        assert pricing._env_key("gpt-4.1") == "GPT_4_1"
-
-    def test_pone_en_mayusculas(self):
-        assert pricing._env_key("gpt-5-nano") == "GPT_5_NANO"
+@pytest.fixture(autouse=True)
+def _clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 class TestPricePerMillionUsd:
-    def test_modelo_conocido_devuelve_precio_por_defecto(self):
+    def test_modelo_conocido_devuelve_precio_por_defecto(self, monkeypatch):
+        monkeypatch.delenv("LLM_PRICES_JSON", raising=False)
         assert pricing.get_price_per_million_usd("gpt-5-mini") == (0.25, 2.00)
         assert pricing.get_price_per_million_usd("gpt-5-nano") == (0.05, 0.40)
 
-    def test_modelo_desconocido_sin_env_devuelve_none(self, monkeypatch):
-        monkeypatch.delenv("LLM_PRICE_GPT_9_ULTRA_INPUT_PER_1M", raising=False)
-        monkeypatch.delenv("LLM_PRICE_GPT_9_ULTRA_OUTPUT_PER_1M", raising=False)
+    def test_modelo_desconocido_sin_override_devuelve_none(self, monkeypatch):
+        monkeypatch.delenv("LLM_PRICES_JSON", raising=False)
         assert pricing.get_price_per_million_usd("gpt-9-ultra") is None
 
-    def test_env_var_sobreescribe_precio_de_modelo_conocido(self, monkeypatch):
-        monkeypatch.setenv("LLM_PRICE_GPT_5_MINI_INPUT_PER_1M", "1.5")
-        monkeypatch.setenv("LLM_PRICE_GPT_5_MINI_OUTPUT_PER_1M", "3.0")
+    def test_llm_prices_json_sobreescribe_precio_de_modelo_conocido(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv("LLM_PRICES_JSON", '{"gpt-5-mini": [1.5, 3.0]}')
         assert pricing.get_price_per_million_usd("gpt-5-mini") == (1.5, 3.0)
 
-    def test_env_var_da_de_alta_modelo_no_listado(self, monkeypatch):
-        monkeypatch.setenv("LLM_PRICE_GPT_9_ULTRA_INPUT_PER_1M", "10.0")
-        monkeypatch.setenv("LLM_PRICE_GPT_9_ULTRA_OUTPUT_PER_1M", "20.0")
+    def test_llm_prices_json_da_de_alta_modelo_no_listado(self, monkeypatch):
+        monkeypatch.setenv("LLM_PRICES_JSON", '{"gpt-9-ultra": [10.0, 20.0]}')
         assert pricing.get_price_per_million_usd("gpt-9-ultra") == (10.0, 20.0)
 
-    def test_solo_una_env_var_fijada_cae_al_default_no_falla(self, monkeypatch):
-        """Documenta el comportamiento real: deben fijarse las DOS env vars o
-        ninguna -- fijar solo una no es un error, simplemente se ignora y se
-        usa el default (o None si el modelo no tiene default)."""
-        monkeypatch.setenv("LLM_PRICE_GPT_5_MINI_INPUT_PER_1M", "1.5")
-        monkeypatch.delenv("LLM_PRICE_GPT_5_MINI_OUTPUT_PER_1M", raising=False)
-        assert pricing.get_price_per_million_usd("gpt-5-mini") == (0.25, 2.00)
+    def test_llm_prices_json_puede_traer_varios_modelos_a_la_vez(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv(
+            "LLM_PRICES_JSON",
+            '{"gpt-5-mini": [1.5, 3.0], "gpt-9-ultra": [10.0, 20.0]}',
+        )
+        assert pricing.get_price_per_million_usd("gpt-5-mini") == (1.5, 3.0)
+        assert pricing.get_price_per_million_usd("gpt-9-ultra") == (10.0, 20.0)
+        # Un modelo con default y sin override en el JSON sigue cayendo al
+        # default -- el override es por modelo, no sustituye todo el dict.
+        assert pricing.get_price_per_million_usd("gpt-5-nano") == (0.05, 0.40)
 
 
 class TestUsdToEurRate:
@@ -66,8 +70,7 @@ class TestUsdToEurRate:
 
 class TestEstimateCostEur:
     def test_modelo_desconocido_devuelve_none(self, monkeypatch):
-        monkeypatch.delenv("LLM_PRICE_GPT_9_ULTRA_INPUT_PER_1M", raising=False)
-        monkeypatch.delenv("LLM_PRICE_GPT_9_ULTRA_OUTPUT_PER_1M", raising=False)
+        monkeypatch.delenv("LLM_PRICES_JSON", raising=False)
         assert pricing.estimate_cost_eur("gpt-9-ultra", 1000, 500) is None
 
     def test_cero_tokens_devuelve_cero(self, monkeypatch):
@@ -99,3 +102,37 @@ class TestEstimateCostEur:
         cost = pricing.estimate_cost_eur("gpt-5-nano", 0, 500_000)
         # 0.5M tokens de salida * 0.40$/1M = 0.20 USD
         assert cost == pytest.approx(0.20)
+
+
+class TestConfiguredModelsMissingPrice:
+    """`Settings` (modelo por nodo) y `pricing.py` (precio por modelo) son
+    dos fuentes de verdad independientes -- estos tests cubren la validación
+    que las cruza (ver docstring de `configured_models_missing_price`).
+    El fixture `_clear_settings_cache` ya limpia la cache antes/después de
+    cada test; aquí solo hace falta fijar las env vars."""
+
+    def test_configuracion_por_defecto_no_tiene_modelos_sin_precio(
+        self, monkeypatch
+    ):
+        """Los tres nodos caen a "gpt-5-mini" por defecto (ver config.py),
+        que sí tiene precio en _DEFAULT_PRICES_USD_PER_MILLION."""
+        monkeypatch.delenv("TRIAGE_MODEL", raising=False)
+        monkeypatch.delenv("EVALUATOR_MODEL", raising=False)
+        monkeypatch.delenv("RESOLVER_MODEL", raising=False)
+        monkeypatch.delenv("LLM_PRICES_JSON", raising=False)
+
+        assert pricing.configured_models_missing_price() == []
+
+    def test_detecta_un_modelo_configurado_sin_precio_conocido(self, monkeypatch):
+        monkeypatch.setenv("TRIAGE_MODEL", "gpt-9-ultra")
+        monkeypatch.delenv("LLM_PRICES_JSON", raising=False)
+
+        assert pricing.configured_models_missing_price() == ["gpt-9-ultra"]
+
+    def test_un_override_en_llm_prices_json_cuenta_como_precio_conocido(
+        self, monkeypatch
+    ):
+        monkeypatch.setenv("TRIAGE_MODEL", "gpt-9-ultra")
+        monkeypatch.setenv("LLM_PRICES_JSON", '{"gpt-9-ultra": [10.0, 20.0]}')
+
+        assert pricing.configured_models_missing_price() == []

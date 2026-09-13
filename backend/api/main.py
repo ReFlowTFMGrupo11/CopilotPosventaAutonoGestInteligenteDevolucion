@@ -39,6 +39,7 @@ from fastapi.responses import JSONResponse
 
 from backend.agents.graph import get_checkpointer_status, get_return_graph
 from backend.api.routers import admin, chat, usage
+from backend.services import pricing
 from backend.services.observability import flush as langfuse_flush, get_langfuse
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,19 @@ async def lifespan(app: FastAPI):
     lf = get_langfuse()
     if lf:
         lf.create_event(name="app_startup", metadata={"version": "0.1.0"})
+    # Avisar pronto si algún TRIAGE_MODEL/EVALUATOR_MODEL/RESOLVER_MODEL
+    # configurado no tiene precio conocido en pricing.py: sin esto, el
+    # síntoma solo aparece más tarde como "coste incompleto" silencioso en
+    # el dashboard (ver pricing.configured_models_missing_price()).
+    missing_prices = pricing.configured_models_missing_price()
+    if missing_prices:
+        logger.warning(
+            "Modelo(s) configurado(s) sin precio conocido en pricing.py: %s. "
+            "El dashboard de costes los marcará como 'coste incompleto'. "
+            "Añádelos a LLM_PRICES_JSON (ver backend/config.py) o a "
+            "_DEFAULT_PRICES_USD_PER_MILLION en pricing.py.",
+            ", ".join(missing_prices),
+        )
     yield
     # Shutdown: vaciar el buffer de LangFuse antes de cerrar
     langfuse_flush()
