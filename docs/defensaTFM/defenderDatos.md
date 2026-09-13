@@ -238,7 +238,7 @@ y ahora se sabe exactamente por qué.
 
 ---
 
-## 7. ¿Por qué no está conectado a CI (todavía)?
+## 7. Conexión a CI — ya resuelto
 
 `evaluate_evaluator_agent.py` está **diseñado** para funcionar como gate de CI: en modo `--dry-run`
 (sin LLM, sin red) devuelve un exit code según la accuracy obtenida:
@@ -247,12 +247,11 @@ y ahora se sabe exactamente por qué.
 sys.exit(0 if accuracy >= 0.70 else 1)   # evaluate_evaluator_agent.py
 ```
 
-Pero un hallazgo relevante para la defensa: **no existe ningún pipeline de CI en el
-repositorio** (no hay `.github/workflows/`, ni ningún otro sistema de CI configurado). El
-script está listo — el problema no es de código, es que no hay ningún sitio al que
-conectarlo todavía. Es un paso deliberadamente pospuesto, no un olvido: antes de
-automatizarlo había que corregir primero la fidelidad del input (§5), porque conectar un
-examen mal planteado a CI solo automatiza una señal poco fiable.
+*(Corrección: una versión anterior de este documento decía "no existe ningún pipeline de
+CI en el repositorio". Ya no es así — `.github/workflows/ci.yml` existe y el job
+`qa-golden-dataset-dry-run` ejecuta exactamente este script en `--dry-run` en cada push,
+como regression gate sobre `policy_rules.py`. Se corrigió primero la fidelidad del input
+(§5) antes de conectarlo, tal como razonaba esta sección originalmente.)*
 
 ---
 
@@ -304,6 +303,23 @@ un ajuste, y afecta solo al 1.7% de los 480 casos. Se decidió documentar el tec
 accuracy que esto implica (~98.3%, no 100%) en vez de ampliar el alcance del proyecto
 para cerrarlo.
 
+### Objeción: "¿Por qué no usar otro LLM como juez (LLM-as-judge) para evaluar al agente?"
+
+Decisión consciente, no un hueco por descuido. Las `expected_label` del golden dataset
+salen de `classify_case()` — reglas Python deterministas — precisamente para tener un
+*ground truth* reproducible byte a byte (mismo `SEED`, mismo dataset, siempre). Un
+LLM-juez introduciría no-determinismo justo en la pieza que se usa como referencia para
+medir al agente evaluado: si el juez y el agente comparten el mismo sesgo de un modelo de
+la misma familia, la evaluación podría "aprobar" un error compartido en vez de detectarlo
+— el mismo riesgo que ya se reconoce arriba (§8, primera objeción) para las reglas
+compartidas entre `classify_case()` y `policy_rules.py`, pero peor: ahí al menos las dos
+implementaciones son independientes y deterministas.
+
+De las 6 categorías habituales en una tabla de métricas de evaluación, `evaluate_evaluator_agent.py`
+cubre 5 (task success, tool accuracy, contains, costo, latencia — ver
+`tests/qa/golden/README.md` para el detalle exacto de cómo se mide cada una); LLM-as-judge
+es la única deliberadamente fuera, por el motivo de arriba.
+
 ---
 
 ## 9. Resumen para la presentación
@@ -319,4 +335,9 @@ para cerrarlo.
 > Langfuse, para comparar accuracy entre versiones de prompt o modelo con trazabilidad
 > completa. Durante el desarrollo detectamos y corregimos un problema real de fidelidad
 > del propio dataset — el CSV no exportaba la condición del artículo que sus etiquetas
-> usaban para calcularse — antes de considerar conectar la evaluación a un pipeline de CI."
+> usaban para calcularse — antes de conectar la evaluación local como gate de CI
+> (`--dry-run`, en cada push) y de ampliarla más allá de la accuracy de la etiqueta:
+> también mide si el agente llama a la búsqueda RAG solo cuando debería, si su
+> justificación menciona el motivo real de un rechazo por plazo, y su coste/latencia por
+> caso — todo salvo LLM-as-judge, descartado a propósito para no introducir
+> no-determinismo en la referencia con la que se mide al propio agente."

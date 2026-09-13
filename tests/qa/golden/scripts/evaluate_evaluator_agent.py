@@ -29,6 +29,48 @@ para validar que el golden dataset es internamente consistente.  Ideal para CI.
 
 Requisitos (solo para el modo real):
     OPENAI_API_KEY en .env
+
+## Métricas de evaluación (ver docs/defensaTFM/defenderDatos.md)
+
+De las 6 categorías de la tabla de evaluación del TFM, este script cubre:
+
+- **Task success**: sí (accuracy/precision/recall/F1 por clase, la métrica
+  original de este script).
+- **Tool accuracy**: sí, `_expected_tool_called()` — evaluator_agent solo
+  debería llamar a `search_return_policy()` (Fase 2, RAG narrativo) cuando
+  el pre-check determinista (Fase 1) NO resuelve el caso él solo, es decir,
+  cuando `expected_label != "invalid"` (ver docstring de `evaluator_agent`
+  en backend/agents/nodes/evaluator.py). No hace falta una columna
+  `expected_tool` nueva en el CSV: se deriva de `expected_label`, que ya
+  sale de la misma lógica de negocio (`classify_case()` en
+  `generate_dataset.py` replica `deterministic_check()`).
+- **Contains**: sí, pero deliberadamente acotado — `_expected_keywords()`
+  solo comprueba la palabra "plazo" en `eligibility_reason` para casos
+  `invalid` por fuera de plazo (Fase 1, texto 100% determinista de
+  `policy_rules.py`, sin LLM de por medio). NO se comprueban palabras para
+  higiene/condición (redacción más variable, check frágil) ni para casos
+  `human_review`/`valid` que sí pasan por el LLM (Fase 2): ahí
+  `eligibility_reason` es razonamiento libre sobre elegibilidad de
+  política, no una plantilla fija sobre el motivo de HITL (importe/cliente
+  frecuente) — el LLM nunca recibe esos umbrales como instrucción
+  explícita, así que comprobarlos ahí daría falsos negativos por diseño
+  del prompt, no por un fallo real del agente.
+- **Costo**/**Latencia**: sí, por caso — se mockea
+  `usage_service.log_llm_usage()` (nunca escribe en la BD real: mismo
+  motivo por el que se mockean `search_return_policy`/`get_policy_info`,
+  evitar efectos secundarios reales en una evaluación) para capturar
+  tokens/modelo de cada llamada real al LLM y calcular su coste con
+  `pricing.py`; la latencia mide el `evaluator_agent()` completo por caso
+  (incluye el mock de RAG, que es ~instantáneo, así que en la práctica es
+  la latencia real del LLM).
+- **LLM-as-judge**: decisión consciente de NO implementarlo. Las
+  `expected_label` del golden dataset salen de `classify_case()` — reglas
+  Python deterministas, no el juicio de otro LLM — precisamente para tener
+  un "ground truth" reproducible y auditable byte a byte (dos ejecuciones
+  del generador con el mismo `SEED` dan el mismo dataset). Introducir un
+  LLM-juez añadiría no-determinismo justo en la pieza que se usa como
+  referencia para medir al LLM evaluado — ver docs/defensaTFM/
+  defenderDatos.md.
 """
 
 from __future__ import annotations
@@ -40,6 +82,7 @@ import json
 import logging
 import os
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,6 +92,8 @@ from unittest.mock import AsyncMock, patch
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
+
+from backend.services import pricing  # noqa: E402 -- tras load_dotenv, ver Settings
 
 # ── Rutas ──────────────────────────────────────────────────────────────────
 # parents[4]: scripts/ -> golden/ -> qa/ -> tests/ -> repo root
@@ -200,6 +245,12 @@ def _build_state(row: dict) -> dict[str, Any]:
         },
         "reason": f"Motivo de evaluación: {row['reason_category']}",
         "reason_category": row["reason_category"],
+        # Solo para que el guard de usage_tracking.py::_log_usage() ("sin
+        # thread_id no hay sesión a la que atribuir el gasto") no descarte
+        # la llamada -- log_llm_usage() está mockeado más abajo (ver
+        # run_evaluation), nunca escribe en la BD real. Necesario para
+        # medir Costo/Latencia por caso (ver docstring del módulo).
+        "thread_id": f"eval-{row['case_id']}",
         "items_to_return": [
             {
                 "order_item_id": order_item_id,
@@ -236,6 +287,65 @@ def _deterministic_label(row: dict) -> str:
     if frequent:
         return "human_review"
     return "valid"
+
+
+def _expected_tool_called(row: dict) -> bool:
+    """Si evaluator_agent debería llamar a ``search_return_policy()`` (Fase
+    2, RAG narrativo) para este caso.
+
+    Ver el docstring de ``evaluator_agent`` (backend/agents/nodes/evaluator.py):
+    el pre-check determinista (Fase 1, ``get_policy_info`` + ``deterministic_check()``)
+    resuelve el caso ENTERO sin RAG cuando el veredicto es "invalid" — ningún
+    contexto adicional cambiaría ese veto. Solo cuando el veredicto queda en
+    zona gris ("valid"/"human_review") el caso pasa a la Fase 2 y llama a
+    ``search_return_policy()``.
+
+    No hace falta una columna ``expected_tool`` nueva en el CSV:
+    ``expected_label`` ya sale de ``classify_case()`` (generate_dataset.py),
+    que replica las mismas reglas de negocio que ``deterministic_check()``
+    (policy_rules.py) — por eso "invalid" en el CSV predice de forma fiable
+    "sin llamada RAG" en el agente real.
+    """
+    return row["expected_label"] != "invalid"
+
+
+def _expected_keywords(row: dict) -> list[str]:
+    """Palabra clave que DEBERÍA aparecer en el ``eligibility_reason`` real
+    si el caso se decide por plazo, o lista vacía si no aplica ningún check.
+
+    Deliberadamente acotado: solo cubre casos "invalid" resueltos en la
+    Fase 1 (pre-check determinista, sin LLM) cuyo motivo es el plazo —
+    ``rule_deadline``/``rule_deadline_borderline`` (policy_rules.py) usan
+    literalmente la palabra "plazo" en su mensaje, así que es un check
+    robusto contra código propio y estable.
+
+    NO se comprueban palabras para higiene/condición (la redacción de
+    ``rule_hygiene``/``rule_condition_allowed`` varía más entre casos, sería
+    un check más frágil que útil) ni para casos "valid"/"human_review" que
+    sí pasan por el LLM (Fase 2): ahí ``eligibility_reason`` es razonamiento
+    libre sobre elegibilidad de política. En particular, el motivo de HITL
+    por importe/cliente frecuente (``rule_high_amount``/
+    ``rule_frequent_returner``) NUNCA se expone al LLM como instrucción
+    explícita — solo decide ``needs_admin_approval`` a nivel de solicitud,
+    no el texto de ningún item — así que comprobar esas palabras ahí daría
+    falsos negativos por diseño del prompt, no por un fallo real del agente.
+    """
+    if row["expected_label"] != "invalid":
+        return []
+    days = int(row["days_since_delivery"])
+    max_days = int(row["max_return_days"])
+    if days > max_days:
+        return ["plazo"]
+    return []
+
+
+def _first_item_reason(result: dict[str, Any]) -> str:
+    """``eligibility_reason`` del primer item (casos single-item del CSV),
+    o cadena vacía si no hay ninguno."""
+    items = result.get("items_eligibility") or []
+    if not items:
+        return ""
+    return items[0].get("eligibility_reason") or ""
 
 
 def _result_to_label(result: dict[str, Any]) -> str:
@@ -330,17 +440,60 @@ def _metrics_by_category(results: list[dict]) -> dict[str, dict]:
     return {cat: _compute_metrics(rows) for cat, rows in sorted(by_cat.items())}
 
 
+def _compute_extra_metrics(results: list[dict]) -> dict:
+    """Tool accuracy, contains, costo y latencia agregados (ver docstring
+    del módulo). Todo a None/0 en modo --dry-run, donde no se llama a
+    evaluator_agent ni a los mocks -- ninguno de estos campos tiene sentido
+    sin una invocación real.
+
+    ``*_n`` documenta explícitamente el denominador de cada ratio: ni
+    tool_accuracy ni contains_accuracy se calculan sobre los 480 casos --
+    solo sobre el subconjunto con una expectativa bien definida (ver
+    ``_expected_tool_called``/``_expected_keywords``), y ocultar ese
+    denominador daría una falsa sensación de cobertura total.
+    """
+    tool_checked = [r["tool_match"] for r in results if r.get("tool_match") is not None]
+    contains_checked = [
+        r["contains_match"] for r in results if r.get("contains_match") is not None
+    ]
+    latencies = [r["latency_ms"] for r in results if r.get("latency_ms") is not None]
+    llm_calls = sum(1 for r in results if r.get("llm_called"))
+    total_cost_eur = sum(r.get("cost_eur") or 0.0 for r in results)
+
+    return {
+        "tool_accuracy": (
+            (sum(tool_checked) / len(tool_checked)) if tool_checked else None
+        ),
+        "tool_accuracy_n": len(tool_checked),
+        "contains_accuracy": (
+            (sum(contains_checked) / len(contains_checked))
+            if contains_checked
+            else None
+        ),
+        "contains_accuracy_n": len(contains_checked),
+        "total_cost_eur": round(total_cost_eur, 6),
+        "llm_calls": llm_calls,
+        "avg_latency_ms": round(sum(latencies) / len(latencies)) if latencies else None,
+    }
+
+
 # ── Formatters ─────────────────────────────────────────────────────────────
 
 
 def _render_markdown(
-    overall: dict, by_cat: dict[str, dict], timestamp: str, mode: str
+    overall: dict,
+    by_cat: dict[str, dict],
+    extra: dict,
+    timestamp: str,
+    mode: str,
 ) -> str:
     """Renderiza el informe de evaluación (métricas globales y por categoría) como tabla Markdown.
 
     Args:
         overall: Métricas globales, tal como las devuelve ``_compute_metrics``.
         by_cat: Métricas por categoría, tal como las devuelve ``_metrics_by_category``.
+        extra: Tool accuracy/contains/costo/latencia, tal como las devuelve
+            ``_compute_extra_metrics`` (todo a None/0 en --dry-run).
         timestamp: Marca de tiempo a mostrar en la cabecera del informe.
         mode: Modo de ejecución ("dry-run" o "llm") a mostrar en la cabecera.
     """
@@ -375,6 +528,32 @@ def _render_markdown(
         lines.append(
             f"| {cat} | {m['total']} | {m['accuracy']:.1%} | {m['macro']['f1']:.3f} |"
         )
+
+    lines += [
+        "",
+        "## Métricas adicionales (tool accuracy / contains / costo / latencia)",
+        "",
+    ]
+    if mode == "dry-run":
+        lines.append(
+            "_No aplica en --dry-run: no se llama a evaluator_agent ni a los "
+            "mocks (ver docstring del módulo)._"
+        )
+    else:
+        tool_acc = extra["tool_accuracy"]
+        contains_acc = extra["contains_accuracy"]
+        avg_latency = extra["avg_latency_ms"]
+        tool_acc_str = f"{tool_acc:.1%}" if tool_acc is not None else "—"
+        contains_acc_str = f"{contains_acc:.1%}" if contains_acc is not None else "—"
+        avg_latency_str = f"{avg_latency} ms" if avg_latency is not None else "—"
+        lines += [
+            "| Métrica | Valor | Casos evaluados |",
+            "|---------|-------|------------------|",
+            f"| Tool accuracy | {tool_acc_str} | {extra['tool_accuracy_n']} |",
+            f"| Contains (plazo) | {contains_acc_str} | {extra['contains_accuracy_n']} |",
+            f"| Coste total (~) | {extra['total_cost_eur']:.6f} € | {extra['llm_calls']} llamada(s) al LLM |",
+            f"| Latencia media por caso | {avg_latency_str} | {overall['total']} |",
+        ]
     return "\n".join(lines) + "\n"
 
 
@@ -427,6 +606,13 @@ async def run_evaluation(
         cat = row["category"]
         max_days = int(row["max_return_days"])
 
+        tool_match: bool | None = None
+        contains_match: bool | None = None
+        cost_eur: float | None = None
+        total_tokens_case = 0
+        latency_ms: int | None = None
+        llm_called = False
+
         if dry_run:
             predicted = _deterministic_label(row)
         else:
@@ -434,16 +620,29 @@ async def run_evaluation(
             allowed_conditions = row["allowed_conditions"].split("|")
             mock_policy = _build_mock_policy(cat, max_days, allowed_conditions)
 
+            tool_called_flag = {"value": False}
+
             async def _mock_search(
                 query: str, category: str = "", thread_id: str = ""
             ) -> dict:  # noqa: E501
                 """Sustituye a search_return_policy() devolviendo la policy mockeada de este caso."""
+                tool_called_flag["value"] = True
                 return mock_policy
 
             async def _mock_policy_info(category: str) -> dict:
                 """Sustituye a get_policy_info() (pre-check determinista, ver evaluator.py)."""
                 return mock_policy.get("policy_info") or {}
 
+            # Captura tokens/modelo de cada llamada real al LLM sin escribir
+            # en la BD real -- mismo motivo que mockear las tools de RAG:
+            # una evaluación no debe tener efectos secundarios reales (ver
+            # docstring del módulo, sección Costo/Latencia).
+            captured_usage: list[dict[str, Any]] = []
+
+            async def _fake_log_llm_usage(**kwargs: Any) -> None:
+                captured_usage.append(kwargs)
+
+            start = time.perf_counter()
             try:
                 with patch(
                     "backend.agents.nodes.evaluator.get_policy_info",
@@ -451,10 +650,38 @@ async def run_evaluation(
                 ), patch(
                     "backend.agents.nodes.evaluator.search_return_policy",
                     side_effect=_mock_search,
+                ), patch(
+                    "backend.agents.usage_tracking.usage_service.log_llm_usage",
+                    new=AsyncMock(side_effect=_fake_log_llm_usage),
                 ):
                     agent_result = await evaluator_agent(state)
+                latency_ms = int((time.perf_counter() - start) * 1000)
                 predicted = _result_to_label(agent_result)
+
+                tool_match = tool_called_flag["value"] == _expected_tool_called(row)
+
+                expected_kw = _expected_keywords(row)
+                if expected_kw:
+                    reason_text = _first_item_reason(agent_result).lower()
+                    contains_match = all(kw in reason_text for kw in expected_kw)
+
+                llm_called = bool(captured_usage)
+                total_tokens_case = sum(
+                    u.get("total_tokens", 0) for u in captured_usage
+                )
+                cost_eur = sum(
+                    (
+                        pricing.estimate_cost_eur(
+                            u.get("model", ""),
+                            u.get("input_tokens", 0),
+                            u.get("output_tokens", 0),
+                        )
+                        or 0.0
+                    )
+                    for u in captured_usage
+                )
             except Exception as exc:
+                latency_ms = int((time.perf_counter() - start) * 1000)
                 logger.warning("Caso %s falló: %s", case_id, exc)
                 predicted = "error"
 
@@ -467,6 +694,12 @@ async def run_evaluation(
                 "predicted": predicted,
                 "match": match,
                 "rationale": row.get("rationale", ""),
+                "tool_match": tool_match,
+                "contains_match": contains_match,
+                "cost_eur": cost_eur,
+                "total_tokens": total_tokens_case,
+                "latency_ms": latency_ms,
+                "llm_called": llm_called,
             }
         )
 
@@ -510,6 +743,7 @@ async def run_evaluation(
 
     overall = _compute_metrics(results)
     by_cat = _metrics_by_category(results)
+    extra = _compute_extra_metrics(results)
     mismatches = [r for r in results if not r["match"]]
 
     report = {
@@ -517,6 +751,7 @@ async def run_evaluation(
         "mode": "dry-run" if dry_run else "llm",
         "overall": overall,
         "by_category": by_cat,
+        "extra_metrics": extra,
         "mismatches": mismatches[:50],
     }
 
@@ -550,7 +785,7 @@ async def run_evaluation(
         json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
     )
     md_path.write_text(
-        _render_markdown(overall, by_cat, ts, report["mode"]), encoding="utf-8"
+        _render_markdown(overall, by_cat, extra, ts, report["mode"]), encoding="utf-8"
     )
 
     logger.info("─" * 60)
@@ -559,6 +794,30 @@ async def run_evaluation(
         overall["accuracy"] * 100,
         overall["macro"]["f1"],
     )
+    if not dry_run:
+        logger.info(
+            "Tool accuracy: %s (n=%d)  |  Contains: %s (n=%d)  |  "
+            "Coste total: %.6f€ (%d llamadas al LLM)  |  Latencia media: %s",
+            (
+                f"{extra['tool_accuracy']:.1%}"
+                if extra["tool_accuracy"] is not None
+                else "—"
+            ),
+            extra["tool_accuracy_n"],
+            (
+                f"{extra['contains_accuracy']:.1%}"
+                if extra["contains_accuracy"] is not None
+                else "—"
+            ),
+            extra["contains_accuracy_n"],
+            extra["total_cost_eur"],
+            extra["llm_calls"],
+            (
+                f"{extra['avg_latency_ms']} ms"
+                if extra["avg_latency_ms"] is not None
+                else "—"
+            ),
+        )
     logger.info("Informe JSON → %s", json_path)
     logger.info("Informe MD  → %s", md_path)
 
