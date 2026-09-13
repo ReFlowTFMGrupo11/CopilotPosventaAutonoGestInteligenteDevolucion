@@ -66,6 +66,25 @@ async def lifespan(app: FastAPI):
             "_DEFAULT_PRICES_USD_PER_MILLION en pricing.py.",
             ", ".join(missing_prices),
         )
+        # El log de arriba es la señal garantizada (funciona siempre, sin
+        # depender de que Langfuse esté configurado -- mismo motivo por el
+        # que existe el dashboard de costes propio, ver
+        # defenderDashboardCostes.md §4). Este evento es un canal EXTRA,
+        # no un sustituto: si Langfuse está configurado, queda visible
+        # también ahí (mismo patrón que checkpointer_degraded en graph.py).
+        if lf:
+            try:
+                lf.create_event(
+                    name="pricing_models_missing_price",
+                    level="WARNING",
+                    metadata={"models": missing_prices},
+                )
+            except Exception as exc:  # observabilidad nunca rompe el arranque
+                logger.warning(
+                    "No se pudo registrar pricing_models_missing_price en "
+                    "LangFuse: %s",
+                    exc,
+                )
     yield
     # Shutdown: vaciar el buffer de LangFuse antes de cerrar
     langfuse_flush()
