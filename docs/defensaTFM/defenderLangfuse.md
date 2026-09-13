@@ -297,13 +297,20 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
 - `score_error(thread_id, "timeout"|"exception")` (`observability.py`,
   llamado desde `chat.py`) marca en LangFuse cuándo un *turno completo*
   terminó en error — filtrable/contable por sesión en la UI de Scores.
-- **Gap real, no ese**: el error se registra a nivel de *turno*, no de
-  *tool*. Si `create_return_record`/`generate_shipping_label`/etc. falla,
-  la excepción sube y en el mejor caso marca el turno como "exception" —
-  no queda registro de *qué tool* falló. "¿Qué tools fallan más?" no tiene
-  respuesta hoy, ni en LangFuse ni en ningún otro sitio — es una mejora
-  identificada, no implementada (instrumentar `call_tool()` en
-  `mcp_client.py`, el único punto de paso de las 10 tools MCP).
+- **Gap ya cerrado**: antes, el error se registraba solo a nivel de
+  *turno*, no de *tool* — si `create_return_record`/
+  `generate_shipping_label`/etc. fallaba, la excepción subía y en el mejor
+  caso marcaba el turno como "exception", sin registro de *qué tool*
+  falló. Ahora `call_tool()` (`mcp_client.py`, el único punto de paso de
+  las 10 tools MCP) envuelve la invocación real en try/except: registra
+  éxito/fallo y latencia en la tabla propia `mcp_tool_calls` (siempre
+  disponible, mismo criterio que el dashboard de coste, ver
+  `tool_call_service.py`) y, si hay `thread_id` y LangFuse está
+  configurado, también un score `tool_call` como canal extra
+  (`observability.score_tool_call`). "¿Qué tools fallan más?" se responde
+  agregando por tool (`tool_call_service.get_tool_call_error_rates()`,
+  expuesto en `GET /api/admin/observability` y en el panel de admin,
+  expander "🔧 Salud de tools MCP").
 - No hay retries instrumentados en las llamadas a LLM/MCP.
 
 ### Calidad y evaluación — la más fuerte de las cuatro

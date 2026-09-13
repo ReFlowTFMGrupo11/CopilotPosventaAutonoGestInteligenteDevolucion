@@ -10,6 +10,8 @@ romper el turno del cliente — ese guard vive en usage_tracking.py, no aquí.
 
 from __future__ import annotations
 
+from datetime import date
+
 from backend.db.supabase_client import get_supabase_client
 from backend.services import pricing
 
@@ -144,6 +146,82 @@ async def list_usage_sessions(limit: int = 100) -> list[dict]:
 
     result.sort(key=lambda s: s["last_seen"], reverse=True)
     return result[:limit]
+
+
+async def get_usage_timeseries(
+    *, since: date | None = None, until: date | None = None, limit: int = 5000
+) -> list[dict]:
+    """Serie temporal de coste/tokens/latencia por nodo, agregada por día.
+
+    Pensado para las gráficas de tendencia de `frontend/pages/2_Costes.py`
+    (analítica real -- coste/latencia/tokens por nodo en el tiempo -- en vez
+    de solo tablas planas de sesiones individuales).
+
+    Se agrega en Python por (fecha, nodo) en vez de una vista SQL con
+    `date_trunc`: mismo criterio que `list_usage_sessions()` -- el volumen
+    esperado no lo justifica y evita otra migración; además así el cálculo
+    de coste incompleto (ver más abajo) reutiliza la misma lógica que el
+    resto del módulo en vez de duplicarla en SQL.
+
+    Args:
+        since: fecha mínima (inclusive) de `created_at`, o sin filtro si es None.
+        until: fecha máxima (inclusive) de `created_at`, o sin filtro si es None.
+        limit: número máximo de filas de `llm_usage` a leer antes de agregar.
+
+    Returns:
+        Lista de dicts, uno por (fecha, nodo), ordenada por fecha y nodo:
+        `date` (YYYY-MM-DD), `node`, `requests`, `total_tokens`, `cost_eur`,
+        `cost_complete`, `avg_latency_ms`.
+    """
+    client = await get_supabase_client()
+    query = client.table("llm_usage").select(
+        "node, total_tokens, cost_eur, latency_ms, created_at"
+    )
+    if since is not None:
+        query = query.gte("created_at", since.isoformat())
+    if until is not None:
+        # until es inclusive: el día completo, hasta el final.
+        query = query.lte("created_at", f"{until.isoformat()}T23:59:59.999999")
+    resp = await query.order("created_at", desc=False).limit(limit).execute()
+    rows = resp.data or []
+
+    buckets: dict[tuple[str, str], dict] = {}
+    for row in rows:
+        bucket_date = (row.get("created_at") or "")[:10]  # YYYY-MM-DD
+        node = row.get("node") or "desconocido"
+        key = (bucket_date, node)
+        entry = buckets.setdefault(
+            key,
+            {
+                "date": bucket_date,
+                "node": node,
+                "requests": 0,
+                "total_tokens": 0,
+                "cost_eur": 0.0,
+                "cost_complete": True,
+                "latencies_ms": [],
+            },
+        )
+        entry["requests"] += 1
+        entry["total_tokens"] += row.get("total_tokens") or 0
+        entry["latencies_ms"].append(row.get("latency_ms") or 0)
+
+        row_cost = row.get("cost_eur")
+        if row_cost is None:
+            entry["cost_complete"] = False
+        else:
+            entry["cost_eur"] += row_cost
+
+    result = []
+    for entry in buckets.values():
+        latencies = entry.pop("latencies_ms")
+        entry["avg_latency_ms"] = (
+            round(sum(latencies) / len(latencies)) if latencies else 0
+        )
+        result.append(entry)
+
+    result.sort(key=lambda e: (e["date"], e["node"]))
+    return result
 
 
 async def get_usage_detail(thread_id: str) -> list[dict]:

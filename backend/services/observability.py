@@ -14,6 +14,10 @@ Expone estos helpers:
                                por cliente sin necesidad de un contador propio.
   - get_langfuse_links()         → URLs del dashboard para el panel de admin
                                (ver frontend/pages/1_Admin.py).
+  - score_tool_call()         → score categórico (éxito/error) por llamada a
+                               una tool MCP, canal extra junto a la tabla
+                               propia mcp_tool_calls (ver
+                               backend/services/tool_call_service.py).
 
 Todos devuelven None/deshabilitado si LANGFUSE_SECRET_KEY no está en el
 entorno, de modo que el sistema arranca sin errores aunque LangFuse no esté
@@ -334,6 +338,54 @@ def score_resolution(thread_id: str, resolution: str | None) -> None:
         )
     except Exception as exc:
         logger.warning("No se pudo registrar el score de LangFuse: %s", exc)
+
+
+def score_tool_call(
+    thread_id: str | None,
+    tool_name: str,
+    *,
+    success: bool,
+    error: str | None = None,
+) -> None:
+    """Anota en LangFuse el resultado de una llamada a una tool MCP.
+
+    Canal EXTRA junto a la tabla propia ``mcp_tool_calls`` (ver
+    ``backend/services/tool_call_service.py``), no un sustituto: la tabla es
+    la señal garantizada (funciona sin LangFuse configurado y con
+    ``thread_id`` ausente, que es el caso de varios wrappers de
+    ``mcp_client.py``). Este score solo se registra si hay `thread_id` (no
+    hay session a la que adjuntarlo si no) y si LangFuse está configurado --
+    mismo patrón que `score_error`/`score_rag_similarity`
+    (`create_score(session_id=thread_id, ...)`, no `score_current_trace()`,
+    ver el docstring de `score_rag_similarity` para el porqué).
+
+    El nombre de la tool va en `metadata` (no en el nombre del score, para
+    no crear un tipo de score distinto por cada una de las 10 tools): la UI
+    de LangFuse permite filtrar/agrupar scores por metadata.
+
+    No-op silencioso si no hay `thread_id`, LangFuse no está configurado o
+    falla la llamada -- es solo observabilidad, nunca debe poder romper el
+    turno del cliente ni enmascarar el resultado real de la tool (mismo
+    criterio que el resto de este módulo).
+    """
+    if not thread_id:
+        return
+    lf = get_langfuse()
+    if lf is None:
+        return
+    try:
+        lf.create_score(
+            name="tool_call",
+            value="success" if success else "error",
+            session_id=thread_id,
+            data_type="CATEGORICAL",
+            metadata={"tool": tool_name},
+            comment=error,
+        )
+    except Exception as exc:
+        logger.warning(
+            "No se pudo registrar el score de tool_call de LangFuse: %s", exc
+        )
 
 
 def _resolve_project_id() -> Optional[str]:

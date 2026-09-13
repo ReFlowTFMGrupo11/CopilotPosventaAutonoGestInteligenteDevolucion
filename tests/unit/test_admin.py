@@ -253,3 +253,32 @@ async def test_get_stats(async_client, mock_supabase):
     assert data["rejected"] == 1
     assert data["pending"] == 1
     assert data["approval_rate"] == 50.0
+
+
+@pytest.mark.asyncio
+async def test_get_observability_links(async_client):
+    """Verifica que incluye enlaces de LangFuse, estado del checkpointer y
+    error rate por tool (ver tool_call_service.get_tool_call_error_rates,
+    docs/defensaTFM/defenderLangfuse.md sobre por qué se agrega aquí en vez
+    de solo enlazar a LangFuse)."""
+    mock_error_rates = [
+        {
+            "tool_name": "generate_shipping_label",
+            "total": 10,
+            "errors": 2,
+            "error_rate": 0.2,
+            "avg_latency_ms": 350,
+        }
+    ]
+    with patch(
+        "backend.api.routers.admin.tool_call_service.get_tool_call_error_rates",
+        new=AsyncMock(return_value=mock_error_rates),
+    ):
+        async with async_client as client:
+            resp = await client.get("/api/admin/observability")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["tool_error_rates"] == mock_error_rates
+    assert "checkpointer" in data
+    assert "configured" in data  # de get_langfuse_links()

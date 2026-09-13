@@ -16,12 +16,14 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any
 
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
 from backend.config import get_settings
-from backend.services.observability import score_rag_similarity
+from backend.services import tool_call_service
+from backend.services.observability import score_rag_similarity, score_tool_call
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +99,84 @@ async def close_mcp_client() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _parse_tool_result(tool_name: str, result: Any) -> Any:
+    """Interpreta la respuesta cruda de una tool MCP.
+
+    MCP tool responses may come as raw JSON strings or content blocks.
+    Parse them to return a proper Python dict/list.
+
+    Raises:
+        RuntimeError: si la respuesta lleva el prefijo de error de MCP
+            ("Error executing tool") -- la tool SÍ se invocó, pero falló en
+            el lado del server.
+    """
+    if isinstance(result, str):
+        if result.startswith("Error executing tool"):
+            raise RuntimeError(f"MCP tool '{tool_name}' failed: {result}")
+        try:
+            return json.loads(result)
+        except (json.JSONDecodeError, ValueError):
+            return result
+    if isinstance(result, list) and result:
+        # Content block list — extract text from first block
+        first = result[0]
+        text = first.get("text", first) if isinstance(first, dict) else str(first)
+        if isinstance(text, str) and text.startswith("Error executing tool"):
+            raise RuntimeError(f"MCP tool '{tool_name}' failed: {text}")
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, ValueError, TypeError):
+            return result
+    return result
+
+
+async def _log_tool_call(
+    tool_name: str,
+    *,
+    success: bool,
+    latency_ms: int,
+    thread_id: str | None,
+    error: str | None,
+) -> None:
+    """Registra el resultado de una llamada a una tool MCP.
+
+    Tabla propia ``mcp_tool_calls`` (señal garantizada, ver
+    ``tool_call_service.py``) + score de LangFuse (canal extra, ver
+    ``score_tool_call``). Un fallo aquí NUNCA debe enmascarar el resultado
+    real de la tool -- se loguea y se sigue (mismo principio que
+    ``usage_tracking.py::_log_usage`` para el coste de LLM).
+    """
+    try:
+        await tool_call_service.log_tool_call(
+            tool_name=tool_name,
+            success=success,
+            latency_ms=latency_ms,
+            thread_id=thread_id,
+            error_message=error,
+        )
+    except Exception:
+        logger.warning(
+            "No se pudo registrar en mcp_tool_calls la llamada a la tool '%s'",
+            tool_name,
+            exc_info=True,
+        )
+    score_tool_call(thread_id, tool_name, success=success, error=error)
+
+
 async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
     """Llama a una tool MCP por nombre con los argumentos dados.
 
     Determina automáticamente qué server contiene la tool y solo
     conecta con ese server (no requiere que todos estén levantados).
+
+    Registra éxito/fallo y latencia de la invocación real (no de la
+    búsqueda de la tool en cache, que es un error de configuración/wiring
+    distinto) en ``mcp_tool_calls`` -- ver ``_log_tool_call``. `thread_id`
+    se extrae de forma oportunista de ``args["thread_id"]`` cuando está
+    presente (no todos los wrappers de este módulo lo reciben, ver
+    docstring de la migración de ``mcp_tool_calls``); sin él, la fila sigue
+    siendo útil para la agregación por tool, solo pierde la trazabilidad a
+    la sesión.
 
     Returns:
         El resultado ya parseado a ``dict``/``list`` si la respuesta MCP
@@ -123,30 +198,30 @@ async def call_tool(tool_name: str, args: dict[str, Any]) -> Any:
     if tool is None:
         raise ValueError(f"Tool '{tool_name}' no encontrada en server '{server_name}'.")
 
-    result = await tool.ainvoke(args)
-
-    # MCP tool responses may come as raw JSON strings or content blocks.
-    # Parse them to return a proper Python dict/list.
-    if isinstance(result, str):
-        # Check for error prefix
-        if result.startswith("Error executing tool"):
-            raise RuntimeError(f"MCP tool '{tool_name}' failed: {result}")
-        try:
-            return json.loads(result)
-        except (json.JSONDecodeError, ValueError):
-            return result
-    if isinstance(result, list) and result:
-        # Content block list — extract text from first block
-        first = result[0]
-        text = first.get("text", first) if isinstance(first, dict) else str(first)
-        # Check for error prefix
-        if isinstance(text, str) and text.startswith("Error executing tool"):
-            raise RuntimeError(f"MCP tool '{tool_name}' failed: {text}")
-        try:
-            return json.loads(text)
-        except (json.JSONDecodeError, ValueError, TypeError):
-            return result
-    return result
+    thread_id = args.get("thread_id") or None
+    start = time.perf_counter()
+    try:
+        result = await tool.ainvoke(args)
+        parsed = _parse_tool_result(tool_name, result)
+    except Exception as exc:
+        latency_ms = int((time.perf_counter() - start) * 1000)
+        await _log_tool_call(
+            tool_name,
+            success=False,
+            latency_ms=latency_ms,
+            thread_id=thread_id,
+            error=str(exc),
+        )
+        raise
+    latency_ms = int((time.perf_counter() - start) * 1000)
+    await _log_tool_call(
+        tool_name,
+        success=True,
+        latency_ms=latency_ms,
+        thread_id=thread_id,
+        error=None,
+    )
+    return parsed
 
 
 # ---------------------------------------------------------------------------

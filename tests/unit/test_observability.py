@@ -311,6 +311,58 @@ class TestScoreResolution:
         )
 
 
+class TestScoreToolCall:
+    def test_sin_thread_id_no_hace_nada(self):
+        with patch("backend.services.observability.get_langfuse") as mock_get:
+            observability.score_tool_call(None, "get_order_details", success=True)
+        mock_get.assert_not_called()
+
+    def test_sin_langfuse_configurado_no_hace_nada(self):
+        with patch("backend.services.observability.get_langfuse", return_value=None):
+            # No debe lanzar ninguna excepción.
+            observability.score_tool_call("thread-1", "get_order_details", success=True)
+
+    def test_exito_registra_value_success_con_el_tool_en_metadata(self):
+        fake_lf = MagicMock()
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
+            observability.score_tool_call("thread-1", "get_order_details", success=True)
+
+        fake_lf.create_score.assert_called_once_with(
+            name="tool_call",
+            value="success",
+            session_id="thread-1",
+            data_type="CATEGORICAL",
+            metadata={"tool": "get_order_details"},
+            comment=None,
+        )
+
+    def test_error_registra_value_error_con_el_mensaje_en_comment(self):
+        fake_lf = MagicMock()
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
+            observability.score_tool_call(
+                "thread-1",
+                "create_return_record",
+                success=False,
+                error="constraint violada",
+            )
+
+        fake_lf.create_score.assert_called_once_with(
+            name="tool_call",
+            value="error",
+            session_id="thread-1",
+            data_type="CATEGORICAL",
+            metadata={"tool": "create_return_record"},
+            comment="constraint violada",
+        )
+
+    def test_un_fallo_al_registrar_no_se_propaga(self):
+        fake_lf = MagicMock()
+        fake_lf.create_score.side_effect = Exception("LangFuse caído")
+        with patch("backend.services.observability.get_langfuse", return_value=fake_lf):
+            # No debe lanzar ninguna excepción.
+            observability.score_tool_call("thread-1", "get_order_details", success=True)
+
+
 class TestResolveProjectId:
     def test_usa_el_override_de_settings_sin_llamar_a_la_api(self):
         settings = _fake_settings(langfuse_project_id="proj-fijo")

@@ -67,6 +67,39 @@ with st.expander("💰 Monitorización de gasto (LangFuse)", expanded=False):
             "en el backend para enlazarlas directamente)."
         )
 
+# ── Salud de tools MCP (error rate por tool) ────────────────────────────
+#
+# Antes de esto, si create_return_record/generate_shipping_label/etc.
+# fallaba, la excepción subía y en el mejor caso marcaba el TURNO completo
+# como error (score "error" en LangFuse) -- no quedaba ningún registro de
+# QUÉ TOOL falló. "¿Qué tools fallan más?" no tenía respuesta en ningún
+# sitio (ver docs/defensaTFM/defenderLangfuse.md). Instrumentado en
+# backend/agents/infra/mcp_client.py::call_tool(), agregado aquí vía
+# tool_call_service.get_tool_call_error_rates() -- siempre disponible,
+# igual que el dashboard de costes, sin depender de LangFuse.
+tool_error_rates = links.get("tool_error_rates") or []
+with st.expander("🔧 Salud de tools MCP (error rate por tool)", expanded=False):
+    if not tool_error_rates:
+        st.caption("Todavía no hay llamadas a tools MCP registradas.")
+    else:
+        table = [
+            {
+                "Tool": entry["tool_name"],
+                "Peticiones": entry["total"],
+                "Errores": entry["errors"],
+                "% error": f"{entry['error_rate'] * 100:.1f}%",
+                "Latencia media": f"{entry['avg_latency_ms']} ms",
+            }
+            for entry in tool_error_rates
+        ]
+        st.dataframe(table, use_container_width=True, hide_index=True)
+        peores = [e for e in tool_error_rates if e["error_rate"] > 0]
+        if peores:
+            st.caption(
+                f"⚠️ {len(peores)} tool(s) con errores registrados en las "
+                "últimas 500 llamadas (ordenadas por % de error descendente)."
+            )
+
 
 def money(value) -> str:
     """Formatea un importe como euros con 2 decimales, o "—" si no es numérico."""

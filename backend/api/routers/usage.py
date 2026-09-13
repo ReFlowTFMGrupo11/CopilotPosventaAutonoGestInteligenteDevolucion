@@ -13,6 +13,8 @@ por sesión), solo cambia en qué fichero vive el código — la URL pública no
 cambia, así que ``frontend/lib/api.py`` no necesita ningún ajuste.
 """
 
+from datetime import date
+
 from fastapi import APIRouter
 
 from backend.services import usage_service
@@ -35,3 +37,12 @@ async def get_usage_session_detail(thread_id: str):
     """Detalle petición a petición (tokens/latencia) de una sesión concreta."""
     requests = await usage_service.get_usage_detail(thread_id)
     return {"thread_id": thread_id, "requests": requests, "count": len(requests)}
+
+
+@router.get("/usage/trends")
+async def get_usage_trends(since: date | None = None, until: date | None = None):
+    """Serie temporal de coste/tokens/latencia por nodo, para las gráficas
+    de tendencia de 2_Costes.py (analítica real, no solo tablas de
+    sesiones). `since`/`until` en formato YYYY-MM-DD, ambos opcionales."""
+    points = await usage_service.get_usage_timeseries(since=since, until=until)
+    return {"points": points, "count": len(points)}
