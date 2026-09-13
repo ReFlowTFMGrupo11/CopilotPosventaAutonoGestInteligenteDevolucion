@@ -185,3 +185,34 @@ en la sección "Services".
   parte lanzaría `KeyError` sin control, mientras que la primera está
   protegida. Inconsistencia dentro de la misma función, no solo entre
   funciones distintas.
+
+---
+
+## 7. [Guardarraíl — prioridad media] No hay un tope de coste/tokens que corte una conversación (solo se registra, no se limita)
+
+### El problema
+
+`llm_usage` (`supabase/migrations/014_create_llm_usage.sql`) registra
+tokens/coste por llamada (vía `usage_tracking.py`), y `usage_service.py` los
+expone en el dashboard de Costes (`defenderDashboardCostes.md`) — pero es
+**solo observabilidad**. Nada lee esa tabla para decidir cortar una sesión.
+Los únicos guardarraíles reales de "no dejar crecer sin límite" son
+estructurales, no de coste: `GRAPH_RECURSION_LIMIT` (ciclos por turno),
+`GRAPH_TURN_TIMEOUT_SECONDS`/`llm_timeout_seconds` (tiempo) y
+`MAX_CONVERSATION_TURNS` (turnos totales por `thread_id`). Ver el análisis
+completo, comparado contra el framework docente de "condiciones de
+terminación", en `docs/defensaTFM/defenderAgentes.md` §14.
+
+Mitigantes ya existentes que reducen el riesgo sin cerrarlo del todo:
+`max_history_messages=20` (recorta el historial que se manda al LLM de
+triaje en cada llamada) y que cada nodo hace como máximo 1 llamada LLM por
+turno (nunca un loop de tools que pueda disparar el gasto).
+
+### El fix
+
+Una vez esté congelado `cost_eur` por fila (punto 2 de este backlog), añadir
+en `chat.py` una comprobación análoga a
+`_conversation_turn_limit_reached()`: sumar `cost_eur`/`total_tokens` de
+`llm_usage` para el `thread_id` actual y cortar el turno (mismo patrón que
+`MAX_CONVERSATION_TURNS`) si supera un umbral configurable
+(`MAX_SESSION_COST_EUR` o `MAX_SESSION_TOKENS` en `Settings`).
