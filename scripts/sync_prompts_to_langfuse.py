@@ -55,16 +55,13 @@ from __future__ import annotations
 import argparse
 import logging
 
-from dotenv import load_dotenv
-
-load_dotenv(override=True)
-
-from backend.agents.nodes.evaluator import POLICY_SYSTEM_PROMPT  # noqa: E402
-from backend.agents.nodes.resolution import (  # noqa: E402
+from backend.agents.nodes.evaluator import POLICY_SYSTEM_PROMPT
+from backend.agents.nodes.resolution import (
     REJECTION_SYSTEM_PROMPT,
     RESOLUTION_SYSTEM_PROMPT,
 )
-from backend.agents.nodes.triage import TRIAGE_SYSTEM_PROMPT  # noqa: E402
+from backend.agents.nodes.triage import TRIAGE_SYSTEM_PROMPT
+from backend.services.observability import get_langfuse
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -97,10 +94,20 @@ def sync(dry_run: bool = False) -> dict[str, str]:
 
     Returns:
         Dict ``{nombre: "sin cambios"|"creado"|"actualizado"}``.
-    """
-    from langfuse import Langfuse
 
-    lf = Langfuse()
+    Raises:
+        RuntimeError: si Langfuse no está configurado (faltan
+            ``LANGFUSE_PUBLIC_KEY``/``LANGFUSE_SECRET_KEY``) -- a diferencia
+            del resto del proyecto (fail-open: la app sigue funcionando sin
+            Langfuse), este script no tiene ningún propósito sin él, así
+            que falla explícito en vez de simular un resultado.
+    """
+    lf = get_langfuse()
+    if lf is None:
+        raise RuntimeError(
+            "Langfuse no está configurado (faltan LANGFUSE_PUBLIC_KEY/"
+            "LANGFUSE_SECRET_KEY en .env) -- nada que sincronizar."
+        )
     result: dict[str, str] = {}
 
     for name, local_text in PROMPTS.items():
