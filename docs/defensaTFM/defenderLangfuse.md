@@ -140,9 +140,9 @@ lf.create_score(trace_id=run_trace_id, observation_id=obs.id,
 ```
 
 **Decisión**: exponer el cliente crudo cuesta una función más en
-`observability.py`, pero es lo que permite que la evaluación del RAG
-(§7) no se quede en un JSON local sino que sea visible y comparable en la
-UI de LangFuse.
+`observability.py`, pero es lo que permite que la evaluación del golden
+dataset (§8, en [`defenderDatos.md`](defenderDatos.md)) no se quede en un
+JSON local sino que sea visible y comparable en la UI de LangFuse.
 
 ---
 
@@ -165,32 +165,17 @@ intervalo de flush automático del SDK.
 
 ---
 
-## 8. De evaluación local a LangFuse Datasets + Experiments
+## 8. Evaluación del agente: fuera de este documento
 
-El proyecto ya tenía `evaluate_evaluator_agent.py`: lee los 480 casos de
-`evaluation/golden/eval_cases.csv`, corre el agente evaluador y escribe un informe
-JSON/Markdown local con precisión, recall y F1. Funciona, pero comparar dos
-ejecuciones (por ejemplo, antes/después de cambiar un prompt) significa abrir
-dos ficheros Markdown y comparar tablas a mano.
-
-Se añadieron dos scripts para subir ese mismo golden dataset a LangFuse:
-
-```
-migrate_eval_cases_to_langfuse.py   # sube los 480 casos como un Dataset de Langfuse (una vez)
-run_langfuse_experiment.py          # corre el agente sobre ese Dataset como un Experiment
-```
-
-`run_langfuse_experiment.py` reutiliza la lógica de `evaluate_evaluator_agent.py`
-(`_build_state`, `_build_mock_policy`, `_result_to_label`) — no duplica el
-mapeo CSV → estado del agente — pero en vez de escribir un fichero, cada
-caso queda registrado como parte de un `run_experiment()` de LangFuse, con
-un evaluador por caso (`label_match_evaluator`) y un evaluador de accuracy
-agregado por ejecución (`accuracy_run_evaluator`).
-
-**Decisión**: mantener `evaluate_evaluator_agent.py` (rápido, sin credenciales de
-LangFuse, ideal para CI/`--dry-run`) **y** añadir el camino LangFuse
-(visual, comparable entre ejecuciones, mejor para la demo de defensa) en
-vez de sustituir uno por el otro — son complementarios, no redundantes.
+El golden dataset (480 casos), los scripts `evaluate_evaluator_agent.py` /
+`migrate_eval_cases_to_langfuse.py` / `run_langfuse_experiment.py`, y cómo
+se correlaciona la accuracy de un run con la versión del prompt que estaba
+activa ("Link to Traces") viven documentados en
+[`defenderDatos.md`](defenderDatos.md) §4 y §4bis — no se duplican aquí.
+Este documento cubre solo el diseño de la instrumentación de tracing en sí
+(cómo se conecta LangFuse al grafo, qué es opcional/fail-open, cómo se
+agrupan sesiones/usuarios); `defenderDatos.md` cubre qué se mide con esa
+instrumentación y cómo se compara entre ejecuciones.
 
 ---
 
@@ -318,23 +303,9 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
 - **En producción**: `score_rag_similarity()` (`observability.py:175-262`)
   anota en LangFuse la mejor similitud coseno de cada búsqueda RAG,
   incluyendo `value=0.0` explícito cuando no hay resultados — decisión
-  deliberada de no callar los "miss", ver sección 8 más abajo para el
-  contexto de por qué el RAG puede no devolver nada.
-- **Pipeline de evaluación en `evaluation/golden/scripts/`**, tres piezas que
-  se complementan (ver sección 8):
-  - `evaluate_evaluator_agent.py`: trace raíz + una observation por caso de
-    los 480 del golden dataset + scores por caso (`label_match`,
-    `tool_match`, `contains_match`, `cost_eur`, `latency_ms`) + scores
-    agregados (`accuracy`, `macro_f1`/`macro_precision`/`macro_recall`,
-    `precision`/`recall`/`f1` por clase, `category_accuracy` por las 16
-    categorías, `tool_accuracy`, `contains_accuracy`, `total_cost_eur`,
-    `avg_latency_ms`). No escribe ningún fichero local — todo vive en
-    Langfuse.
-  - `migrate_eval_cases_to_langfuse.py`: sube los 480 casos como **LangFuse
-    Dataset**, idempotente por `case_id`.
-  - `run_langfuse_experiment.py`: **LangFuse Experiments** de verdad
-    (`lf.run_experiment(...)`) con evaluador por-item y evaluador agregado
-    a nivel de run.
+  deliberada de no callar los "miss".
+- **Evaluación masiva contra el golden dataset**: ver
+  [`defenderDatos.md`](defenderDatos.md) §4 y §4bis — no se duplica aquí.
 
 ### Trazas y prompt management
 
@@ -357,11 +328,13 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
   la UI de Langfuse no tendría ningún efecto y se perdería en el siguiente
   `sync`. Esto da versionado e historial navegable en la UI de Langfuse sin
   añadir una dependencia en tiempo de ejecución a un servicio opcional
-  (mismo criterio de disponibilidad que el resto del proyecto). Lo que
-  **no** se ganó con esto: "Link to Traces" (métricas de latencia/coste
-  agregadas por versión de prompt en la UI de Langfuse) exige que la
-  generación referencie el objeto `prompt` obtenido de `get_prompt()` en el
-  momento de la llamada — al no leerse en runtime, esa vinculación no
-  existe. A/B testing o rollback instantáneo de prompts sin desplegar
-  código tampoco: seguirían siendo, respectivamente, un experimento manual
-  con dos ramas y un revert de commit.
+  (mismo criterio de disponibilidad que el resto del proyecto).
+  **"Link to Traces"** (correlacionar accuracy de una evaluación con la
+  versión de prompt que estaba activa) sí se ganó, pero no en runtime de
+  producción — son los scripts de evaluación los que leen la versión
+  `production` y enlazan sus propios runs, ver
+  [`defenderDatos.md`](defenderDatos.md) §4bis para el mecanismo y su
+  fallback cuando código y Langfuse no coinciden. A/B testing o rollback
+  instantáneo de prompts sin desplegar código sigue sin existir: seguirían
+  siendo, respectivamente, un experimento manual con dos ramas y un revert
+  de commit.

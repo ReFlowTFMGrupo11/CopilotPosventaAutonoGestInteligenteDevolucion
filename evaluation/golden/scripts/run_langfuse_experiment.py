@@ -6,8 +6,13 @@ Reutiliza la misma lógica que evaluation/golden/scripts/evaluate_evaluator_agen
 (_build_state, _build_mock_policy, _result_to_label, _deterministic_label)
 para no duplicar el mapeo CSV → estado del agente, pero en vez de escribir
 un JSON/MD local, cada caso queda trazado como un run de Langfuse:
-pestaña "Experiments" del dataset → verás precisión por caso, comparable entre
-ejecuciones (por versión de prompt, de modelo, etc.) en la UI.
+pestaña "Experiments" del dataset → verás precisión por caso, comparable
+entre ejecuciones. En modo LLM real, el run queda etiquetado con
+`metadata.prompt_version` = la versión `production` de `policy-system-prompt`
+en Langfuse (subida por scripts/sync_prompts_to_langfuse.py) si coincide con
+el código que de verdad se ejecutó -- si no coincide (prompt editado sin
+sincronizar todavía), se avisa por log y el run queda sin esa metadata, para
+no comparar accuracy contra una versión de prompt que no es la real.
 
 Uso:
     python -m evaluation.golden.scripts.run_langfuse_experiment --dry-run          # gratis, sin LLM
@@ -38,6 +43,7 @@ from evaluation.golden.scripts.evaluate_evaluator_agent import (
     _result_to_label,
 )
 from evaluation.golden.scripts.migrate_eval_cases_to_langfuse import DATASET_NAME
+from scripts.sync_prompts_to_langfuse import get_production_prompt
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -148,6 +154,36 @@ def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
         "dry-run" if dry_run else "LLM real",
     )
 
+    # Prompt activo: solo aplica en modo LLM real (--dry-run no llama a
+    # evaluator_agent) -- ver docstring del módulo.
+    metadata: dict[str, str] = {"mode": "dry-run" if dry_run else "llm"}
+    if not dry_run:
+        from backend.agents.nodes.evaluator import POLICY_SYSTEM_PROMPT
+
+        candidate = get_production_prompt(lf, "policy-system-prompt")
+        if candidate is None:
+            logger.warning(
+                "policy-system-prompt no existe todavía en Langfuse -- este "
+                "run no llevará prompt_version. Corre "
+                "`python -m scripts.sync_prompts_to_langfuse` antes de evaluar."
+            )
+        elif candidate.prompt != POLICY_SYSTEM_PROMPT:
+            logger.warning(
+                "POLICY_SYSTEM_PROMPT (código) difiere de la versión "
+                "'production' v%d en Langfuse -- este run no llevará "
+                "prompt_version (evita comparar accuracy contra una versión "
+                "que no es la que de verdad se ejecutó). Corre "
+                "`python -m scripts.sync_prompts_to_langfuse` antes de evaluar "
+                "si quieres que quede etiquetado.",
+                candidate.version,
+            )
+        else:
+            metadata["prompt_version"] = str(candidate.version)
+            logger.info(
+                "Experimento etiquetado con policy-system-prompt v%d",
+                candidate.version,
+            )
+
     result = lf.run_experiment(
         name="policy-eval" + (" (dry-run)" if dry_run else ""),
         run_name=run_name,
@@ -157,7 +193,7 @@ def run(limit: int | None, dry_run: bool, run_name: str | None) -> None:
         evaluators=[label_match_evaluator],
         run_evaluators=[accuracy_run_evaluator],
         max_concurrency=5,
-        metadata={"mode": "dry-run" if dry_run else "llm"},
+        metadata=metadata,
     )
 
     lf.flush()
