@@ -9,6 +9,14 @@ prefijo de error) y la cache de tools por server.
 _clients/_tools_cache son estado a nivel de módulo (no por instancia) --
 un fixture autouse los limpia antes/después de cada test para que el
 orden de ejecución no contamine resultados entre tests.
+
+call_tool() registra cada invocación en tool_call_service.log_tool_call()
+(ver _log_tool_call) -- sin mockearlo, un entorno con credenciales reales
+de Supabase en .env haría una escritura de verdad en cada test (probado:
+pasa en silencio por el try/except de _log_tool_call, pero es una llamada
+de red real en un test "unitario"). Un fixture autouse lo mockea para
+TODOS los tests de este fichero, salvo los de TestCallToolInstrumentacion
+que lo mockean explícitamente para comprobar cómo se llama.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -24,6 +32,17 @@ async def _reset_mcp_state():
     await mcp_client.close_mcp_client()
     yield
     await mcp_client.close_mcp_client()
+
+
+@pytest.fixture(autouse=True)
+def _mock_tool_call_logging():
+    """Evita escrituras reales a mcp_tool_calls en tests que no comprueban
+    la instrumentación en sí (ver docstring del módulo)."""
+    with patch(
+        "backend.agents.infra.mcp_client.tool_call_service.log_tool_call",
+        new=AsyncMock(),
+    ):
+        yield
 
 
 def _make_tool(name: str, result):
@@ -135,11 +154,12 @@ class TestCallToolBusquedaDeTool:
             call_count["n"] += 1
             return []  # nunca está la tool, en ninguna de las dos consultas
 
-        with patch(
-            "backend.agents.infra.mcp_client._get_tools", new=fake_get_tools
-        ), patch(
-            "backend.agents.infra.mcp_client._tools_cache",
-            {"supabase": [_make_tool("otra_tool", "{}")]},
+        with (
+            patch("backend.agents.infra.mcp_client._get_tools", new=fake_get_tools),
+            patch(
+                "backend.agents.infra.mcp_client._tools_cache",
+                {"supabase": [_make_tool("otra_tool", "{}")]},
+            ),
         ):
             with pytest.raises(ValueError, match="no encontrada en server"):
                 await mcp_client.call_tool("get_order_details", {})
@@ -203,10 +223,13 @@ class TestSearchReturnPolicyWrapper:
             "semantic_results": [{"chunk_text": "...", "similarity": 0.8}],
             "policy_info": {"max_return_days": 30},
         }
-        with patch(
-            "backend.agents.infra.mcp_client.call_tool",
-            new=AsyncMock(return_value=fake_result),
-        ), patch("backend.agents.infra.mcp_client.score_rag_similarity") as mock_score:
+        with (
+            patch(
+                "backend.agents.infra.mcp_client.call_tool",
+                new=AsyncMock(return_value=fake_result),
+            ),
+            patch("backend.agents.infra.mcp_client.score_rag_similarity") as mock_score,
+        ):
             result = await mcp_client.search_return_policy(
                 query="política de devolución",
                 category="electronica_informatica",
@@ -224,13 +247,151 @@ class TestSearchReturnPolicyWrapper:
     @pytest.mark.asyncio
     async def test_sin_semantic_results_registra_score_con_lista_vacia(self):
         fake_result = {"policy_info": {}}  # sin la clave semantic_results
-        with patch(
-            "backend.agents.infra.mcp_client.call_tool",
-            new=AsyncMock(return_value=fake_result),
-        ), patch("backend.agents.infra.mcp_client.score_rag_similarity") as mock_score:
+        with (
+            patch(
+                "backend.agents.infra.mcp_client.call_tool",
+                new=AsyncMock(return_value=fake_result),
+            ),
+            patch("backend.agents.infra.mcp_client.score_rag_similarity") as mock_score,
+        ):
             await mcp_client.search_return_policy(query="q", category="c")
 
         mock_score.assert_called_once_with(None, "q", "c", [])
+
+
+class TestCallToolInstrumentacion:
+    """call_tool() registra éxito/fallo y latencia de cada invocación real
+    en mcp_tool_calls (tabla propia, señal garantizada) + un score de
+    LangFuse (canal extra) -- ver _log_tool_call. Antes, un fallo de tool
+    solo marcaba el TURNO completo como error, sin registro de qué tool
+    falló (docs/defensaTFM/defenderLangfuse.md)."""
+
+    @pytest.mark.asyncio
+    async def test_llamada_exitosa_registra_success_true_con_latencia(self):
+        tool = _make_tool("get_order_details", '{"order_number": "ORD-001"}')
+        with (
+            _patch_tools({"supabase": [tool]}),
+            patch(
+                "backend.agents.infra.mcp_client.tool_call_service.log_tool_call",
+                new=AsyncMock(),
+            ) as mock_log,
+            patch("backend.agents.infra.mcp_client.score_tool_call") as mock_score,
+        ):
+            await mcp_client.call_tool("get_order_details", {"order_number": "ORD-001"})
+
+        mock_log.assert_awaited_once()
+        kwargs = mock_log.call_args.kwargs
+        assert kwargs["tool_name"] == "get_order_details"
+        assert kwargs["success"] is True
+        assert kwargs["error_message"] is None
+        assert kwargs["thread_id"] is None  # no venía en los args
+        assert isinstance(kwargs["latency_ms"], int)
+        mock_score.assert_called_once_with(
+            None, "get_order_details", success=True, error=None
+        )
+
+    @pytest.mark.asyncio
+    async def test_extrae_thread_id_de_los_args_de_forma_oportunista(self):
+        tool = _make_tool("search_return_policy", '{"semantic_results": []}')
+        with (
+            _patch_tools({"supabase": [tool]}),
+            patch(
+                "backend.agents.infra.mcp_client.tool_call_service.log_tool_call",
+                new=AsyncMock(),
+            ) as mock_log,
+            patch("backend.agents.infra.mcp_client.score_tool_call"),
+        ):
+            await mcp_client.call_tool(
+                "search_return_policy",
+                {"query": "q", "category": "c", "thread_id": "thread-1"},
+            )
+
+        assert mock_log.call_args.kwargs["thread_id"] == "thread-1"
+
+    @pytest.mark.asyncio
+    async def test_error_de_la_tool_registra_success_false_y_relanza(self):
+        """Un fallo MCP (prefijo 'Error executing tool') debe registrarse
+        como success=False Y seguir propagando el RuntimeError -- la
+        instrumentación no puede enmascarar el error real."""
+        tool = _make_tool(
+            "create_return_record", "Error executing tool: constraint violada"
+        )
+        with (
+            _patch_tools({"supabase": [tool]}),
+            patch(
+                "backend.agents.infra.mcp_client.tool_call_service.log_tool_call",
+                new=AsyncMock(),
+            ) as mock_log,
+            patch("backend.agents.infra.mcp_client.score_tool_call") as mock_score,
+        ):
+            with pytest.raises(RuntimeError, match="constraint violada"):
+                await mcp_client.call_tool(
+                    "create_return_record", {"thread_id": "thread-2"}
+                )
+
+        kwargs = mock_log.call_args.kwargs
+        assert kwargs["tool_name"] == "create_return_record"
+        assert kwargs["success"] is False
+        assert "constraint violada" in kwargs["error_message"]
+        assert kwargs["thread_id"] == "thread-2"
+        mock_score.assert_called_once()
+        assert mock_score.call_args.kwargs["success"] is False
+
+    @pytest.mark.asyncio
+    async def test_excepcion_inesperada_de_ainvoke_tambien_se_registra_y_relanza(self):
+        """No solo el prefijo de error de MCP -- cualquier excepción de
+        tool.ainvoke() (timeout, conexión caída...) debe quedar registrada
+        igual, no solo el caso "bonito" del prefijo de texto."""
+        tool = MagicMock()
+        tool.name = "generate_shipping_label"
+        tool.ainvoke = AsyncMock(side_effect=TimeoutError("MCP server no responde"))
+        with (
+            _patch_tools({"logistics": [tool]}),
+            patch(
+                "backend.agents.infra.mcp_client.tool_call_service.log_tool_call",
+                new=AsyncMock(),
+            ) as mock_log,
+            patch("backend.agents.infra.mcp_client.score_tool_call"),
+        ):
+            with pytest.raises(TimeoutError):
+                await mcp_client.call_tool("generate_shipping_label", {})
+
+        kwargs = mock_log.call_args.kwargs
+        assert kwargs["success"] is False
+        assert "no responde" in kwargs["error_message"]
+
+    @pytest.mark.asyncio
+    async def test_un_fallo_al_registrar_no_rompe_ni_enmascara_el_resultado(self):
+        """Contrato explícito de _log_tool_call: un fallo al escribir en
+        mcp_tool_calls (BD caída, etc.) nunca debe romper el turno del
+        cliente ni cambiar el resultado real de la tool."""
+        tool = _make_tool("get_order_details", '{"order_number": "ORD-001"}')
+        with (
+            _patch_tools({"supabase": [tool]}),
+            patch(
+                "backend.agents.infra.mcp_client.tool_call_service.log_tool_call",
+                new=AsyncMock(side_effect=Exception("BD caída")),
+            ),
+            patch("backend.agents.infra.mcp_client.score_tool_call"),
+        ):
+            # No debe lanzar ninguna excepción, y debe devolver el resultado real.
+            result = await mcp_client.call_tool("get_order_details", {})
+
+        assert result == {"order_number": "ORD-001"}
+
+    @pytest.mark.asyncio
+    async def test_tool_no_encontrada_no_registra_nada(self):
+        """Un error de lookup (tool no mapeada/no encontrada) es un
+        problema de configuración/wiring, no "la tool falló al ejecutarse"
+        -- no debe generar una fila en mcp_tool_calls."""
+        with patch(
+            "backend.agents.infra.mcp_client.tool_call_service.log_tool_call",
+            new=AsyncMock(),
+        ) as mock_log:
+            with pytest.raises(ValueError):
+                await mcp_client.call_tool("tool_inexistente", {})
+
+        mock_log.assert_not_awaited()
 
 
 class TestGetPendingReturnRequestIdWrapper:

@@ -220,12 +220,39 @@ def usage_session_detail(thread_id: str) -> list[dict]:
     return r.json().get("requests", [])
 
 
+def usage_trends(since=None, until=None) -> list[dict]:
+    """Llama a GET /api/admin/usage/trends para la serie temporal de
+    coste/tokens/latencia por nodo (gráficas de tendencia de 2_Costes.py).
+
+    Args:
+        since: fecha mínima (``datetime.date`` o str "YYYY-MM-DD"), o None
+            para no filtrar por fecha de inicio.
+        until: fecha máxima (inclusive), o None para no filtrar por fecha
+            de fin.
+
+    Returns:
+        Lista de puntos, uno por (fecha, nodo): date, node, requests,
+        total_tokens, cost_eur, cost_complete, avg_latency_ms.
+    """
+    params = {}
+    if since is not None:
+        params["since"] = str(since)
+    if until is not None:
+        params["until"] = str(until)
+    r = httpx.get(f"{API_BASE}/api/admin/usage/trends", params=params, timeout=10)
+    r.raise_for_status()
+    return r.json().get("points", [])
+
+
 def observability_links() -> dict:
-    """Llama a GET /api/admin/observability para obtener los enlaces al dashboard de LangFuse.
+    """Llama a GET /api/admin/observability: enlaces a LangFuse, estado del
+    checkpointer y error rate por tool MCP.
 
     Returns:
         Dict con si LangFuse está configurado y, si lo está, las URLs a
-        las vistas de sesiones/usuarios.
+        las vistas de sesiones/usuarios; `checkpointer` con su estado; y
+        `tool_error_rates` (lista agregada por tool, ver
+        tool_call_service.get_tool_call_error_rates).
     """
     r = httpx.get(f"{API_BASE}/api/admin/observability", timeout=10)
     r.raise_for_status()

@@ -121,3 +121,63 @@ async def test_get_usage_session_detail_empty(async_client):
     data = resp.json()
     assert data["count"] == 0
     assert data["requests"] == []
+
+
+@pytest.mark.asyncio
+async def test_get_usage_trends(async_client):
+    """Verifica la serie temporal por (fecha, nodo) para las gráficas de
+    tendencia de 2_Costes.py."""
+    mock_points = [
+        {
+            "date": "2026-09-11",
+            "node": "triage_agent",
+            "requests": 5,
+            "total_tokens": 1200,
+            "cost_eur": 0.005,
+            "cost_complete": True,
+            "avg_latency_ms": 800,
+        },
+    ]
+    with patch(
+        "backend.api.routers.usage.usage_service.get_usage_timeseries",
+        new=AsyncMock(return_value=mock_points),
+    ):
+        async with async_client as client:
+            resp = await client.get("/api/admin/usage/trends")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["count"] == 1
+    assert data["points"][0]["node"] == "triage_agent"
+
+
+@pytest.mark.asyncio
+async def test_get_usage_trends_pasa_since_y_until_al_servicio(async_client):
+    """Verifica que los query params since/until (YYYY-MM-DD) se parsean y
+    se pasan tal cual al servicio."""
+    mock_get = AsyncMock(return_value=[])
+    with patch(
+        "backend.api.routers.usage.usage_service.get_usage_timeseries", new=mock_get
+    ):
+        async with async_client as client:
+            resp = await client.get(
+                "/api/admin/usage/trends?since=2026-08-01&until=2026-08-31"
+            )
+
+    assert resp.status_code == 200
+    kwargs = mock_get.call_args.kwargs
+    assert str(kwargs["since"]) == "2026-08-01"
+    assert str(kwargs["until"]) == "2026-08-31"
+
+
+@pytest.mark.asyncio
+async def test_get_usage_trends_sin_parametros_no_filtra(async_client):
+    mock_get = AsyncMock(return_value=[])
+    with patch(
+        "backend.api.routers.usage.usage_service.get_usage_timeseries", new=mock_get
+    ):
+        async with async_client as client:
+            resp = await client.get("/api/admin/usage/trends")
+
+    assert resp.status_code == 200
+    mock_get.assert_awaited_once_with(since=None, until=None)

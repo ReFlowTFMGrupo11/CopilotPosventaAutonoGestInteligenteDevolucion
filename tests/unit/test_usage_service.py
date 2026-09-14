@@ -51,6 +51,8 @@ def _make_mock_supabase(table_data=None):
     query.select.return_value = query
     query.insert.return_value = query
     query.eq.return_value = query
+    query.gte.return_value = query
+    query.lte.return_value = query
     query.order.return_value = query
     query.limit.return_value = query
     query.execute = AsyncMock(return_value=MagicMock(data=table_data))
@@ -391,3 +393,151 @@ class TestGetUsageDetail:
             result = await usage_service.get_usage_detail("thread-1")
 
         assert result[0]["cost_eur"] is None
+
+
+class TestGetUsageTimeseries:
+    """Serie temporal agregada por (fecha, nodo), para las gráficas de
+    tendencia de frontend/pages/2_Costes.py."""
+
+    @pytest.mark.asyncio
+    async def test_sin_filas_devuelve_lista_vacia(self):
+        _, patcher = _patched_client(table_data=[])
+        with patcher:
+            result = await usage_service.get_usage_timeseries()
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_agrega_por_fecha_y_nodo(self):
+        rows = [
+            {
+                "node": "triage_agent",
+                "total_tokens": 100,
+                "cost_eur": 0.01,
+                "latency_ms": 500,
+                "created_at": "2026-09-11T10:00:00+00:00",
+            },
+            {
+                "node": "triage_agent",
+                "total_tokens": 200,
+                "cost_eur": 0.02,
+                "latency_ms": 700,
+                "created_at": "2026-09-11T18:00:00+00:00",
+            },
+            {
+                "node": "evaluator_agent",
+                "total_tokens": 50,
+                "cost_eur": 0.005,
+                "latency_ms": 300,
+                "created_at": "2026-09-11T12:00:00+00:00",
+            },
+            {
+                "node": "triage_agent",
+                "total_tokens": 300,
+                "cost_eur": 0.03,
+                "latency_ms": 600,
+                "created_at": "2026-09-12T09:00:00+00:00",
+            },
+        ]
+        _, patcher = _patched_client(table_data=rows)
+        with patcher:
+            result = await usage_service.get_usage_timeseries()
+
+        assert len(result) == 3  # (11, triage), (11, evaluator), (12, triage)
+        by_key = {(p["date"], p["node"]): p for p in result}
+
+        day11_triage = by_key[("2026-09-11", "triage_agent")]
+        assert day11_triage["requests"] == 2
+        assert day11_triage["total_tokens"] == 300
+        assert day11_triage["cost_eur"] == pytest.approx(0.03)
+        assert day11_triage["avg_latency_ms"] == round((500 + 700) / 2)
+
+        day11_evaluator = by_key[("2026-09-11", "evaluator_agent")]
+        assert day11_evaluator["requests"] == 1
+
+        day12_triage = by_key[("2026-09-12", "triage_agent")]
+        assert day12_triage["total_tokens"] == 300
+
+    @pytest.mark.asyncio
+    async def test_ordena_por_fecha_y_luego_por_nodo(self):
+        rows = [
+            {
+                "node": "resolution_agent",
+                "total_tokens": 10,
+                "cost_eur": 0.001,
+                "latency_ms": 100,
+                "created_at": "2026-09-12T00:00:00+00:00",
+            },
+            {
+                "node": "evaluator_agent",
+                "total_tokens": 10,
+                "cost_eur": 0.001,
+                "latency_ms": 100,
+                "created_at": "2026-09-11T00:00:00+00:00",
+            },
+            {
+                "node": "triage_agent",
+                "total_tokens": 10,
+                "cost_eur": 0.001,
+                "latency_ms": 100,
+                "created_at": "2026-09-11T00:00:00+00:00",
+            },
+        ]
+        _, patcher = _patched_client(table_data=rows)
+        with patcher:
+            result = await usage_service.get_usage_timeseries()
+
+        assert [(p["date"], p["node"]) for p in result] == [
+            ("2026-09-11", "evaluator_agent"),
+            ("2026-09-11", "triage_agent"),
+            ("2026-09-12", "resolution_agent"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_cost_eur_none_marca_cost_complete_false_sin_romper_la_suma(self):
+        rows = [
+            {
+                "node": "triage_agent",
+                "total_tokens": 10,
+                "cost_eur": 0.01,
+                "latency_ms": 100,
+                "created_at": "2026-09-11T00:00:00+00:00",
+            },
+            {
+                "node": "triage_agent",
+                "total_tokens": 20,
+                "cost_eur": None,
+                "latency_ms": 200,
+                "created_at": "2026-09-11T01:00:00+00:00",
+            },
+        ]
+        _, patcher = _patched_client(table_data=rows)
+        with patcher:
+            result = await usage_service.get_usage_timeseries()
+
+        entry = result[0]
+        assert entry["cost_complete"] is False
+        assert entry["cost_eur"] == pytest.approx(0.01)  # solo suma lo conocido
+        assert entry["total_tokens"] == 30
+
+    @pytest.mark.asyncio
+    async def test_pasa_since_y_until_como_filtros_gte_lte(self):
+        from datetime import date
+
+        client, patcher = _patched_client(table_data=[])
+        with patcher:
+            await usage_service.get_usage_timeseries(
+                since=date(2026, 8, 1), until=date(2026, 8, 31)
+            )
+
+        query = client.table.return_value
+        query.gte.assert_called_once_with("created_at", "2026-08-01")
+        query.lte.assert_called_once_with("created_at", "2026-08-31T23:59:59.999999")
+
+    @pytest.mark.asyncio
+    async def test_sin_since_ni_until_no_filtra_por_fecha(self):
+        client, patcher = _patched_client(table_data=[])
+        with patcher:
+            await usage_service.get_usage_timeseries()
+
+        client.table.return_value.gte.assert_not_called()
+        client.table.return_value.lte.assert_not_called()

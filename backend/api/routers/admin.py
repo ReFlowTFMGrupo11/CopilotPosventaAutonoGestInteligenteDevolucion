@@ -33,7 +33,12 @@ from backend.api.schemas import (
     OrderDetailResponse,
     ReturnHistoryResponse,
 )
-from backend.services import observability, orders_service, returns_service
+from backend.services import (
+    observability,
+    orders_service,
+    returns_service,
+    tool_call_service,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -151,7 +156,8 @@ async def get_return_detail(return_id: str):
 
 @router.get("/observability")
 async def get_observability_links():
-    """Enlaces al dashboard de LangFuse + estado del checkpointer del grafo.
+    """Enlaces al dashboard de LangFuse + estado del checkpointer del grafo +
+    error rate por tool MCP.
 
     Los enlaces de LangFuse complementan el dashboard propio de coste
     (``routers/usage.py::list_usage_sessions``): LangFuse ya trackea
@@ -163,10 +169,17 @@ async def get_observability_links():
     `/health`, para que el panel de admin pueda mostrar un aviso visible si
     el grafo está corriendo sobre InMemorySaver — antes esa degradación solo
     se veía en los logs de consola del proceso.
+
+    `tool_error_rates` (ver backend/services/tool_call_service.py) sí se
+    agrega aquí, en vez de solo enlazar a LangFuse: es la respuesta a
+    "¿qué tools fallan más?", que antes no tenía respuesta en ningún sitio
+    (ver docs/defensaTFM/defenderLangfuse.md) -- mismo criterio que el
+    dashboard de coste, dato siempre disponible sin depender de LangFuse.
     """
     return {
         **observability.get_langfuse_links(),
         "checkpointer": get_checkpointer_status(),
+        "tool_error_rates": await tool_call_service.get_tool_call_error_rates(),
     }
 
 

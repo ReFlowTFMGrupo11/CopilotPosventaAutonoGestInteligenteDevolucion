@@ -34,6 +34,10 @@ uvicorn[standard]>=0.30.0
 # Frontend (Streamlit)
 streamlit>=1.38.0
 httpx>=0.27.0
+# Ya venía como dependencia transitiva de streamlit; se fija aquí explícita
+# porque 2_Costes.py la importa directamente (pivota la serie temporal de
+# usage_trends() para las gráficas de tendencia por nodo).
+pandas>=2.0.0
 
 # Testing
 pytest>=8.0.0
