@@ -52,6 +52,11 @@ tests/           unit/, integration/, conftest.py (shared fixtures), manual_chec
                  480 synthetic cases, LLM + Langfuse, no UI) — see tests/qa/README.md for the split.
 generated_labels/ Runtime-generated PDFs + notifications_log.jsonl — gitignored, self-regenerating
 docs/            architecture.drawio, graph_diagram.md, ER_diagram.md, defensaTFM/ (thesis defense notes)
+scripts/         Cross-cutting maintenance scripts not tied to data/ (dataset-specific) or
+                 tests/qa/ (QA-specific) — e.g. sync_prompts_to_langfuse.py, which pushes the
+                 4 system-prompt constants (source of truth stays in code) to Langfuse Prompt
+                 Management for versioning/visibility; agents never read prompts back from
+                 Langfuse at runtime.
 ```
 
 Layering discipline to preserve when editing: `services/` has no MCP/LLM dependency; `mcp/` wraps

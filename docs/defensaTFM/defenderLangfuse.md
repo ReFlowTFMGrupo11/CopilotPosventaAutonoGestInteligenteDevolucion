@@ -320,18 +320,23 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
   incluyendo `value=0.0` explícito cuando no hay resultados — decisión
   deliberada de no callar los "miss", ver sección 8 más abajo para el
   contexto de por qué el RAG puede no devolver nada.
-- **Pipeline de evaluación en `tests/qa/scripts/`**, tres piezas que se
-  complementan (ver sección 8):
-  - `evaluate_rag.py`: trace raíz + una observation por caso de los 480 del
-    golden dataset + score `label_match` por caso + scores agregados
-    (`accuracy`, `macro_f1`, `macro_precision`, `macro_recall`).
+- **Pipeline de evaluación en `tests/qa/golden/scripts/`**, tres piezas que
+  se complementan (ver sección 8):
+  - `evaluate_evaluator_agent.py`: trace raíz + una observation por caso de
+    los 480 del golden dataset + scores por caso (`label_match`,
+    `tool_match`, `contains_match`, `cost_eur`, `latency_ms`) + scores
+    agregados (`accuracy`, `macro_f1`/`macro_precision`/`macro_recall`,
+    `precision`/`recall`/`f1` por clase, `category_accuracy` por las 16
+    categorías, `tool_accuracy`, `contains_accuracy`, `total_cost_eur`,
+    `avg_latency_ms`). No escribe ningún fichero local — todo vive en
+    Langfuse.
   - `migrate_eval_cases_to_langfuse.py`: sube los 480 casos como **LangFuse
     Dataset**, idempotente por `case_id`.
   - `run_langfuse_experiment.py`: **LangFuse Experiments** de verdad
     (`lf.run_experiment(...)`) con evaluador por-item y evaluador agregado
     a nivel de run.
 
-### Trazas y prompt management — trazas fuertes, prompt management ausente
+### Trazas y prompt management
 
 - Trazas: diseño no invasivo ya cubierto en la sección 2 — ni los tres
   agentes ni `graph.py` importan LangFuse, todo entra por `config`. Dos
@@ -339,11 +344,24 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
   `CallbackHandler` (proceso de la API) y `langfuse.openai` para el
   embedding (proceso del MCP server, `mcp_supabase.py`) — cada uno necesita
   su propio cliente LangFuse registrado porque son procesos separados.
-- **Prompt management: no implementado.** Cero usos de
-  `langfuse.get_prompt()`/`create_prompt()` en todo el repo. Los tres
-  prompts de sistema (`TRIAGE_SYSTEM_PROMPT` en `triage.py`,
-  `POLICY_SYSTEM_PROMPT` en `evaluator.py`, `RESOLUTION_SYSTEM_PROMPT` en
-  `resolution.py`) son constantes de Python hardcodeadas. Versionar un
-  prompt hoy es un commit de git, no un cambio gestionado en LangFuse — si
-  preguntan por A/B testing o rollback de prompts, la respuesta honesta es
-  que no existe ese mecanismo todavía.
+- **Prompt management: sincronizado, no leído en runtime — decisión
+  deliberada.** Los 4 prompts de sistema (`TRIAGE_SYSTEM_PROMPT` en
+  `triage.py`, `POLICY_SYSTEM_PROMPT` en `evaluator.py`,
+  `RESOLUTION_SYSTEM_PROMPT`/`REJECTION_SYSTEM_PROMPT` en `resolution.py`)
+  siguen siendo constantes de Python — **la fuente de verdad sigue siendo
+  el código**, revisable en PR con historia de git real. `scripts/
+  sync_prompts_to_langfuse.py` empuja su contenido actual a Langfuse
+  (`create_prompt(..., labels=["production"])`), de forma idempotente (solo
+  crea una versión nueva si el texto cambió) — nunca al revés: los agentes
+  NUNCA llaman a `langfuse.get_prompt()`, así que un cambio hecho a mano en
+  la UI de Langfuse no tendría ningún efecto y se perdería en el siguiente
+  `sync`. Esto da versionado e historial navegable en la UI de Langfuse sin
+  añadir una dependencia en tiempo de ejecución a un servicio opcional
+  (mismo criterio de disponibilidad que el resto del proyecto). Lo que
+  **no** se ganó con esto: "Link to Traces" (métricas de latencia/coste
+  agregadas por versión de prompt en la UI de Langfuse) exige que la
+  generación referencie el objeto `prompt` obtenido de `get_prompt()` en el
+  momento de la llamada — al no leerse en runtime, esa vinculación no
+  existe. A/B testing o rollback instantáneo de prompts sin desplegar
+  código tampoco: seguirían siendo, respectivamente, un experimento manual
+  con dos ramas y un revert de commit.
