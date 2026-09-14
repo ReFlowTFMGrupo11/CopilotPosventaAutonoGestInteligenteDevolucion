@@ -7,7 +7,7 @@
 -- por ese script -- EJECUTAR DESPUES de qa_manual_testing_seed.sql (o de
 -- seed_synthetic.sql), no antes.
 --
--- Generado por tests/qa/scripts/generate_mixed_qa_kit.py. Guion de pruebas (mensaje a
+-- Generado por evaluation/manual/scripts/generate_mixed_qa_kit.py. Guion de pruebas (mensaje a
 -- pegar en el chat por caso) en
 -- dataset/qa_manual_testing_casos_pedidos_mixtos.xlsx.
 --

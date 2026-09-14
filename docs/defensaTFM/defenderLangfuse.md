@@ -133,7 +133,7 @@ dataset?" — eso requiere llamar a `create_score()` sobre el cliente
 directamente, algo que un callback pasivo no ofrece.
 
 ```python
-# tests/qa/golden/scripts/evaluate_evaluator_agent.py
+# evaluation/golden/scripts/evaluate_evaluator_agent.py
 obs = lf.start_observation(name=f"eval-case-{cat}", as_type="evaluator", ...)
 lf.create_score(trace_id=run_trace_id, observation_id=obs.id,
                  name="label_match", value=1.0 if match else 0.0, data_type="NUMERIC")
@@ -168,7 +168,7 @@ intervalo de flush automático del SDK.
 ## 8. De evaluación local a LangFuse Datasets + Experiments
 
 El proyecto ya tenía `evaluate_evaluator_agent.py`: lee los 480 casos de
-`tests/qa/golden/eval_cases.csv`, corre el agente evaluador y escribe un informe
+`evaluation/golden/eval_cases.csv`, corre el agente evaluador y escribe un informe
 JSON/Markdown local con precisión, recall y F1. Funciona, pero comparar dos
 ejecuciones (por ejemplo, antes/después de cambiar un prompt) significa abrir
 dos ficheros Markdown y comparar tablas a mano.
@@ -320,7 +320,7 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
   incluyendo `value=0.0` explícito cuando no hay resultados — decisión
   deliberada de no callar los "miss", ver sección 8 más abajo para el
   contexto de por qué el RAG puede no devolver nada.
-- **Pipeline de evaluación en `tests/qa/golden/scripts/`**, tres piezas que
+- **Pipeline de evaluación en `evaluation/golden/scripts/`**, tres piezas que
   se complementan (ver sección 8):
   - `evaluate_evaluator_agent.py`: trace raíz + una observation por caso de
     los 480 del golden dataset + scores por caso (`label_match`,

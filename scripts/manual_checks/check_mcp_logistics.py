@@ -1,7 +1,11 @@
 """
 Test script for MCP logistics server via Streamable HTTP.
 Start the server first: python -m backend.mcp.mcp_logistics
-Then run this: python tests/test_mcp_logistics.py
+Then run this (from repo root, module mode -- a plain `python
+scripts/manual_checks/check_mcp_logistics.py` fails with ModuleNotFoundError:
+sys.path[0] becomes this script's own directory, not the repo root, so
+`backend` isn't importable):
+    python -m scripts.manual_checks.check_mcp_logistics
 """
 
 import asyncio

@@ -43,13 +43,28 @@ supabase/        migrations/ (001..014, numbered/sequential), run_all.sql, seed_
                  No ER_diagram.md here — see docs/ER_diagram.md (the old supabase/ copy was deleted
                  after it drifted out of sync).
 data/            generate_dataset.py (deterministic synthetic data — feeds supabase/seed_synthetic.sql
-                 and tests/qa/golden/, both across trees), rag/policies/ (markdown policy docs +
+                 and evaluation/golden/, both across trees), rag/policies/ (markdown policy docs +
                  ingest_policy_embeddings.py). No qa/ subfolder — the golden eval dataset has zero
-                 production consumers, so it lives at tests/qa/golden/ instead (see tests/).
-tests/           unit/, integration/, conftest.py (shared fixtures), manual_checks/ (standalone MCP
-                 smoke-test scripts, not pytest — see Testing), qa/manual/ (human-run QA kit, 24 curated
-                 cases via the Streamlit UI) + qa/golden/ (automated evaluator_agent evaluation against
-                 480 synthetic cases, LLM + Langfuse, no UI) — see tests/qa/README.md for the split.
+                 production consumers, so it lives at evaluation/golden/ instead (see evaluation/).
+tests/           unit/, integration/, conftest.py (shared fixtures) — ONLY pytest-collected
+                 correctness tests. Manual smoke-checks and LLM/agent quality evaluation used to live
+                 nested here (tests/qa/, tests/manual_checks/) but were promoted to their own
+                 top-level folders (evaluation/, scripts/manual_checks/) — different discipline
+                 (probabilistic, often calls a real LLM, no `assert`) and different audience than
+                 pytest's "is the code correct" — nesting them under tests/ meant the README had to
+                 keep warning "nothing here runs via plain `pytest tests/`", a sign the name itself
+                 was misleading.
+evaluation/      LLM/agent quality assessment against curated cases — NOT pytest, see
+                 evaluation/README.md for the two independent kits: golden/ (480 synthetic cases,
+                 evaluate_evaluator_agent.py scores everything to Langfuse — task success, tool
+                 accuracy, contains, cost, latency — no local report file) and manual/ (24 curated
+                 cases, a human clicks through the Streamlit chat UI).
+scripts/         Cross-cutting maintenance scripts not tied to data/ (dataset-specific) or
+                 evaluation/ (LLM-quality-specific) — e.g. sync_prompts_to_langfuse.py, which pushes
+                 the 4 system-prompt constants (source of truth stays in code) to Langfuse Prompt
+                 Management for versioning/visibility (agents never read prompts back from Langfuse
+                 at runtime); manual_checks/ (standalone MCP smoke-test scripts, run via
+                 `python -m scripts.manual_checks.check_mcp_supabase`, not `pytest`).
 generated_labels/ Runtime-generated PDFs + notifications_log.jsonl — gitignored, self-regenerating
 docs/            architecture.drawio, graph_diagram.md, ER_diagram.md, defensaTFM/ (thesis defense notes)
 scripts/         Cross-cutting maintenance scripts not tied to data/ (dataset-specific) or
@@ -107,17 +122,20 @@ pytest tests/integration/  # integration only
 
 Async tests use explicit `@pytest.mark.asyncio` markers (no global `asyncio_mode` set).
 
-`tests/manual_checks/check_mcp_supabase.py` and `check_mcp_logistics.py` are **manual smoke-test
-scripts**, not pytest tests — run them directly (`python tests/manual_checks/check_mcp_supabase.py`)
-against a live MCP server, not via pytest. They're named `check_*.py` (not `test_*.py`) specifically so
-plain `pytest tests/` does not collect and fail on them.
+`tests/` now holds ONLY what plain `pytest tests/` collects — `manual_checks/` and `qa/` used to live
+nested here (with README/naming workarounds warning that they don't run via pytest) and were promoted
+to their own top-level folders, see Directory map above:
 
-`tests/qa/` is a **separate** QA area with two independent kits — neither runs via plain `pytest tests/`:
-`tests/qa/manual/` (24 curated cases, a human clicks through the Streamlit chat UI) and
-`tests/qa/golden/` (480 synthetic cases, evaluates `evaluator_agent` with a real/mocked LLM, optionally
-via Langfuse). See `tests/qa/README.md` for which one you want and `tests/qa/golden/README.md`
-for the Langfuse flow specifically. `tests/qa/golden/scripts/evaluate_evaluator_agent.py --dry-run` does
-run automatically in CI (job `qa-golden-dataset-dry-run`) as a regression gate on `policy_rules.py`.
+- `scripts/manual_checks/check_mcp_supabase.py` and `check_mcp_logistics.py` are **manual smoke-test
+  scripts**, not pytest tests — run them via `python -m scripts.manual_checks.check_mcp_supabase`
+  against a live MCP server, not via pytest.
+- `evaluation/` is a **separate** LLM/agent quality area with two independent kits:
+  `evaluation/manual/` (24 curated cases, a human clicks through the Streamlit chat UI) and
+  `evaluation/golden/` (480 synthetic cases, evaluates `evaluator_agent` with a real/mocked LLM,
+  scores everything to Langfuse — no local report file). See `evaluation/README.md` for which one
+  you want and `evaluation/golden/README.md` for the Langfuse Datasets/Experiments flow specifically.
+  `evaluation/golden/scripts/evaluate_evaluator_agent.py --dry-run` does run automatically in CI (job
+  `qa-golden-dataset-dry-run`) as a regression gate on `policy_rules.py`.
 
 Test conventions: fixtures named `mock_*`/`sample_*` in `conftest.py`, `unittest.mock.AsyncMock` for
 async mocks, test files named `test_<module>.py` mirroring the `services/`/`agents/` module they cover.
@@ -144,5 +162,5 @@ after it drifted out of sync — it was missing the `thread_id` column from migr
 
 - CORS in `backend/api/main.py` is wide open (`allow_origins=["*"]`) — this is intentional for local dev,
   not an oversight to "fix" without discussion.
-- Per-directory README.md files (`frontend/README.md`, `data/README.md`, `tests/qa/README.md`) contain
+- Per-directory README.md files (`frontend/README.md`, `data/README.md`, `evaluation/README.md`) contain
   authoritative setup detail for their area — check them before assuming behavior.

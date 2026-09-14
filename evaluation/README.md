@@ -6,7 +6,7 @@ comparten datos ni herramientas — no hace falta correr uno para usar el otro:
 | | [`manual/`](manual/README.md) | [`golden/`](golden/README.md) |
 |---|---|---|
 | **Qué es** | 24 casos curados a mano, para un humano | 480 casos sintéticos, para un script |
-| **Cómo se ejecuta** | Escribiendo mensajes en el chat de Streamlit (UI) | `python -m tests.qa.golden.scripts...` (sin UI) |
+| **Cómo se ejecuta** | Escribiendo mensajes en el chat de Streamlit (UI) | `python -m evaluation.golden.scripts...` (sin UI) |
 | **Quién lo corre** | Una persona, siguiendo una guía de 5 pasos | El agente evaluador real (LLM) o reglas deterministas |
 | **Qué mide** | "¿Responde bien el chatbot completo, de punta a punta?" | "¿Clasifica bien `evaluator_agent` valid/invalid/human_review?" |
 | **¿Toca RAG de verdad?** | Sí (vía la app real) | No — mockea `search_return_policy()` a propósito |

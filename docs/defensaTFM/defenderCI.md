@@ -59,7 +59,7 @@ fallo suyo no impide mergear.
 ### El planteamiento
 `rag-ingest-dry-run` y `qa-golden-dataset-dry-run` validan, respectivamente, el
 chunking de las 17 políticas Markdown y la consistencia de los 480 casos del
-golden dataset (`tests/qa/golden/eval_cases.csv`) contra las reglas deterministas de
+golden dataset (`evaluation/golden/eval_cases.csv`) contra las reglas deterministas de
 `policy_rules.py` — sin ninguna llamada real a OpenAI ni a Supabase.
 
 ### Argumentos para defenderlo

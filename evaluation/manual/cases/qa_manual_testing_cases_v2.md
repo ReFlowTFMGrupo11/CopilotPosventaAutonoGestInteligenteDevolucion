@@ -1,7 +1,7 @@
 # 🧪 QA Manual Testing — 24 Casos de Prueba v2
 
 **Fecha:** 2026-08-18 · **Rama:** `tamara-testing-v2`  
-**BD requerida:** ejecutar `tests/qa/sql/00_reset_and_seed_complete.sql` en Supabase antes de probar.
+**BD requerida:** ejecutar `evaluation/manual/sql/00_reset_and_seed_complete.sql` en Supabase antes de probar.
 
 ---
 

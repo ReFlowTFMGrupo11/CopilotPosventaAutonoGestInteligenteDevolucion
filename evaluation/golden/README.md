@@ -1,4 +1,4 @@
-# tests/qa/golden — evaluación automática del Agente Evaluador
+# evaluation/golden — evaluación automática del Agente Evaluador
 
 Kit de evaluación **100% automático, sin UI**: llama a `evaluator_agent()`
 directamente en Python contra 480 casos golden y calcula precisión/recall/F1.
@@ -6,11 +6,11 @@ Para el kit de pruebas manuales (24 casos, UI de Streamlit), ver
 [`../manual/README.md`](../manual/README.md).
 
 Los scripts se ejecutan siempre desde la **raíz del repo** con `python -m`, no
-directamente con `python tests/qa/golden/scripts/archivo.py` (usan imports
+directamente con `python evaluation/golden/scripts/archivo.py` (usan imports
 relativos al paquete `backend`).
 
 ```bash
-.venv/Scripts/python.exe -m tests.qa.golden.scripts.<nombre_del_script> [opciones]
+.venv/Scripts/python.exe -m evaluation.golden.scripts.<nombre_del_script> [opciones]
 ```
 
 ## Índice de scripts
@@ -63,10 +63,10 @@ experiment runs comparables en la UI, con historial entre versiones).
 
 ```bash
 # Prueba pequeña primero (gratis, no llama al LLM, solo escribe en Langfuse)
-.venv/Scripts/python.exe -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse --limit 5
+.venv/Scripts/python.exe -m evaluation.golden.scripts.migrate_eval_cases_to_langfuse --limit 5
 
 # Si todo se ve bien en la UI, sube el resto (o usa --force para re-subir)
-.venv/Scripts/python.exe -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse
+.venv/Scripts/python.exe -m evaluation.golden.scripts.migrate_eval_cases_to_langfuse
 ```
 
 Qué hace: lee `eval_cases.csv` (480 filas, en esta misma carpeta) y crea, por
@@ -115,14 +115,14 @@ Input / Expected Output / Metadata.
 ```bash
 # Dry-run: reglas deterministas, SIN LLM, gratis — valida que el
 # pipeline (dataset → task → evaluador → Langfuse) funciona de punta a punta
-.venv/Scripts/python.exe -m tests.qa.golden.scripts.run_langfuse_experiment --dry-run --limit 5
+.venv/Scripts/python.exe -m evaluation.golden.scripts.run_langfuse_experiment --dry-run --limit 5
 
 # Smoke test con el LLM real, pocos casos (consume tokens de OpenAI)
-.venv/Scripts/python.exe -m tests.qa.golden.scripts.run_langfuse_experiment --limit 20
+.venv/Scripts/python.exe -m evaluation.golden.scripts.run_langfuse_experiment --limit 20
 
 # Run completo: los 480 casos con el LLM real (gpt-5-mini) — tiene coste,
 # ejecútalo cuando quieras un número serio de accuracy/F1
-.venv/Scripts/python.exe -m tests.qa.golden.scripts.run_langfuse_experiment
+.venv/Scripts/python.exe -m evaluation.golden.scripts.run_langfuse_experiment
 ```
 
 Qué hace, por cada item del dataset:
