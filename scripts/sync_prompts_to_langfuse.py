@@ -12,11 +12,21 @@ importando y usando sus constantes de Python exactamente igual que antes --
 CERO cambios en su lógica ni en su disponibilidad. Este script solo EMPUJA
 el contenido actual del código hacia Langfuse, nunca al revés.
 
-Motivo: mantener el prompt versionado y editable en Langfuse (útil para
-"Link to Traces"/métricas por versión, más adelante) sin renunciar a que un
-prompt sea código *source controlled* -- revisable en PR, con historia de
-git real, sin depender de que alguien recuerde sincronizar de vuelta un
-cambio hecho a mano en la UI de Langfuse antes de que se pierda.
+Motivo: mantener el prompt versionado y editable en Langfuse sin renunciar
+a que un prompt sea código *source controlled* -- revisable en PR, con
+historia de git real, sin depender de que alguien recuerde sincronizar de
+vuelta un cambio hecho a mano en la UI de Langfuse antes de que se pierda.
+
+La versión `production` que sube este script es la que leen
+`evaluation/golden/scripts/evaluate_evaluator_agent.py` (enlaza cada run vía
+"Link to Traces" y anota `prompt_version` en sus scores agregados) y
+`run_langfuse_experiment.py` (etiqueta el Experiment con `prompt_version`)
+para poder comparar accuracy entre versiones de prompt filtrando por
+metadata en Langfuse, sin diffear el código a mano -- ver
+`get_production_prompt()` más abajo. Si el código local no coincide con la
+versión `production` (p. ej. editaste el prompt y no has corrido este
+script todavía), esa evaluación se registra sin enlazar a ninguna versión
+-- enlazarla a la versión vieja daría una correlación falsa.
 
 ## Qué hace
 
@@ -54,6 +64,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+from typing import Any
 
 from backend.agents.nodes.evaluator import POLICY_SYSTEM_PROMPT
 from backend.agents.nodes.resolution import (
@@ -79,14 +90,27 @@ PROMPTS: dict[str, str] = {
 }
 
 
+def get_production_prompt(lf, name: str) -> Any | None:
+    """Cliente de la versión `production` actual en Langfuse (con `.prompt`
+    y `.version`), o None si el prompt no existe todavía.
+
+    Reutilizado por `evaluation/golden/scripts/evaluate_evaluator_agent.py`
+    para enlazar cada run de evaluación a la versión de prompt que
+    realmente se usó -- ver `sync()` más abajo para quién sube esa versión.
+    Sin `cache_ttl_seconds=0` reutilizaría una versión cacheada del proceso
+    anterior en vez de la real, dando un falso positivo de "coincide".
+    """
+    try:
+        return lf.get_prompt(name, label="production", cache_ttl_seconds=0)
+    except Exception:
+        return None
+
+
 def _current_production_text(lf, name: str) -> str | None:
     """Texto de la versión `production` actual en Langfuse, o None si el
     prompt no existe todavía."""
-    try:
-        prompt = lf.get_prompt(name, label="production", cache_ttl_seconds=0)
-    except Exception:
-        return None
-    return prompt.prompt
+    prompt = get_production_prompt(lf, name)
+    return prompt.prompt if prompt else None
 
 
 def sync(dry_run: bool = False) -> dict[str, str]:

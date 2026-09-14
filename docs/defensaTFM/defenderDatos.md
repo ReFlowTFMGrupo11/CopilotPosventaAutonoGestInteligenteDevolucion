@@ -71,10 +71,14 @@ A partir de `eval_cases.csv`, tres scripts en `evaluation/golden/scripts/` "toma
 ```
 eval_cases.csv
         │
-        ├──► evaluate_evaluator_agent.py                  local: reconstruye el estado,
+        ├──► evaluate_evaluator_agent.py                  reconstruye el estado,
         │                                      llama a evaluator_agent(),
-        │                                      compara vs expected_label,
-        │                                      escribe un informe JSON/MD
+        │                                      compara vs expected_label.
+        │                                      NO escribe ningún fichero local
+        │                                      -- todo (scores por caso y
+        │                                      agregados) va a una traza
+        │                                      suelta de Langfuse, si está
+        │                                      configurado
         │
         └──► migrate_eval_cases_to_langfuse.py   sube las 480 filas como
                        │                          Dataset de Langfuse
@@ -86,6 +90,11 @@ eval_cases.csv
                                                 comparable entre ejecuciones,
                                                 traza por caso)
 ```
+
+Ambos scripts (en modo LLM real) leen además la versión `production` de
+`policy-system-prompt` en Langfuse (subida por
+`scripts/sync_prompts_to_langfuse.py`) y, si coincide con el código que de
+verdad se ejecutó, enlazan el run a esa versión — ver §4bis.
 
 ---
 
@@ -142,6 +151,41 @@ No son dos implementaciones paralelas que puedan desincronizarse: `run_langfuse_
 importa literalmente `_build_state`/`_build_mock_policy`/`_result_to_label` desde
 `evaluate_evaluator_agent.py` — un solo punto de verdad para "cómo se reconstruye el caso", con dos
 formas distintas de registrar el resultado.
+
+---
+
+## 4bis. Correlacionar accuracy con la versión del prompt ("Link to Traces")
+
+`scripts/sync_prompts_to_langfuse.py` sube los 4 prompts de sistema a Langfuse
+como versiones `production`, pero durante un tiempo eso fue solo un espejo
+para que un humano lo leyera en la UI — nada en el código leía esa versión de
+vuelta para saber "¿qué accuracy dio esta versión concreta del prompt?". Cerrado así:
+
+Antes de correr los casos, ambos scripts (`evaluate_evaluator_agent.py` y
+`run_langfuse_experiment.py`) comparan `POLICY_SYSTEM_PROMPT` (el código que
+de verdad se va a ejecutar) contra la versión `production` en Langfuse
+(`get_production_prompt()`):
+
+- **Coinciden** → el run queda enlazado a esa versión: `evaluate_evaluator_agent.py`
+  pasa el objeto `prompt` obtenido de Langfuse a cada `start_observation()`
+  (el mecanismo nativo de Langfuse — desde la página de esa versión de prompt
+  se ve la lista de runs que la usaron) y además anota
+  `metadata={"prompt_version": N}` en los scores agregados (`accuracy`,
+  `macro_f1`, ...), más un score `prompt_version` categórico standalone para
+  poder filtrar/agrupar directamente en la tabla de Scores. `run_langfuse_experiment.py`
+  etiqueta el Experiment completo con `metadata.prompt_version`.
+- **No coinciden** (se editó el prompt en el código y no se ha corrido
+  `sync_prompts_to_langfuse.py` todavía, o el prompt no existe aún en
+  Langfuse) → se avisa por log y el run se manda **sin enlazar a ninguna
+  versión**. Enlazarlo a la versión `production` vieja habría dado una
+  correlación falsa (atribuir esa accuracy a un prompt que no es el que
+  realmente se ejecutó).
+
+Con esto, comparar "¿mejoró la accuracy al cambiar este prompt?" ya no exige
+diffear ficheros a mano ni fiarse de memoria — se filtra por `prompt_version`
+en la tabla de Scores/Experiments de Langfuse. Solo aplica en modo LLM real:
+`--dry-run` no llama a `evaluator_agent()`, así que `POLICY_SYSTEM_PROMPT` ni
+se ejecuta.
 
 ---
 

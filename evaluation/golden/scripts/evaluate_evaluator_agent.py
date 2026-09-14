@@ -27,6 +27,27 @@ consola, no se guardan en ningún sitio -- si el objetivo es guardar un
 histórico, hazlo vía LangFuse, no relanzando el script y mirando la
 terminal.
 
+## Correlación con la versión del prompt (solo modo LLM real)
+
+Antes de evaluar, se lee de Langfuse la versión `production` de
+`policy-system-prompt` (subida por
+`scripts/sync_prompts_to_langfuse.py`) y se compara con la constante
+`POLICY_SYSTEM_PROMPT` que de verdad se ejecuta en este run:
+  - Si coinciden: cada observation por caso queda enlazada a esa versión
+    (parámetro `prompt=` de `start_observation`, el "Link to Traces"
+    nativo de Langfuse -- desde la página de esa versión de prompt se ve
+    la lista de runs que la usaron) y los scores agregados
+    (`accuracy`, `macro_f1`, ...) llevan `metadata={"prompt_version": N}`,
+    así que se puede comparar accuracy entre versiones filtrando por esa
+    metadata en la tabla de Scores, sin diffear nada a mano.
+  - Si no coinciden (editaste el prompt y no has corrido
+    `sync_prompts_to_langfuse` todavía, o el prompt no existe aún en
+    Langfuse): se avisa por log y el run se manda SIN enlazar a ninguna
+    versión -- enlazarlo a la versión `production` vieja mentiría sobre
+    qué prompt generó esa accuracy.
+En `--dry-run` no aplica: no se llama a `evaluator_agent` ni por tanto a
+`POLICY_SYSTEM_PROMPT`.
+
 Uso:
     python -m evaluation.golden.scripts.evaluate_evaluator_agent                  # todos los casos
     python -m evaluation.golden.scripts.evaluate_evaluator_agent --limit 50       # primeros N casos
@@ -510,8 +531,9 @@ async def run_evaluation(
         ``{"mode": "dry-run"|"llm", "overall": <de _compute_metrics>}`` —
         lo mínimo que necesita ``__main__`` para el exit code.
     """
-    from backend.agents.nodes.evaluator import evaluator_agent
+    from backend.agents.nodes.evaluator import POLICY_SYSTEM_PROMPT, evaluator_agent
     from backend.services.observability import get_langfuse, flush as langfuse_flush
+    from scripts.sync_prompts_to_langfuse import get_production_prompt
 
     cases = _load_cases(EVAL_CSV, limit, category)
     logger.info(
@@ -528,6 +550,38 @@ async def run_evaluation(
 
         run_trace_id = Langfuse.create_trace_id()
         logger.info("LangFuse: trace_id=%s", run_trace_id)
+
+    # ── Prompt activo: enlazar el run a la versión 'production' de Langfuse ──
+    # Solo aplica en modo LLM real (--dry-run no llama a evaluator_agent, así
+    # que POLICY_SYSTEM_PROMPT ni se ejecuta) -- ver docstring del módulo,
+    # "Correlación con la versión del prompt".
+    prompt_client = None
+    prompt_version: int | None = None
+    if lf and not dry_run:
+        candidate = get_production_prompt(lf, "policy-system-prompt")
+        if candidate is None:
+            logger.warning(
+                "policy-system-prompt no existe todavía en Langfuse -- este run "
+                "no quedará enlazado a ninguna versión. Corre "
+                "`python -m scripts.sync_prompts_to_langfuse` antes de evaluar "
+                "si quieres poder comparar accuracy por versión de prompt."
+            )
+        elif candidate.prompt != POLICY_SYSTEM_PROMPT:
+            logger.warning(
+                "POLICY_SYSTEM_PROMPT (código) difiere de la versión "
+                "'production' v%d en Langfuse -- este run evalúa el código "
+                "actual, no esa versión, así que se manda SIN enlazar (evita "
+                "correlacionar esta accuracy con un prompt equivocado). Corre "
+                "`python -m scripts.sync_prompts_to_langfuse` antes de evaluar "
+                "si quieres que quede enlazado.",
+                candidate.version,
+            )
+        else:
+            prompt_client = candidate
+            prompt_version = candidate.version
+            logger.info(
+                "LangFuse: run enlazado a policy-system-prompt v%d", prompt_version
+            )
 
     results: list[dict] = []
 
@@ -660,6 +714,7 @@ async def run_evaluation(
                         "is_frequent_returner": row.get("is_frequent_returner"),
                     },
                     trace_context={"trace_id": run_trace_id},
+                    prompt=prompt_client,
                 )
                 obs.end()
                 lf.create_score(
@@ -719,6 +774,23 @@ async def run_evaluation(
     # abajo en __main__) sigue funcionando igual, en memoria.
     if lf and run_trace_id:
         try:
+            # Metadata compartida por todos los scores agregados de este run,
+            # para poder filtrar/agrupar en la tabla de Scores de LangFuse
+            # "accuracy por versión de prompt" sin abrir cada traza (ver
+            # docstring del módulo, "Correlación con la versión del prompt").
+            # None si el código no coincide con 'production' -- no se enlaza
+            # a una versión que no es la que de verdad se ejecutó.
+            prompt_meta = (
+                {"prompt_version": prompt_version} if prompt_version is not None else None
+            )
+            if prompt_version is not None:
+                lf.create_score(
+                    trace_id=run_trace_id,
+                    name="prompt_version",
+                    value=str(prompt_version),
+                    data_type="CATEGORICAL",
+                    metadata={"prompt_name": "policy-system-prompt"},
+                )
             for metric_name, value in [
                 ("accuracy", overall["accuracy"]),
                 ("macro_f1", overall["macro"]["f1"]),
@@ -736,6 +808,7 @@ async def run_evaluation(
                     name=metric_name,
                     value=value,
                     data_type="NUMERIC",
+                    metadata=prompt_meta,
                 )
             # Precision/recall/F1 por clase: mismo nombre de score para las
             # 3 clases, diferenciadas por metadata -- evita crear un tipo de
@@ -749,7 +822,7 @@ async def run_evaluation(
                         name=metric_name,
                         value=m[metric_name],
                         data_type="NUMERIC",
-                        metadata={"label": lbl},
+                        metadata={"label": lbl, **(prompt_meta or {})},
                     )
             # Accuracy por categoría: mismo criterio, metadata={"category": cat}.
             for cat, m in by_cat.items():
@@ -758,7 +831,7 @@ async def run_evaluation(
                     name="category_accuracy",
                     value=m["accuracy"],
                     data_type="NUMERIC",
-                    metadata={"category": cat},
+                    metadata={"category": cat, **(prompt_meta or {})},
                 )
             langfuse_flush()
             logger.info("LangFuse: métricas enviadas → trace_id=%s", run_trace_id)
