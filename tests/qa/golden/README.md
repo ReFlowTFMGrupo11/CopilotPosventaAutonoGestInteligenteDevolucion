@@ -17,17 +17,39 @@ relativos al paquete `backend`).
 
 | Script | Para qué | Requiere LLM/red |
 |---|---|---|
-| `evaluate_evaluator_agent.py` | Evaluador **local** de `evaluator_agent` contra los 480 casos golden (`eval_cases.csv`, en esta misma carpeta). Calcula precisión/recall/F1 y escribe el informe en `results/*.json` y `*.md`. Pese a su nombre histórico ("evaluate_rag"), **no** ejecuta ninguna búsqueda vectorial real — mockea `search_return_policy()` a propósito para aislar la calidad de la decisión (LLM + reglas) de la calidad del retrieval. El test real del RAG (chunking/ingesta) vive en `tests/unit/test_ingest_policy_embeddings.py`. | Solo si no usas `--dry-run` |
+| `evaluate_evaluator_agent.py` | Evaluador de `evaluator_agent` contra los 480 casos golden (`eval_cases.csv`, en esta misma carpeta). Calcula precisión/recall/F1 (task success) + tool accuracy + contains + costo + latencia por caso, y manda todo como `score` a LangFuse (por caso y agregado en la traza raíz) — no escribe ningún fichero local; sin LangFuse configurado, solo el exit code (accuracy) y el log de consola son el resultado. Pese a su nombre histórico ("evaluate_rag"), **no** ejecuta ninguna búsqueda vectorial real — mockea `search_return_policy()` a propósito para aislar la calidad de la decisión (LLM + reglas) de la calidad del retrieval. El test real del RAG (chunking/ingesta) vive en `tests/unit/test_ingest_policy_embeddings.py`. | Solo si no usas `--dry-run` |
 | `migrate_eval_cases_to_langfuse.py` | Sube los 480 casos golden a Langfuse como **Dataset** (`policy-eval-golden-set`), reutilizando el mismo CSV que `evaluate_evaluator_agent.py`. | No (solo escribe en Langfuse) |
 | `run_langfuse_experiment.py` | Ejecuta `evaluator_agent` contra el dataset de Langfuse y sube los resultados como **Experiment Run**, con evaluación automática por item (`label_match`) y agregada (`accuracy`). Es el equivalente a `evaluate_evaluator_agent.py` pero con historial y comparación entre ejecuciones en la UI de Langfuse en vez de ficheros locales. | Solo si no usas `--dry-run` |
 
 ---
 
+## Cobertura de métricas de evaluación
+
+De las 6 categorías habituales de una tabla de métricas de evaluación
+(task success, tool accuracy, contains, LLM-as-judge, costo, latencia),
+`evaluate_evaluator_agent.py` cubre 5 (ver el docstring del propio script
+para el detalle exacto de cómo se calcula cada una y sus límites):
+
+| Métrica | ¿Implementada? | Cómo |
+|---|---|---|
+| Task success | ✅ | accuracy/precision/recall/F1 por clase (la métrica original del script) |
+| Tool accuracy | ✅ | ¿llamó a `search_return_policy()` solo cuando el pre-check determinista no resolvía el caso él solo? (derivado de `expected_label`, sin columna nueva en el CSV) |
+| Contains | ✅ (acotado) | solo para casos `invalid` por plazo — palabra "plazo" en `eligibility_reason`, texto 100% determinista de `policy_rules.py` |
+| Costo | ✅ | tokens/modelo reales capturados mockeando `usage_service.log_llm_usage()` (nunca escribe en la BD real) |
+| Latencia | ✅ | tiempo real de cada llamada a `evaluator_agent()`, por caso |
+| LLM-as-judge | ❌ (decisión consciente) | las `expected_label` salen de reglas Python deterministas (`classify_case()`), no del juicio de otro LLM — para tener un ground truth reproducible byte a byte, no un segundo modelo cuyo propio error se mezclaría con el del agente evaluado |
+
+Solo aplica con LLM real (`--dry-run` no llama a `evaluator_agent()` ni a
+los mocks, así que estas 5 métricas quedan a `None`/0 en ese modo — task
+success sigue disponible siempre, vía `_deterministic_label()`).
+
 ## Guía: golden dataset + experimentos en Langfuse
 
 Esto documenta el flujo que estamos siguiendo para pasar de "evaluación
-local con ficheros JSON/MD" (`evaluate_evaluator_agent.py`) a "evaluación en
-Langfuse" (dataset + experiment runs comparables en la UI).
+local, un run suelto sin historial" (`evaluate_evaluator_agent.py`, que ya
+manda sus métricas a LangFuse como scores pero sin comparación entre
+ejecuciones) a "evaluación en Langfuse Datasets/Experiments" (dataset +
+experiment runs comparables en la UI, con historial entre versiones).
 
 ### Requisitos previos
 

@@ -11,11 +11,21 @@ tests/unit/test_ingest_policy_embeddings.py.
 
 Lee los 480 casos de tests/qa/golden/eval_cases.csv, construye un estado
 mínimo por caso, y ejecuta evaluator_agent con el LLM real (gpt-5-mini).
-Calcula precisión, recall y F1 por clase y por categoría, y vuelca el
-informe como JSON y tabla Markdown en:
+Calcula precisión, recall y F1 por clase y por categoría, más las 4
+métricas adicionales de más abajo.
 
-  tests/qa/golden/results/eval_report_<timestamp>.json
-  tests/qa/golden/results/eval_report_<timestamp>.md
+## Dónde se ven las métricas
+
+Este script NO escribe ningún fichero local (ni JSON ni Markdown): todas
+las métricas, por caso y agregadas, se mandan como `score` a LangFuse (si
+está configurado, ver requisitos más abajo) — la traza raíz agrupa toda la
+ejecución, cada caso es un span con sus propios scores. Sin LangFuse
+configurado (p. ej. en CI, `--dry-run`), el único resultado persistente es
+el exit code de `accuracy` (ver `if __name__ == "__main__"`, calculado en
+memoria); las métricas de esa ejecución concreta solo se ven en el log de
+consola, no se guardan en ningún sitio -- si el objetivo es guardar un
+histórico, hazlo vía LangFuse, no relanzando el script y mirando la
+terminal.
 
 Uso:
     python -m tests.qa.golden.scripts.evaluate_evaluator_agent                  # todos los casos
@@ -29,6 +39,51 @@ para validar que el golden dataset es internamente consistente.  Ideal para CI.
 
 Requisitos (solo para el modo real):
     OPENAI_API_KEY en .env
+
+## Métricas de evaluación (ver docs/defensaTFM/defenderDatos.md)
+
+De las 6 categorías de la tabla de evaluación del TFM, este script cubre:
+todas las que se implementan se mandan como `score` a LangFuse (por caso
+y/o agregado en la traza raíz, ver "Dónde se ven las métricas" más
+arriba) -- ninguna vive solo en un fichero local.
+
+- **Task success**: sí (accuracy/precision/recall/F1 por clase, la métrica
+  original de este script).
+- **Tool accuracy**: sí, `_expected_tool_called()` — evaluator_agent solo
+  debería llamar a `search_return_policy()` (Fase 2, RAG narrativo) cuando
+  el pre-check determinista (Fase 1) NO resuelve el caso él solo, es decir,
+  cuando `expected_label != "invalid"` (ver docstring de `evaluator_agent`
+  en backend/agents/nodes/evaluator.py). No hace falta una columna
+  `expected_tool` nueva en el CSV: se deriva de `expected_label`, que ya
+  sale de la misma lógica de negocio (`classify_case()` en
+  `generate_dataset.py` replica `deterministic_check()`).
+- **Contains**: sí, pero deliberadamente acotado — `_expected_keywords()`
+  solo comprueba la palabra "plazo" en `eligibility_reason` para casos
+  `invalid` por fuera de plazo (Fase 1, texto 100% determinista de
+  `policy_rules.py`, sin LLM de por medio). NO se comprueban palabras para
+  higiene/condición (redacción más variable, check frágil) ni para casos
+  `human_review`/`valid` que sí pasan por el LLM (Fase 2): ahí
+  `eligibility_reason` es razonamiento libre sobre elegibilidad de
+  política, no una plantilla fija sobre el motivo de HITL (importe/cliente
+  frecuente) — el LLM nunca recibe esos umbrales como instrucción
+  explícita, así que comprobarlos ahí daría falsos negativos por diseño
+  del prompt, no por un fallo real del agente.
+- **Costo**/**Latencia**: sí, por caso — se mockea
+  `usage_service.log_llm_usage()` (nunca escribe en la BD real: mismo
+  motivo por el que se mockean `search_return_policy`/`get_policy_info`,
+  evitar efectos secundarios reales en una evaluación) para capturar
+  tokens/modelo de cada llamada real al LLM y calcular su coste con
+  `pricing.py`; la latencia mide el `evaluator_agent()` completo por caso
+  (incluye el mock de RAG, que es ~instantáneo, así que en la práctica es
+  la latencia real del LLM).
+- **LLM-as-judge**: decisión consciente de NO implementarlo. Las
+  `expected_label` del golden dataset salen de `classify_case()` — reglas
+  Python deterministas, no el juicio de otro LLM — precisamente para tener
+  un "ground truth" reproducible y auditable byte a byte (dos ejecuciones
+  del generador con el mismo `SEED` dan el mismo dataset). Introducir un
+  LLM-juez añadiría no-determinismo justo en la pieza que se usa como
+  referencia para medir al LLM evaluado — ver docs/defensaTFM/
+  defenderDatos.md.
 """
 
 from __future__ import annotations
@@ -36,10 +91,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import csv
-import json
 import logging
-import os
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,16 +104,16 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
+from backend.services import pricing  # noqa: E402 -- tras load_dotenv, ver Settings
+
 # ── Rutas ──────────────────────────────────────────────────────────────────
 # parents[4]: scripts/ -> golden/ -> qa/ -> tests/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[4]
 EVAL_CSV = REPO_ROOT / "tests" / "qa" / "golden" / "eval_cases.csv"
 POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
 
 # ── Umbrales deterministas (deben coincidir con la lógica del agente) ──────
 HITL_AMOUNT_THRESHOLD = 100.0  # €  → human_review
-HITL_FREQUENT_RETURNER = True  # is_frequent_returner=True → human_review
 BORDER_ZONE_DAYS = 5  # plazo ± 5 días → human_review (zona frontera)
 
 LABELS = ["valid", "invalid", "human_review"]
@@ -200,6 +254,12 @@ def _build_state(row: dict) -> dict[str, Any]:
         },
         "reason": f"Motivo de evaluación: {row['reason_category']}",
         "reason_category": row["reason_category"],
+        # Solo para que el guard de usage_tracking.py::_log_usage() ("sin
+        # thread_id no hay sesión a la que atribuir el gasto") no descarte
+        # la llamada -- log_llm_usage() está mockeado más abajo (ver
+        # run_evaluation), nunca escribe en la BD real. Necesario para
+        # medir Costo/Latencia por caso (ver docstring del módulo).
+        "thread_id": f"eval-{row['case_id']}",
         "items_to_return": [
             {
                 "order_item_id": order_item_id,
@@ -238,6 +298,65 @@ def _deterministic_label(row: dict) -> str:
     return "valid"
 
 
+def _expected_tool_called(row: dict) -> bool:
+    """Si evaluator_agent debería llamar a ``search_return_policy()`` (Fase
+    2, RAG narrativo) para este caso.
+
+    Ver el docstring de ``evaluator_agent`` (backend/agents/nodes/evaluator.py):
+    el pre-check determinista (Fase 1, ``get_policy_info`` + ``deterministic_check()``)
+    resuelve el caso ENTERO sin RAG cuando el veredicto es "invalid" — ningún
+    contexto adicional cambiaría ese veto. Solo cuando el veredicto queda en
+    zona gris ("valid"/"human_review") el caso pasa a la Fase 2 y llama a
+    ``search_return_policy()``.
+
+    No hace falta una columna ``expected_tool`` nueva en el CSV:
+    ``expected_label`` ya sale de ``classify_case()`` (generate_dataset.py),
+    que replica las mismas reglas de negocio que ``deterministic_check()``
+    (policy_rules.py) — por eso "invalid" en el CSV predice de forma fiable
+    "sin llamada RAG" en el agente real.
+    """
+    return row["expected_label"] != "invalid"
+
+
+def _expected_keywords(row: dict) -> list[str]:
+    """Palabra clave que DEBERÍA aparecer en el ``eligibility_reason`` real
+    si el caso se decide por plazo, o lista vacía si no aplica ningún check.
+
+    Deliberadamente acotado: solo cubre casos "invalid" resueltos en la
+    Fase 1 (pre-check determinista, sin LLM) cuyo motivo es el plazo —
+    ``rule_deadline``/``rule_deadline_borderline`` (policy_rules.py) usan
+    literalmente la palabra "plazo" en su mensaje, así que es un check
+    robusto contra código propio y estable.
+
+    NO se comprueban palabras para higiene/condición (la redacción de
+    ``rule_hygiene``/``rule_condition_allowed`` varía más entre casos, sería
+    un check más frágil que útil) ni para casos "valid"/"human_review" que
+    sí pasan por el LLM (Fase 2): ahí ``eligibility_reason`` es razonamiento
+    libre sobre elegibilidad de política. En particular, el motivo de HITL
+    por importe/cliente frecuente (``rule_high_amount``/
+    ``rule_frequent_returner``) NUNCA se expone al LLM como instrucción
+    explícita — solo decide ``needs_admin_approval`` a nivel de solicitud,
+    no el texto de ningún item — así que comprobar esas palabras ahí daría
+    falsos negativos por diseño del prompt, no por un fallo real del agente.
+    """
+    if row["expected_label"] != "invalid":
+        return []
+    days = int(row["days_since_delivery"])
+    max_days = int(row["max_return_days"])
+    if days > max_days:
+        return ["plazo"]
+    return []
+
+
+def _first_item_reason(result: dict[str, Any]) -> str:
+    """``eligibility_reason`` del primer item (casos single-item del CSV),
+    o cadena vacía si no hay ninguno."""
+    items = result.get("items_eligibility") or []
+    if not items:
+        return ""
+    return items[0].get("eligibility_reason") or ""
+
+
 def _result_to_label(result: dict[str, Any]) -> str:
     """Convierte la salida de evaluator_agent en una etiqueta comparable.
 
@@ -274,8 +393,6 @@ def _result_to_label(result: dict[str, Any]) -> str:
 
 def _compute_metrics(results: list[dict]) -> dict:
     """Calcula accuracy, precision, recall y F1 por clase y macro-average."""
-    from collections import Counter
-
     per_class: dict[str, dict] = {lbl: {"tp": 0, "fp": 0, "fn": 0} for lbl in LABELS}
     correct = 0
 
@@ -330,52 +447,41 @@ def _metrics_by_category(results: list[dict]) -> dict[str, dict]:
     return {cat: _compute_metrics(rows) for cat, rows in sorted(by_cat.items())}
 
 
-# ── Formatters ─────────────────────────────────────────────────────────────
+def _compute_extra_metrics(results: list[dict]) -> dict:
+    """Tool accuracy, contains, costo y latencia agregados (ver docstring
+    del módulo). Todo a None/0 en modo --dry-run, donde no se llama a
+    evaluator_agent ni a los mocks -- ninguno de estos campos tiene sentido
+    sin una invocación real.
 
-
-def _render_markdown(
-    overall: dict, by_cat: dict[str, dict], timestamp: str, mode: str
-) -> str:
-    """Renderiza el informe de evaluación (métricas globales y por categoría) como tabla Markdown.
-
-    Args:
-        overall: Métricas globales, tal como las devuelve ``_compute_metrics``.
-        by_cat: Métricas por categoría, tal como las devuelve ``_metrics_by_category``.
-        timestamp: Marca de tiempo a mostrar en la cabecera del informe.
-        mode: Modo de ejecución ("dry-run" o "llm") a mostrar en la cabecera.
+    ``*_n`` documenta explícitamente el denominador de cada ratio: ni
+    tool_accuracy ni contains_accuracy se calculan sobre los 480 casos --
+    solo sobre el subconjunto con una expectativa bien definida (ver
+    ``_expected_tool_called``/``_expected_keywords``), y ocultar ese
+    denominador daría una falsa sensación de cobertura total.
     """
-    lines = [
-        f"# Informe de Evaluación RAG — ReFlow",
-        f"",
-        f"**Fecha:** {timestamp}  ",
-        f"**Modo:** {mode}  ",
-        f"**Casos evaluados:** {overall['total']}  ",
-        f"**Accuracy global:** {overall['accuracy']:.1%}  ",
-        f"",
-        f"## Métricas globales por clase",
-        f"",
-        f"| Clase | Precision | Recall | F1 | Support |",
-        f"|-------|-----------|--------|----|---------|",
+    tool_checked = [r["tool_match"] for r in results if r.get("tool_match") is not None]
+    contains_checked = [
+        r["contains_match"] for r in results if r.get("contains_match") is not None
     ]
-    for lbl in LABELS:
-        m = overall["per_class"][lbl]
-        lines.append(
-            f"| {lbl} | {m['precision']:.3f} | {m['recall']:.3f} | {m['f1']:.3f} | {m['support']} |"
-        )
-    macro = overall["macro"]
-    lines += [
-        f"| **macro avg** | {macro['precision']:.3f} | {macro['recall']:.3f} | {macro['f1']:.3f} | {overall['total']} |",
-        f"",
-        f"## Accuracy por categoría",
-        f"",
-        f"| Categoría | Casos | Accuracy | F1 macro |",
-        f"|-----------|-------|----------|----------|",
-    ]
-    for cat, m in by_cat.items():
-        lines.append(
-            f"| {cat} | {m['total']} | {m['accuracy']:.1%} | {m['macro']['f1']:.3f} |"
-        )
-    return "\n".join(lines) + "\n"
+    latencies = [r["latency_ms"] for r in results if r.get("latency_ms") is not None]
+    llm_calls = sum(1 for r in results if r.get("llm_called"))
+    total_cost_eur = sum(r.get("cost_eur") or 0.0 for r in results)
+
+    return {
+        "tool_accuracy": (
+            (sum(tool_checked) / len(tool_checked)) if tool_checked else None
+        ),
+        "tool_accuracy_n": len(tool_checked),
+        "contains_accuracy": (
+            (sum(contains_checked) / len(contains_checked))
+            if contains_checked
+            else None
+        ),
+        "contains_accuracy_n": len(contains_checked),
+        "total_cost_eur": round(total_cost_eur, 6),
+        "llm_calls": llm_calls,
+        "avg_latency_ms": round(sum(latencies) / len(latencies)) if latencies else None,
+    }
 
 
 # ── Runner principal ────────────────────────────────────────────────────────
@@ -392,12 +498,17 @@ async def run_evaluation(
     (reglas deterministas en ``dry_run``, o ``evaluator_agent`` con el LLM
     real y ``search_return_policy`` mockeado en caso contrario), comparándola
     con la etiqueta esperada del CSV. Si LangFuse está configurado, registra
-    un span y un score por caso, además de las métricas agregadas en la traza
-    raíz. Al final calcula precisión/recall/F1 globales y por categoría, y
-    escribe el informe como JSON y Markdown en ``tests/qa/golden/results/``.
+    un span y todas las métricas de ese caso (label_match, tool_match,
+    contains_match, cost_eur, latency_ms) como scores, más las métricas
+    agregadas (accuracy, precision/recall/F1 por clase, accuracy por
+    categoría, tool/contains accuracy, coste/latencia totales) en la traza
+    raíz. No escribe ningún fichero local: si LangFuse no está configurado,
+    el único resultado persistente es el exit code de ``__main__`` (basado
+    en accuracy, calculado en memoria) — ver docstring del módulo.
 
     Returns:
-        El informe completo (métricas, casos fallidos y metadatos de la ejecución).
+        ``{"mode": "dry-run"|"llm", "overall": <de _compute_metrics>}`` —
+        lo mínimo que necesita ``__main__`` para el exit code.
     """
     from backend.agents.nodes.evaluator import evaluator_agent
     from backend.services.observability import get_langfuse, flush as langfuse_flush
@@ -410,7 +521,6 @@ async def run_evaluation(
     )
 
     lf = get_langfuse()
-    run_ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     # ID de traza raíz — se pasa como trace_id en cada span
     run_trace_id: str | None = None
     if lf:
@@ -427,6 +537,12 @@ async def run_evaluation(
         cat = row["category"]
         max_days = int(row["max_return_days"])
 
+        tool_match: bool | None = None
+        contains_match: bool | None = None
+        cost_eur: float | None = None
+        latency_ms: int | None = None
+        llm_called = False
+
         if dry_run:
             predicted = _deterministic_label(row)
         else:
@@ -434,16 +550,29 @@ async def run_evaluation(
             allowed_conditions = row["allowed_conditions"].split("|")
             mock_policy = _build_mock_policy(cat, max_days, allowed_conditions)
 
+            tool_called_flag = {"value": False}
+
             async def _mock_search(
                 query: str, category: str = "", thread_id: str = ""
             ) -> dict:  # noqa: E501
                 """Sustituye a search_return_policy() devolviendo la policy mockeada de este caso."""
+                tool_called_flag["value"] = True
                 return mock_policy
 
             async def _mock_policy_info(category: str) -> dict:
                 """Sustituye a get_policy_info() (pre-check determinista, ver evaluator.py)."""
                 return mock_policy.get("policy_info") or {}
 
+            # Captura tokens/modelo de cada llamada real al LLM sin escribir
+            # en la BD real -- mismo motivo que mockear las tools de RAG:
+            # una evaluación no debe tener efectos secundarios reales (ver
+            # docstring del módulo, sección Costo/Latencia).
+            captured_usage: list[dict[str, Any]] = []
+
+            async def _fake_log_llm_usage(**kwargs: Any) -> None:
+                captured_usage.append(kwargs)
+
+            start = time.perf_counter()
             try:
                 with patch(
                     "backend.agents.nodes.evaluator.get_policy_info",
@@ -451,26 +580,64 @@ async def run_evaluation(
                 ), patch(
                     "backend.agents.nodes.evaluator.search_return_policy",
                     side_effect=_mock_search,
+                ), patch(
+                    "backend.agents.usage_tracking.usage_service.log_llm_usage",
+                    new=AsyncMock(side_effect=_fake_log_llm_usage),
                 ):
                     agent_result = await evaluator_agent(state)
+                latency_ms = int((time.perf_counter() - start) * 1000)
                 predicted = _result_to_label(agent_result)
+
+                tool_match = tool_called_flag["value"] == _expected_tool_called(row)
+
+                expected_kw = _expected_keywords(row)
+                if expected_kw:
+                    reason_text = _first_item_reason(agent_result).lower()
+                    contains_match = all(kw in reason_text for kw in expected_kw)
+
+                llm_called = bool(captured_usage)
+                cost_eur = sum(
+                    (
+                        pricing.estimate_cost_eur(
+                            u.get("model", ""),
+                            u.get("input_tokens", 0),
+                            u.get("output_tokens", 0),
+                        )
+                        or 0.0
+                    )
+                    for u in captured_usage
+                )
             except Exception as exc:
+                latency_ms = int((time.perf_counter() - start) * 1000)
                 logger.warning("Caso %s falló: %s", case_id, exc)
                 predicted = "error"
 
         match = expected == predicted
+        # Solo se guardan los campos que _compute_metrics()/_metrics_by_category()/
+        # _compute_extra_metrics() leen de verdad más abajo -- "case_id",
+        # "match" y "rationale" NO se guardan aquí porque nada los vuelve a
+        # leer del dict (case_id/rationale ya se usan directamente de
+        # row/variables locales para el score de LangFuse de abajo; "match"
+        # también se recalcula desde expected/predicted, nunca desde este
+        # dict). Guardarlos sería código muerto.
         results.append(
             {
-                "case_id": case_id,
                 "category": cat,
                 "expected": expected,
                 "predicted": predicted,
-                "match": match,
-                "rationale": row.get("rationale", ""),
+                "tool_match": tool_match,
+                "contains_match": contains_match,
+                "cost_eur": cost_eur,
+                "latency_ms": latency_ms,
+                "llm_called": llm_called,
             }
         )
 
         # ── LangFuse: span + scores por caso ──────────────────────────────
+        # Todas las métricas por caso van aquí, no a un fichero local: si no
+        # se manda a Langfuse (o no cabe como score agregado, ver más abajo),
+        # no se calcula ni se guarda en ningún sitio (ver docstring del
+        # módulo, "Dónde se ven las métricas").
         if lf and run_trace_id:
             try:
                 obs = lf.start_observation(
@@ -502,6 +669,38 @@ async def run_evaluation(
                     value=1.0 if match else 0.0,
                     data_type="NUMERIC",
                 )
+                if tool_match is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="tool_match",
+                        value=1.0 if tool_match else 0.0,
+                        data_type="NUMERIC",
+                    )
+                if contains_match is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="contains_match",
+                        value=1.0 if contains_match else 0.0,
+                        data_type="NUMERIC",
+                    )
+                if cost_eur is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="cost_eur",
+                        value=cost_eur,
+                        data_type="NUMERIC",
+                    )
+                if latency_ms is not None:
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        observation_id=obs.id,
+                        name="latency_ms",
+                        value=float(latency_ms),
+                        data_type="NUMERIC",
+                    )
             except Exception as exc:
                 logger.debug("LangFuse span error (caso %s): %s", case_id, exc)
 
@@ -510,17 +709,14 @@ async def run_evaluation(
 
     overall = _compute_metrics(results)
     by_cat = _metrics_by_category(results)
-    mismatches = [r for r in results if not r["match"]]
-
-    report = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "mode": "dry-run" if dry_run else "llm",
-        "overall": overall,
-        "by_category": by_cat,
-        "mismatches": mismatches[:50],
-    }
+    extra = _compute_extra_metrics(results)
 
     # ── LangFuse: scores agregados en la traza raíz ────────────────────────
+    # Cada métrica agregada calculada por este script se manda aquí -- es la
+    # única forma en que este script "guarda" un resultado (ver docstring
+    # del módulo). Sin LangFuse configurado (p. ej. en CI), estos scores
+    # simplemente no se mandan a ningún sitio; el exit code (accuracy, más
+    # abajo en __main__) sigue funcionando igual, en memoria.
     if lf and run_trace_id:
         try:
             for metric_name, value in [
@@ -528,30 +724,46 @@ async def run_evaluation(
                 ("macro_f1", overall["macro"]["f1"]),
                 ("macro_precision", overall["macro"]["precision"]),
                 ("macro_recall", overall["macro"]["recall"]),
+                ("tool_accuracy", extra["tool_accuracy"]),
+                ("contains_accuracy", extra["contains_accuracy"]),
+                ("total_cost_eur", extra["total_cost_eur"]),
+                ("avg_latency_ms", extra["avg_latency_ms"]),
             ]:
+                if value is None:
+                    continue
                 lf.create_score(
                     trace_id=run_trace_id,
                     name=metric_name,
                     value=value,
                     data_type="NUMERIC",
                 )
+            # Precision/recall/F1 por clase: mismo nombre de score para las
+            # 3 clases, diferenciadas por metadata -- evita crear un tipo de
+            # score distinto por clase (mismo criterio que score_tool_call en
+            # observability.py, ver su docstring).
+            for lbl in LABELS:
+                m = overall["per_class"][lbl]
+                for metric_name in ("precision", "recall", "f1"):
+                    lf.create_score(
+                        trace_id=run_trace_id,
+                        name=metric_name,
+                        value=m[metric_name],
+                        data_type="NUMERIC",
+                        metadata={"label": lbl},
+                    )
+            # Accuracy por categoría: mismo criterio, metadata={"category": cat}.
+            for cat, m in by_cat.items():
+                lf.create_score(
+                    trace_id=run_trace_id,
+                    name="category_accuracy",
+                    value=m["accuracy"],
+                    data_type="NUMERIC",
+                    metadata={"category": cat},
+                )
             langfuse_flush()
             logger.info("LangFuse: métricas enviadas → trace_id=%s", run_trace_id)
         except Exception as exc:
             logger.warning("LangFuse flush error: %s", exc)
-
-    # ── Guardar resultados ─────────────────────────────────────────────────
-    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    ts = run_ts
-    json_path = RESULTS_DIR / f"eval_report_{ts}.json"
-    md_path = RESULTS_DIR / f"eval_report_{ts}.md"
-
-    json_path.write_text(
-        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    md_path.write_text(
-        _render_markdown(overall, by_cat, ts, report["mode"]), encoding="utf-8"
-    )
 
     logger.info("─" * 60)
     logger.info(
@@ -559,10 +771,38 @@ async def run_evaluation(
         overall["accuracy"] * 100,
         overall["macro"]["f1"],
     )
-    logger.info("Informe JSON → %s", json_path)
-    logger.info("Informe MD  → %s", md_path)
+    if not dry_run:
+        logger.info(
+            "Tool accuracy: %s (n=%d)  |  Contains: %s (n=%d)  |  "
+            "Coste total: %.6f€ (%d llamadas al LLM)  |  Latencia media: %s",
+            (
+                f"{extra['tool_accuracy']:.1%}"
+                if extra["tool_accuracy"] is not None
+                else "—"
+            ),
+            extra["tool_accuracy_n"],
+            (
+                f"{extra['contains_accuracy']:.1%}"
+                if extra["contains_accuracy"] is not None
+                else "—"
+            ),
+            extra["contains_accuracy_n"],
+            extra["total_cost_eur"],
+            extra["llm_calls"],
+            (
+                f"{extra['avg_latency_ms']} ms"
+                if extra["avg_latency_ms"] is not None
+                else "—"
+            ),
+        )
+    if not lf:
+        logger.info(
+            "LangFuse no configurado: las métricas de esta ejecución solo se "
+            "ven en este log (nunca se guardan en un fichero local, ver "
+            "docstring del módulo)."
+        )
 
-    return report
+    return {"mode": "dry-run" if dry_run else "llm", "overall": overall}
 
 
 def _parse_args() -> argparse.Namespace:
