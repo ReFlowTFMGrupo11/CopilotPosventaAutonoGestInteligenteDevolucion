@@ -19,7 +19,7 @@ Cubre los tres tipos de resultado que el sistema debe distinguir:
 ## 📁 Estructura
 
 ```
-tests/qa/manual/
+evaluation/manual/
 ├── README.md                          ← Este documento (leer primero)
 ├── cases/
 │   ├── qa_manual_testing_cases_v2.csv ← 24 casos curados — fuente de verdad
@@ -64,14 +64,14 @@ streamlit run frontend/Chat.py
 
 ```bash
 # Borra todo y recarga políticas + 24 clientes + 24 productos + 24 pedidos
-psql -h <host> -U postgres -d <db> -f tests/qa/manual/sql/00_reset_and_seed_complete.sql
+psql -h <host> -U postgres -d <db> -f evaluation/manual/sql/00_reset_and_seed_complete.sql
 ```
 
 **Opción B — Solo añadir los 24 casos (sin borrar nada):**
 
 ```bash
 # Aditivo e idempotente: se puede ejecutar múltiples veces sin duplicar datos
-psql -h <host> -U postgres -d <db> -f tests/qa/manual/sql/01_seed_qa_cases.sql
+psql -h <host> -U postgres -d <db> -f evaluation/manual/sql/01_seed_qa_cases.sql
 ```
 
 **Opción C — Desde el SQL Editor web de Supabase:**
@@ -87,7 +87,7 @@ psql -h <host> -U postgres -d <db> -f tests/qa/manual/sql/01_seed_qa_cases.sql
 ### Paso 3 — Abrir el Excel de casos
 
 ```bash
-open tests/qa/manual/cases/qa_manual_testing_cases_v2.xlsx
+open evaluation/manual/cases/qa_manual_testing_cases_v2.xlsx
 ```
 
 El Excel tiene dos pestañas:
@@ -238,7 +238,7 @@ Si modificas `qa_manual_testing_cases_v2.csv`, regenera el Excel con:
 
 ```bash
 source .venv/bin/activate
-python tests/qa/manual/scripts/create_qa_testing_excel.py
+python evaluation/manual/scripts/create_qa_testing_excel.py
 ```
 
 ---

@@ -10,8 +10,8 @@ Cubre dos piezas relacionadas pero distintas, que conviene no confundir en la de
 
 - **Generación de datos** (`data/generate_dataset.py` → `supabase/seed_synthetic.sql`):
   un mundo ficticio y coherente (clientes, productos, pedidos) para poblar la app.
-- **Evaluación / golden dataset** (`tests/qa/golden/eval_cases.csv` + los scripts de
-  `tests/qa/golden/scripts/`): un examen con las respuestas correctas ya puestas, y las
+- **Evaluación / golden dataset** (`evaluation/golden/eval_cases.csv` + los scripts de
+  `evaluation/golden/scripts/`): un examen con las respuestas correctas ya puestas, y las
   herramientas que se lo toman al agente real.
 
 ---
@@ -53,12 +53,12 @@ data/generate_dataset.py   (seed fijo: 20260730 — reproducible)
         │                                    140 conversaciones de chat
         │                                    → para poblar Supabase (BD real)
         │
-        ├──► tests/qa/golden/eval_cases.csv          480 filas: datos de entrada +
+        ├──► evaluation/golden/eval_cases.csv          480 filas: datos de entrada +
         │                                    expected_label (valid/invalid/
         │                                    human_review) YA CALCULADO
         │                                    → el "examen con respuestas"
         │
-        └──► tests/qa/golden/GENERATION_STATS.md     resumen legible (recuentos,
+        └──► evaluation/golden/GENERATION_STATS.md     resumen legible (recuentos,
                                               distribución) — solo para que
                                               un humano compruebe de un
                                               vistazo que el dataset generado
@@ -66,7 +66,7 @@ data/generate_dataset.py   (seed fijo: 20260730 — reproducible)
                                               lo consume
 ```
 
-A partir de `eval_cases.csv`, tres scripts en `tests/qa/golden/scripts/` "toman el examen":
+A partir de `eval_cases.csv`, tres scripts en `evaluation/golden/scripts/` "toman el examen":
 
 ```
 eval_cases.csv
@@ -267,7 +267,7 @@ casos concretos es una señal real de que ambas capturan la misma intención de 
 documentada en las políticas — no un artefacto circular donde el mismo código se
 autoevalúa. El límite real: si ambas comparten el **mismo error de diseño** (p. ej. una
 mala interpretación de una política legal), el golden dataset no lo detectaría — para eso
-existen los 24 casos manuales curados (`tests/qa/manual/cases/`), revisados por una persona, no
+existen los 24 casos manuales curados (`evaluation/manual/cases/`), revisados por una persona, no
 generados por ninguna regla.
 
 ### Objeción: "¿Por qué 480 casos y no 15, o 1000?"

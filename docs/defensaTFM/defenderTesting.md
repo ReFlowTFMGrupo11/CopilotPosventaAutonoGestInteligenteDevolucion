@@ -2,7 +2,7 @@
 
 Este documento recoge los argumentos para defender, en la memoria/presentación del
 TFM, **la infraestructura de tests de código** de ReFlow: por qué hay tres capas
-distintas (`tests/unit/`, `tests/integration/`, `tests/manual_checks/`), qué
+distintas (`tests/unit/`, `tests/integration/`, `scripts/manual_checks/`), qué
 verifica cada una, cómo se conectan con el pipeline de CI (`.github/workflows/ci.yml`,
 ver [`defenderCI.md`](defenderCI.md)), y el estado real de CD.
 
@@ -11,20 +11,21 @@ documento habla de si **el código** funciona (¿un endpoint devuelve lo que deb
 ¿una función calcula bien?). Si buscas si **el agente decide bien** (Langfuse,
 golden dataset de 480 casos, QA manual de 24 casos), ve a
 [`defenderLangfuse.md`](defenderLangfuse.md) y [`defenderDatos.md`](defenderDatos.md)
-— son medidas de calidad de comportamiento de IA, no de corrección de código, aunque
-ambas familias vivan bajo `tests/`. Ver el índice en `docs/defensaTFM/README.md`
-para el mapa completo.
+— son medidas de calidad de comportamiento de IA, no de corrección de código; viven
+en su propia carpeta top-level (`evaluation/`), separada de `tests/` precisamente
+por esa diferencia de disciplina y audiencia. Ver el índice en
+`docs/defensaTFM/README.md` para el mapa completo.
 
 ---
 
 ## 1. Tres capas, no una — qué verifica cada una
 
-| | `tests/unit/` | `tests/integration/` | `tests/manual_checks/` |
+| | `tests/unit/` | `tests/integration/` | `scripts/manual_checks/` |
 |---|---|---|---|
 | **Qué prueba** | Una función/endpoint aislado | El grafo LangGraph completo, con nodos reales encadenados | Que un servidor MCP real responde |
 | **Qué mockea** | Todo lo externo (Supabase, LLM, grafo) | El LLM (`_build_llm` mockeado) y los tools MCP; el grafo y el routing son **reales** | Nada — servidor levantado de verdad |
 | **Velocidad** | Milisegundos | Milisegundos (sin red real) | Segundos (red real) |
-| **Se ejecuta con `pytest`** | Sí | Sí | **No** — scripts standalone (`check_*.py`, no `test_*.py`, para que `pytest` no los recoja) |
+| **Se ejecuta con `pytest`** | Sí | Sí | **No** — scripts standalone (`check_*.py`), fuera de `tests/` (viven en `scripts/manual_checks/`) |
 | **Corre en CI** | Sí, cada PR (`ci.yml::test`) | Sí, cada PR (mismo job) | No — necesitaría los 2 servers MCP levantados en el runner |
 | **Ejemplo real de hoy** | `test_pricing.py` — aritmética de coste, cero I/O | `test_graph_flow.py` — turno completo triage→evaluator→resolver | `check_mcp_supabase.py` — ¿responde `get_order_details` de verdad? |
 
@@ -39,11 +40,12 @@ para el mapa completo.
   lo correcto dado lo que el LLM devolvió?"* — necesita el grafo real para que esa
   pregunta tenga sentido, pero no necesita gastar tokens reales para responderla
   (el LLM se mockea con una respuesta fija).
-- **`manual_checks/` no es pytest a propósito**: nombrado `check_*.py` (no
-  `test_*.py`) para que ni `pytest tests/` ni CI lo recojan por accidente — exige
-  los 2 servers MCP levantados a mano, algo que no tiene sentido automatizar en
-  cada PR (ver §4 de [`defenderCI.md`](defenderCI.md), mismo argumento de
-  infraestructura real vs mockeada).
+- **`manual_checks/` no es pytest a propósito**: vive en `scripts/manual_checks/`,
+  fuera de `tests/`, y nombrado `check_*.py` (no `test_*.py`) — doble garantía de
+  que ni `pytest tests/` ni CI lo recogen por accidente — exige los 2 servers MCP
+  levantados a mano, algo que no tiene sentido automatizar en cada PR (ver §4 de
+  [`defenderCI.md`](defenderCI.md), mismo argumento de infraestructura real vs
+  mockeada).
 
 ---
 

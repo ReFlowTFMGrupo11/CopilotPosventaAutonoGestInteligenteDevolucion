@@ -289,7 +289,7 @@ contra `datetime.now()` — el mismo patrón de "bomba de relojería" que ya se
 había corregido una vez en `tests/conftest.py` (commit `ab28809`), pero que
 nunca se aplicó a este script porque su modo con LLM real nunca se había
 ejecutado hasta ahora (no hay ningún informe con `"mode": "llm"` en
-`tests/qa/golden/results/` anterior a este cambio). Corregido con el mismo
+`evaluation/golden/results/` anterior a este cambio). Corregido con el mismo
 fix (`now = datetime.now(timezone.utc)`); tras el fix, el mismo smoke test
 de 20 casos sube a **90%** de accuracy, con los únicos 2 fallos siendo el
 gap de `missing_evidence` ya documentado

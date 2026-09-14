@@ -1,7 +1,11 @@
 """
 Test script for MCP Supabase server via Streamable HTTP.
 Start the server first: python -m backend.mcp.mcp_supabase
-Then run this: python tests/test_mcp_supabase.py
+Then run this (from repo root, module mode -- a plain `python
+scripts/manual_checks/check_mcp_supabase.py` fails con ModuleNotFoundError:
+sys.path[0] pasa a ser el directorio del propio script, no la raíz del
+repo, así que `backend` no es importable):
+    python -m scripts.manual_checks.check_mcp_supabase
 
 Requiere que la base de datos tenga al menos un cliente cargado (p. ej.
 supabase/seed_synthetic.sql, ver data/README.md): este script resuelve un

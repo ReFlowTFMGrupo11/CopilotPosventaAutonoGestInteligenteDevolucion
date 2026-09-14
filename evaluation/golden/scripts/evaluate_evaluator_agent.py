@@ -9,7 +9,7 @@ política correcto, evaluator_agent() decide bien (LLM real o reglas
 deterministas en --dry-run). El test real del RAG (chunking/ingesta) vive en
 tests/unit/test_ingest_policy_embeddings.py.
 
-Lee los 480 casos de tests/qa/golden/eval_cases.csv, construye un estado
+Lee los 480 casos de evaluation/golden/eval_cases.csv, construye un estado
 mínimo por caso, y ejecuta evaluator_agent con el LLM real (gpt-5-mini).
 Calcula precisión, recall y F1 por clase y por categoría, más las 4
 métricas adicionales de más abajo.
@@ -28,10 +28,10 @@ histórico, hazlo vía LangFuse, no relanzando el script y mirando la
 terminal.
 
 Uso:
-    python -m tests.qa.golden.scripts.evaluate_evaluator_agent                  # todos los casos
-    python -m tests.qa.golden.scripts.evaluate_evaluator_agent --limit 50       # primeros N casos
-    python -m tests.qa.golden.scripts.evaluate_evaluator_agent --category calzado
-    python -m tests.qa.golden.scripts.evaluate_evaluator_agent --dry-run        # lógica determinista, sin LLM
+    python -m evaluation.golden.scripts.evaluate_evaluator_agent                  # todos los casos
+    python -m evaluation.golden.scripts.evaluate_evaluator_agent --limit 50       # primeros N casos
+    python -m evaluation.golden.scripts.evaluate_evaluator_agent --category calzado
+    python -m evaluation.golden.scripts.evaluate_evaluator_agent --dry-run        # lógica determinista, sin LLM
 
 Modo --dry-run: en vez de llamar al LLM, aplica las reglas deterministas
 directamente sobre las columnas del CSV (plazo, importe HITL, is_frequent_returner)
@@ -107,9 +107,9 @@ load_dotenv(override=True)
 from backend.services import pricing  # noqa: E402 -- tras load_dotenv, ver Settings
 
 # ── Rutas ──────────────────────────────────────────────────────────────────
-# parents[4]: scripts/ -> golden/ -> qa/ -> tests/ -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[4]
-EVAL_CSV = REPO_ROOT / "tests" / "qa" / "golden" / "eval_cases.csv"
+# parents[3]: scripts/ -> golden/ -> evaluation/ -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[3]
+EVAL_CSV = REPO_ROOT / "evaluation" / "golden" / "eval_cases.csv"
 POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
 
 # ── Umbrales deterministas (deben coincidir con la lógica del agente) ──────

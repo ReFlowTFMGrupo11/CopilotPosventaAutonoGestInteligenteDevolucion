@@ -21,7 +21,7 @@ negocio. No mide corrección de código.
 | [`defenderDashboardCostes.md`](defenderDashboardCostes.md) | Por qué existe un dashboard propio de coste/latencia **además de** Langfuse, no en su lugar |
 | [`defenderDatos.md`](defenderDatos.md) | El golden dataset (480 casos, etiquetas calculadas sin IA) — evaluación automática masiva de si `evaluator_agent` clasifica bien |
 | [`defenderRAG.md`](defenderRAG.md) | Calidad de la búsqueda semántica de políticas — incluye la investigación real de por qué el umbral 0.7 dejaba el RAG sin devolver nada, y la optimización de coste que salta el RAG cuando el veto ya es determinista |
-| [`../../tests/qa/README.md`](../../tests/qa/README.md) | Los dos kits de QA: 480 casos automáticos (`golden/`) vs 24 casos curados a mano (`manual/`) |
+| [`../../evaluation/README.md`](../../evaluation/README.md) | Los dos kits de QA: 480 casos automáticos (`golden/`) vs 24 casos curados a mano (`manual/`) |
 
 **Las tres capas de garantía de calidad del agente, de más a menos automatizado:**
 1. **Langfuse** — trazas en vivo, para depurar un caso puntual ya ocurrido.

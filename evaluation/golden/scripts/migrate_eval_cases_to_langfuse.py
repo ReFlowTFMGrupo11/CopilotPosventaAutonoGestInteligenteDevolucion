@@ -1,5 +1,5 @@
 """
-Sube el golden dataset (tests/qa/golden/eval_cases.csv) a Langfuse como Dataset.
+Sube el golden dataset (evaluation/golden/eval_cases.csv) a Langfuse como Dataset.
 
 Crea (o reutiliza) el dataset `policy-eval-golden-set` en la instancia de
 Langfuse configurada por LANGFUSE_PUBLIC_KEY/LANGFUSE_SECRET_KEY/LANGFUSE_HOST
@@ -15,9 +15,9 @@ Idempotente: si el dataset ya tiene items con esos `case_id` en metadata,
 se saltan (usa --force para subir duplicados igualmente).
 
 Uso:
-    python -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse
-    python -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse --limit 10   # smoke test
-    python -m tests.qa.golden.scripts.migrate_eval_cases_to_langfuse --force
+    python -m evaluation.golden.scripts.migrate_eval_cases_to_langfuse
+    python -m evaluation.golden.scripts.migrate_eval_cases_to_langfuse --limit 10   # smoke test
+    python -m evaluation.golden.scripts.migrate_eval_cases_to_langfuse --force
 
 Requisitos:
     LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY en .env (ya están si el
@@ -36,9 +36,9 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-# parents[4]: scripts/ -> golden/ -> qa/ -> tests/ -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[4]
-EVAL_CSV = REPO_ROOT / "tests" / "qa" / "golden" / "eval_cases.csv"
+# parents[3]: scripts/ -> golden/ -> evaluation/ -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[3]
+EVAL_CSV = REPO_ROOT / "evaluation" / "golden" / "eval_cases.csv"
 DATASET_NAME = "policy-eval-golden-set"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
@@ -80,8 +80,8 @@ def migrate(limit: int | None = None, force: bool = False) -> None:
     lf.create_dataset(
         name=DATASET_NAME,
         description="480 casos golden para validar evaluator_agent "
-        "(fuente: tests/qa/golden/eval_cases.csv).",
-        metadata={"source": "tests/qa/golden/eval_cases.csv"},
+        "(fuente: evaluation/golden/eval_cases.csv).",
+        metadata={"source": "evaluation/golden/eval_cases.csv"},
     )
 
     dataset = lf.get_dataset(DATASET_NAME)
