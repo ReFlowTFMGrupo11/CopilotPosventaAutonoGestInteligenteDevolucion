@@ -100,6 +100,18 @@ erDiagram
         INTEGER output_tokens
         INTEGER total_tokens
         INTEGER latency_ms
+        NUMERIC cost_eur
+        TIMESTAMPTZ created_at
+    }
+
+    mcp_tool_calls {
+        UUID id PK
+        TEXT thread_id
+        TEXT tool_name
+        JSONB input_args
+        JSONB output_result
+        INTEGER latency_ms
+        TEXT status
         TIMESTAMPTZ created_at
     }
 
@@ -117,6 +129,7 @@ erDiagram
     order_items ||--o{ return_items : "returned as"
 
     return_requests ||--o{ return_items : "includes"
+    return_requests ||--o{ mcp_tool_calls : "linked via thread_id"
 
     return_policies ||--o{ policy_embeddings : "chunked into"
 ```
@@ -130,12 +143,20 @@ erDiagram
   `AsyncPostgresSaver.setup()` (ver `backend/agents/graph.py`) la primera vez
   que arranca el backend — **no** por ningún fichero de
   `supabase/migrations/`, así que no aparecen en este diagrama. `thread_id`
-  (columna TEXT en `return_requests` y `llm_usage`, migraciones 012/014) es
-  el identificador que conecta ambos mundos. (Existió una tabla
-  `chat_sessions`/`chat_messages` — migración `010` — pensada para esto
-  mismo, pero nunca la consultó ni la escribió ningún código de `backend/`;
-  se eliminó en la migración `015_drop_chat_sessions.sql`. Ver
+  (columna TEXT en `return_requests`, `llm_usage`, y `mcp_tool_calls`,
+  migraciones 012/014/017) es el identificador que conecta ambos mundos.
+  (Existió una tabla `chat_sessions`/`chat_messages` — migración `010` —
+  pensada para esto mismo, pero nunca la consultó ni la escribió ningún código
+  de `backend/`; se eliminó en la migración `015_drop_chat_sessions.sql`. Ver
   `docs/defensaTFM/defenderAgentes.md` §15.)
 - **`llm_usage`**: `customer_id`/`order_id` son `NULL` en los turnos de
   triaje anteriores a conocer el `order_number` del cliente (ver
   `fetch_order_data` en `triage.py`) — de ahí "(opcional)" en las relaciones.
+  El campo `cost_eur` (migración 016) congela el coste económico en el
+  momento de la llamada LLM, permitiendo auditoría y análisis de ROI sin
+  recálculo posterior.
+- **`mcp_tool_calls`** (migración 017): Registro de auditoría de todas las
+  invocaciones de MCP (tools de Supabase y Logistics) para debugging,
+  análisis de rendimiento y trazabilidad de decisiones del agente.
+  Vinculado por `thread_id` a `return_requests` para rastreo end-to-end
+  de una devolución.
