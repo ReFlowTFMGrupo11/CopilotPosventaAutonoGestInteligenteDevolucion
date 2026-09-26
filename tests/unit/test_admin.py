@@ -174,6 +174,48 @@ async def test_list_returns_with_status_filter(async_client, mock_supabase):
     assert resp.status_code == 200
 
 
+@pytest.mark.asyncio
+async def test_get_return_detail(async_client, mock_supabase):
+    """Verifica que se devuelve el detalle completo de una devolución
+    existente, incluyendo sus return_items anidados."""
+    mock_supabase.table.return_value.execute.return_value = MagicMock(
+        data={
+            "id": "ret-1",
+            "order_id": "ORD-001",
+            "status": "approved",
+            "refund_amount": 150.0,
+            "return_items": [
+                {
+                    "id": "ri-1",
+                    "order_item_id": "oi-1",
+                    "quantity": 1,
+                    "condition": "defective",
+                }
+            ],
+        }
+    )
+
+    async with async_client as client:
+        resp = await client.get("/api/admin/returns/ret-1")
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["id"] == "ret-1"
+    assert data["order_id"] == "ORD-001"
+    assert len(data["return_items"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_return_detail_not_found(async_client, mock_supabase):
+    """Verifica que una devolución inexistente devuelve un 404."""
+    mock_supabase.table.return_value.execute.return_value = MagicMock(data=None)
+
+    async with async_client as client:
+        resp = await client.get("/api/admin/returns/ret-nonexistent")
+
+    assert resp.status_code == 404
+
+
 # ── Migrados desde el extinto routers/orders.py (mismas URLs, mismo
 #    comportamiento -- solo cambia backend.api.routers.orders ->
 #    backend.api.routers.admin en el target del patch) ─────────────────────
