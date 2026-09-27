@@ -62,9 +62,14 @@ Uso:
     python -m evaluation.golden.scripts.evaluate_evaluator_agent --category calzado
     python -m evaluation.golden.scripts.evaluate_evaluator_agent --dry-run        # lógica determinista, sin LLM
 
-Modo --dry-run: en vez de llamar al LLM, aplica las reglas deterministas
-directamente sobre las columnas del CSV (plazo, importe HITL, is_frequent_returner)
-para validar que el golden dataset es internamente consistente.  Ideal para CI.
+Modo --dry-run: en vez de llamar al LLM, ejecuta la cadena de reglas REAL
+de policy_rules.py::deterministic_check() (Fase 1, no una reimplementación
+propia -- ver _deterministic_label()) sobre las columnas del CSV, con el
+reason_category traducido al vocabulario de producción
+(GOLDEN_TO_PRODUCTION_REASON_CATEGORY). Gratis, sin red, ideal para CI --
+y a diferencia de antes, SÍ detecta si el golden dataset deja de ser
+consistente con el código real de negocio (rule_hygiene,
+rule_condition_allowed...), no solo con plazo/importe/cliente frecuente.
 
 Requisitos (solo para el modo real):
     OPENAI_API_KEY en .env
@@ -133,6 +138,9 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
+from backend.agents.nodes.policy_rules import (  # noqa: E402
+    deterministic_check,
+)
 from backend.services import pricing  # noqa: E402 -- tras load_dotenv, ver Settings
 
 # ── Rutas ──────────────────────────────────────────────────────────────────
@@ -140,10 +148,6 @@ from backend.services import pricing  # noqa: E402 -- tras load_dotenv, ver Sett
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EVAL_CSV = REPO_ROOT / "evaluation" / "golden" / "eval_cases.csv"
 POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
-
-# ── Umbrales deterministas (deben coincidir con la lógica del agente) ──────
-HITL_AMOUNT_THRESHOLD = 100.0  # €  → human_review
-BORDER_ZONE_DAYS = 5  # plazo ± 5 días → human_review (zona frontera)
 
 LABELS = ["valid", "invalid", "human_review"]
 
@@ -457,27 +461,47 @@ def _build_state(row: dict) -> dict[str, Any]:
 
 
 def _deterministic_label(row: dict) -> str:
-    """Reproduce la lógica determinista del agente sin LLM.
-    Útil para --dry-run y para validar el golden dataset.
-    """
-    days = int(row["days_since_delivery"])
-    max_days = int(row["max_return_days"])
-    amount = float(row["refund_amount"])
-    frequent = row["is_frequent_returner"] == "True"
+    """Etiqueta de Fase 1 (determinista, sin LLM) para ``--dry-run``,
+    llamando a ``deterministic_check()`` REAL de ``policy_rules.py`` --
+    NO una reimplementación propia.
 
-    # Fuera de plazo (con margen de 5 días para zona frontera)
-    if days > max_days + BORDER_ZONE_DAYS:
-        return "invalid"
-    # Zona frontera del plazo
-    if max_days - BORDER_ZONE_DAYS < days <= max_days + BORDER_ZONE_DAYS:
-        return "human_review"
-    # HITL por importe
-    if amount > HITL_AMOUNT_THRESHOLD:
-        return "human_review"
-    # HITL por cliente frecuente
-    if frequent:
-        return "human_review"
-    return "valid"
+    Hasta este fix, esta función reimplementaba a mano solo 3 de las 6
+    reglas de negocio (plazo/importe/cliente frecuente) -- nunca ejecutaba
+    ``rule_hygiene``/``rule_condition_allowed``, así que el gate de CI
+    ``qa-golden-dataset-dry-run`` (``.github/workflows/ci.yml``, descrito
+    literalmente como "consistencia con policy_rules.py") en realidad NO
+    comprobaba consistencia con ese módulo en absoluto para esas 2 reglas
+    -- el bug de vocabulario de ``reason_category`` (ver
+    ``GOLDEN_TO_PRODUCTION_REASON_CATEGORY`` arriba) y el bug de
+    ``rule_hygiene()`` (no comprobaba ``condition`` antes de excluir por
+    higiene, corregido en ``policy_rules.py``) podrían haber estado rotos
+    de forma indefinida sin que ningún push lo detectara: el mock de
+    "Fase 1" nunca ejercitaba el código real que sí se ejecuta en
+    producción. Llamando a la función real, este gate ahora SÍ detecta
+    automáticamente cualquier futura regresión de Fase 1 -- p. ej. si se
+    añade una categoría a ``HYGIENE_CATEGORIES`` sin actualizar el mapeo
+    de vocabulario, o si alguien reordena ``POLICY_RULES`` -- sin gastar
+    tokens ni necesitar red.
+
+    Solo cubre Fase 1: los casos que quedan en zona gris ("valid"/
+    "human_review") en producción real pasarían aún por Fase 2 (LLM+RAG,
+    no simulable sin gastar tokens) -- aquí "valid" significa "Fase 1 no
+    vetó", no necesariamente la etiqueta final que daría el LLM.
+    """
+    mapped_reason = GOLDEN_TO_PRODUCTION_REASON_CATEGORY.get(
+        row["reason_category"], "other"
+    )
+    verdict, _ = deterministic_check(
+        days_since_order=int(row["days_since_delivery"]),
+        max_return_days=int(row["max_return_days"]),
+        allowed_conditions=row["allowed_conditions"].split("|"),
+        condition=row["condition"],
+        category=row["category"],
+        reason_category=mapped_reason,
+        refund_amount=float(row["refund_amount"]),
+        approved_returns=6 if row["is_frequent_returner"] == "True" else 0,
+    )
+    return verdict
 
 
 def _expected_tool_called(row: dict) -> bool:
