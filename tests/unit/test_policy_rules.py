@@ -59,12 +59,33 @@ class TestDeterministicCheck:
         assert verdict == "human_review"
         assert any("zona frontera" in r for r in reasons)
 
-    def test_invalid_hygiene_exclusion_changed_mind_regardless_of_condition(self):
+    def test_invalid_hygiene_exclusion_changed_mind_only_if_seal_broken(self):
         """Categoría de higiene + motivo de 'cambio de opinión' -> veto legal
-        SIEMPRE, incluso si el artículo está unopened (el derecho de
-        desistimiento no aplica a estas categorías, no solo el precinto)."""
-        for condition in ("used", "unopened", "defective"):
-            verdict, reasons = deterministic_check(
+        SOLO si el precinto está roto ('used'). data/rag/policies/
+        00_marco_general_devoluciones.md §2 es explícito: la exclusión
+        legal se pierde "en cuanto se rompe su precinto" / "desprecintados
+        TRAS LA ENTREGA" -- no aplica a un artículo que sigue sin abrir,
+        sea cual sea el motivo declarado."""
+        verdict, reasons = deterministic_check(
+            days_since_order=5,
+            max_return_days=21,
+            allowed_conditions=["unopened", "defective", "wrong_item"],
+            condition="used",
+            category="cosmetica_perfumeria",
+            reason_category="no_longer_needed",
+            refund_amount=30.0,
+            approved_returns=0,
+        )
+        assert verdict == "invalid"
+        assert "cambio de opinión" in reasons[0]
+
+    def test_valid_hygiene_category_changed_mind_if_seal_intact(self):
+        """Mismo motivo de 'cambio de opinión' en categoría de higiene, pero
+        con el precinto intacto ('unopened') -> el derecho de
+        desistimiento SÍ aplica, no hay exclusión legal (ver docstring del
+        test anterior para la cita exacta de la política)."""
+        for condition in ("unopened", "defective"):
+            verdict, _ = deterministic_check(
                 days_since_order=5,
                 max_return_days=21,
                 allowed_conditions=["unopened", "defective", "wrong_item"],
@@ -74,8 +95,7 @@ class TestDeterministicCheck:
                 refund_amount=30.0,
                 approved_returns=0,
             )
-            assert verdict == "invalid", f"condition={condition} debería vetarse igual"
-            assert "cambio de opinión" in reasons[0]
+            assert verdict == "valid", f"condition={condition} no debería vetarse"
 
     def test_valid_hygiene_category_but_mercadia_fault(self):
         """Misma categoría de higiene, pero el motivo SÍ es imputable a
