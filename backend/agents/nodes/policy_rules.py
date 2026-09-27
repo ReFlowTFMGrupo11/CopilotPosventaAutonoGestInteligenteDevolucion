@@ -137,37 +137,55 @@ def rule_deadline(ctx: PolicyContext) -> RuleResult:
 
 
 def rule_hygiene(ctx: PolicyContext) -> RuleResult:
-    """Rechaza productos de higiene abiertos/usados (exclusión legal) o por cambio de opinión."""
+    """Rechaza cambios de opinión en categorías de higiene, SOLO si el
+    precinto está roto (Art. 103 TRLGDCU).
+
+    La exclusión legal de higiene NUNCA aplica a un artículo que sigue sin
+    abrir — es el propio documento de política de Mercadia el que lo dice
+    literalmente, no una interpretación de este módulo: "lo pierden EN
+    CUANTO SE ROMPE su precinto de seguridad" y "que hayan sido
+    DESPRECINTADOS TRAS LA ENTREGA" (data/rag/policies/
+    00_marco_general_devoluciones.md, sección 2); la tabla de categorías
+    de esa misma política es aún más explícita: "Excluido SI SE ROMPIÓ EL
+    PRECINTO y no hay defecto de fábrica" (cosmética, droguería). Del enum
+    de 5 valores de triage.py, solo "used" representa un precinto roto por
+    decisión del cliente -- "unopened" nunca debe excluirse por higiene,
+    sea cual sea el motivo declarado.
+
+    ANTES de este fix, este chequeo de `condition` estaba en un bloque
+    posterior marcado como "inalcanzable hoy" -- porque la rama de
+    "cambio de opinión" de más abajo vetaba de forma incondicional, sin
+    llegar nunca a comprobar `condition`. Corregido: un cliente que
+    devuelve cosmética SIN ABRIR por "encontré mejor precio" tiene
+    derecho legal a hacerlo dentro del plazo comercial; solo se rechaza si
+    ya rompió el precinto.
+    """
     if ctx.category not in HYGIENE_CATEGORIES:
         return RuleResult("valid")
     if ctx.reason_category in MERCADIA_FAULT_REASONS:
         return RuleResult("valid")
-    # Cambio de opinión en categoría con exclusión legal → siempre inválido
+    if ctx.condition != "used":
+        return RuleResult("valid")
+    # A partir de aquí: categoría de higiene Y precinto roto ("used").
     if ctx.reason_category in NO_RETURN_BY_CHOICE_REASONS:
         return RuleResult(
             "invalid",
             f"Categoría '{ctx.category}' no admite devolución por cambio de opinión "
-            f"('{ctx.reason_category}'). Solo se aceptan devoluciones por defecto, "
-            f"artículo incorrecto o daño imputable a Mercadia.",
+            f"('{ctx.reason_category}') con el precinto de higiene roto. Solo se "
+            f"aceptan devoluciones por defecto, artículo incorrecto o daño "
+            f"imputable a Mercadia.",
         )
-    # Producto usado en categoría de higiene → exclusión legal.
-    # (Del enum de 5 valores de triage.py, solo "used" implica precinto/uso
-    # roto por decisión del cliente; "unopened"/"defective"/"damaged"/
-    # "wrong_item" no indican manipulación voluntaria del producto.)
-    #
-    # NOTA: con el reason_category de 6 valores actual, MERCADIA_FAULT_REASONS
-    # ∪ NO_RETURN_BY_CHOICE_REASONS cubre las 6 categorías posibles — este
-    # bloque es hoy inalcanzable (una de las dos ramas de arriba siempre
-    # decide antes de llegar aquí). Se deja como red de seguridad explícita
-    # para si el reason_category se amplía en el futuro (ver docstring del
-    # módulo); no se elimina porque documenta la intención de la regla.
-    if ctx.condition == "used":
-        return RuleResult(
-            "invalid",
-            f"Precinto/uso roto ('{ctx.condition}') en categoría con exclusión "
-            f"legal de higiene y motivo '{ctx.reason_category}' no imputable a Mercadia.",
-        )
-    return RuleResult("valid")
+    # Red de seguridad si el vocabulario de reason_category (hoy 6 valores,
+    # ver docstring del módulo) se ampliara con motivos fuera de
+    # MERCADIA_FAULT_REASONS ∪ NO_RETURN_BY_CHOICE_REASONS: precinto roto
+    # en categoría de higiene sigue vetando igual, sin importar el motivo
+    # exacto (mismo criterio que la política: el precinto es lo que
+    # decide, no la etiqueta del motivo).
+    return RuleResult(
+        "invalid",
+        f"Precinto/uso roto ('{ctx.condition}') en categoría con exclusión "
+        f"legal de higiene y motivo '{ctx.reason_category}' no imputable a Mercadia.",
+    )
 
 
 def rule_condition_allowed(ctx: PolicyContext) -> RuleResult:
