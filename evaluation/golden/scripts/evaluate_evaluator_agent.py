@@ -12,7 +12,8 @@ tests/unit/test_ingest_policy_embeddings.py.
 Lee los 480 casos de evaluation/golden/eval_cases.csv, construye un estado
 mínimo por caso, y ejecuta evaluator_agent con el LLM real (gpt-5-mini).
 Calcula precisión, recall y F1 por clase y por categoría, más las 4
-métricas adicionales de más abajo.
+métricas adicionales de más abajo, y una matriz de confusión (real ×
+predicho, ver `_confusion_matrix`).
 
 ## Dónde se ven las métricas
 
@@ -25,7 +26,14 @@ el exit code de `accuracy` (ver `if __name__ == "__main__"`, calculado en
 memoria); las métricas de esa ejecución concreta solo se ven en el log de
 consola, no se guardan en ningún sitio -- si el objetivo es guardar un
 histórico, hazlo vía LangFuse, no relanzando el script y mirando la
-terminal.
+consola.
+
+Excepción: la matriz de confusión SOLO se imprime en el log de consola y se
+devuelve en el dict de `run_evaluation()` — nunca se manda a LangFuse (un
+`score` es un escalar nombre/valor, una tabla NxN no encaja ahí) ni se
+persiste en fichero. Es deliberadamente un dato de reporting puntual (p.
+ej. para pegar en la memoria del TFM), no una métrica con historial entre
+ejecuciones como el resto.
 
 ## Correlación con la versión del prompt (solo modo LLM real)
 
@@ -54,9 +62,14 @@ Uso:
     python -m evaluation.golden.scripts.evaluate_evaluator_agent --category calzado
     python -m evaluation.golden.scripts.evaluate_evaluator_agent --dry-run        # lógica determinista, sin LLM
 
-Modo --dry-run: en vez de llamar al LLM, aplica las reglas deterministas
-directamente sobre las columnas del CSV (plazo, importe HITL, is_frequent_returner)
-para validar que el golden dataset es internamente consistente.  Ideal para CI.
+Modo --dry-run: en vez de llamar al LLM, ejecuta la cadena de reglas REAL
+de policy_rules.py::deterministic_check() (Fase 1, no una reimplementación
+propia -- ver _deterministic_label()) sobre las columnas del CSV, con el
+reason_category traducido al vocabulario de producción
+(GOLDEN_TO_PRODUCTION_REASON_CATEGORY). Gratis, sin red, ideal para CI --
+y a diferencia de antes, SÍ detecta si el golden dataset deja de ser
+consistente con el código real de negocio (rule_hygiene,
+rule_condition_allowed...), no solo con plazo/importe/cliente frecuente.
 
 Requisitos (solo para el modo real):
     OPENAI_API_KEY en .env
@@ -125,6 +138,9 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
+from backend.agents.nodes.policy_rules import (  # noqa: E402
+    deterministic_check,
+)
 from backend.services import pricing  # noqa: E402 -- tras load_dotenv, ver Settings
 
 # ── Rutas ──────────────────────────────────────────────────────────────────
@@ -133,11 +149,151 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 EVAL_CSV = REPO_ROOT / "evaluation" / "golden" / "eval_cases.csv"
 POLICIES_DIR = REPO_ROOT / "data" / "rag" / "policies"
 
-# ── Umbrales deterministas (deben coincidir con la lógica del agente) ──────
-HITL_AMOUNT_THRESHOLD = 100.0  # €  → human_review
-BORDER_ZONE_DAYS = 5  # plazo ± 5 días → human_review (zona frontera)
-
 LABELS = ["valid", "invalid", "human_review"]
+
+# ── Traducción de vocabulario: golden dataset (15 valores) → producción
+#    (6 valores de triage.py) ───────────────────────────────────────────────
+#
+# BUG REAL encontrado evaluando resultados de un run completo (ver
+# docs/defensaTFM/defenderDatos.md -- pendiente de añadir esta sección):
+# _build_state() pasaba el `reason_category` CRUDO del CSV (vocabulario
+# granular de 15 valores de data/generate_dataset.py: "missing_parts",
+# "damaged_in_transit", "wrong_item_shipped"...) directamente al
+# `evaluator_agent()` real, que espera el vocabulario de PRODUCCIÓN de 6
+# valores que genera triage.py: defective, wrong_item, not_as_described,
+# no_longer_needed, arrived_late, other (ver policy_rules.py, líneas 14-34).
+#
+# Consecuencia: `rule_condition_allowed` (policy_rules.py) comprueba
+# `reason_category not in MERCADIA_FAULT_REASONS` (= {"defective",
+# "wrong_item", "not_as_described"}) para decidir si el motivo exime del
+# check de `condition`. Un valor como "missing_parts" nunca coincide con
+# ese set literal -- aunque SÍ es un motivo imputable a Mercadia según
+# `classify_case()` (el ground truth, ver generate_dataset.py:1839-1845,
+# STORE_FAULT_REASONS) -- así que la regla vetaba a "invalid" en Fase 1
+# (determinista, sin LLM) ANTES de que `rule_high_amount`/
+# `rule_deadline_borderline` llegaran a ejecutarse. Verificado con
+# deterministic_check() real (sin LLM) contra los 480 casos: el mapeo de
+# abajo elimina 66 falsos vetos de Fase 1 -- 34 quedan garantizados en
+# "human_review" (needs_admin_approval se dispara igual, sin depender del
+# LLM) y 32 pasan a "valid", diferidos a Fase 2/LLM (su acierto final
+# dependerá de una llamada real, no verificable en Python puro).
+#
+# Mapeo: cada valor de STORE_FAULT_REASONS (generate_dataset.py:1839-1845,
+# "imputable a Mercadia") se traduce a uno de los 3 valores que SÍ están en
+# MERCADIA_FAULT_REASONS -- así el bypass de `rule_condition_allowed` se
+# dispara para los mismos motivos para los que `classify_case()` ya lo
+# hace (generate_dataset.py:2113, `condition_not_allowed and reason in
+# CUSTOMER_FAULT_REASONS` -- el veto solo aplica a motivos de CLIENTE, nunca
+# a los de tienda). CUSTOMER_FAULT_REASONS se traduce a valores fuera de
+# MERCADIA_FAULT_REASONS (no_longer_needed/other) para que el veto SÍ se
+# siga disparando cuando corresponde -- mismo comportamiento que el ground
+# truth, no una traducción "generosa" que oculte casos realmente inválidos.
+#
+# SEGUNDA INTERACCIÓN DESCUBIERTA (verificada con deterministic_check() real
+# contra los 480 casos, ver evaluation/golden/GENERATION_STATS.md para el
+# recuento): mapear un motivo a `no_longer_needed`/`arrived_late`/`other`
+# también activa `rule_hygiene` (policy_rules.py:139-170), que RECHAZA
+# cualquier motivo de ese set en categorías de higiene
+# (HYGIENE_CATEGORIES) -- SIN comprobar `condition` (a diferencia de
+# `classify_case()`, que solo excluye por higiene si el motivo es
+# LITERALMENTE "changed_mind"/"quality_issue"/"better_price_found" Y el
+# artículo está abierto/usado, ver generate_dataset.py:2088-2092). El
+# primer mapeo de este fix asignaba "wrong_size"/"duplicate_order"/
+# "incompatible"/"arrived_late" a ese set -- 30 de 480 casos empeoraron
+# (verificado): motivos que `classify_case()` NUNCA excluye por higiene se
+# rechazaban igualmente al pasar por rule_hygiene con el "vecino" mapeado.
+#
+# Regla para elegir el mapeo de cada motivo (2 preguntas, en este orden):
+#   1. ¿classify_case() SÍ lo trata como excluible por higiene si está
+#      abierto? Solo 3 de los 15 (changed_mind/quality_issue/
+#      better_price_found, generate_dataset.py:2090) → mapear a
+#      NO_RETURN_BY_CHOICE_REASONS (no_longer_needed/other) para conservar
+#      esa intención (con la salvedad ya señalada: rule_hygiene no
+#      comprueba condition, gap preexistente de policy_rules.py, no de
+#      este arnés).
+#   2. Si no, ¿es un motivo imputable a Mercadia (STORE_FAULT_REASONS,
+#      generate_dataset.py:1839-1845) o uno de los "especiales" que
+#      classify_case() tampoco vetea nunca por condición
+#      (SPECIAL_REASONS, generate_dataset.py:1852-1859, salvo que ya caiga
+#      en la pregunta 1)? → mapear DENTRO de MERCADIA_FAULT_REASONS
+#      (defective/wrong_item/not_as_described) para bypasear ambas reglas,
+#      igual que classify_case() nunca las vetea.
+#
+# "wrong_size" es CUSTOMER_FAULT (generate_dataset.py:1846-1851, sí debería
+# poder vetearse por condición, generate_dataset.py:2113) pero NO está en
+# la lista de higiene de la pregunta 1 -- con el vocabulario de 6 valores
+# de producción (partición exacta 3+3 entre las dos reglas, sin un tercer
+# cubo "cliente pero no elegible para veto de higiene") es
+# estructuralmente imposible satisfacer ambas reglas a la vez para este
+# motivo. Se prioriza evitar el falso rechazo de higiene (más grave: niega
+# una devolución legítima sin abrir el paquete) sobre preservar el veto de
+# condición para "wrong_size" -- verificado contra los 480 casos: esto
+# SACRIFICA el veto determinista de Fase 1 en 3 casos "wrong_size" que
+# `classify_case()` etiqueta "invalid" por condición no admitida (p. ej.
+# case 4830775d: alimentacion/wrong_size/opened_tested). No se pierden del
+# todo -- Fase 1 los deja en zona gris ("valid"/"human_review") y pasan a
+# Fase 2 (LLM + RAG), que SÍ ve la política real de la categoría y puede
+# llegar a la misma conclusión de forma independiente (verificable solo
+# con una llamada real, no con este script 100% Python). Es un
+# comportamiento deliberadamente distinto de un "falso veto" (que es
+# irrecuperable: Fase 2 nunca llega a ejecutarse) -- aquí como mucho se le
+# da al LLM la oportunidad de decidir un caso que antes decidía mal una
+# regla determinista por el motivo equivocado.
+#
+# BUG DE PRODUCCIÓN DESCUBIERTO (distinto del bug de vocabulario, NO
+# corregido aquí -- fuera de alcance de este arnés de test, ver aviso al
+# usuario): mapear "changed_mind"/"better_price_found" a
+# "no_longer_needed" para preservar el veto de higiene expone un gap real
+# y preexistente en `rule_hygiene()` (policy_rules.py:139-170): esa
+# función NUNCA comprueba `condition` en la rama
+# `reason_category in NO_RETURN_BY_CHOICE_REASONS` -- a diferencia de
+# `classify_case()` (generate_dataset.py:2088-2092), que solo excluye por
+# higiene si el artículo está ABIERTO/USADO (`condition in
+# ("opened_unused", "opened_tested", "used")`). Verificado contra los 480
+# casos: 15 casos con `condition="unopened"` en categoría de higiene y
+# motivo "changed_mind"/"better_price_found" quedan vetados a "invalid" en
+# Fase 1 cuando `expected_label` es "valid"/"human_review" -- un
+# comportamiento que, si se traduce a producción real, rechazaría
+# automáticamente una devolución de cosmética/alimentación/mascotas SIN
+# ABRIR solo porque el cliente encontró mejor precio o cambió de opinión
+# -- Art. 103 TRLGDCU exige que el precinto de higiene esté roto para que
+# aplique la exclusión legal, `rule_hygiene()` no lo comprueba. Esto NO es
+# un artefacto de este arnés de test: es un bug real en
+# `backend/agents/nodes/policy_rules.py` que afectaría a clientes reales.
+# Corregirlo requiere tocar código de producción (añadir el check de
+# `condition` a la rama de NO_RETURN_BY_CHOICE_REASONS), con su propio test
+# unitario en tests/unit/test_policy_rules.py -- decisión pendiente de
+# alcance, no incluida en este fix del arnés.
+GOLDEN_TO_PRODUCTION_REASON_CATEGORY: dict[str, str] = {
+    # STORE_FAULT_REASONS (generate_dataset.py:1839-1845): nunca vetean por
+    # condición en el ground truth → dentro de MERCADIA_FAULT_REASONS.
+    "defective": "defective",
+    "wrong_item_shipped": "wrong_item",
+    "damaged_in_transit": "defective",
+    "missing_parts": "defective",
+    "not_as_described": "not_as_described",
+    # Los 3 ÚNICOS motivos que classify_case() excluye por higiene
+    # (generate_dataset.py:2090) → dentro de NO_RETURN_BY_CHOICE_REASONS.
+    "changed_mind": "no_longer_needed",
+    "better_price_found": "no_longer_needed",
+    "quality_issue": "other",
+    # CUSTOMER_FAULT pero NO en la lista de higiene -- ver nota "wrong_size"
+    # arriba: se prioriza no activar rule_hygiene por error.
+    "wrong_size": "wrong_item",
+    # SPECIAL_REASONS (generate_dataset.py:1852-1859) que classify_case()
+    # nunca vetea ni por condición ni por higiene → dentro de
+    # MERCADIA_FAULT_REASONS. Incluye "arrived_late": pese a coincidir
+    # literalmente con el valor de producción del mismo nombre, ESE
+    # valor SÍ está en NO_RETURN_BY_CHOICE_REASONS -- mapearlo "tal cual"
+    # repite el mismo bug de higiene (confirmado con datos: 1 falso rechazo
+    # en los 480 casos), así que aquí NO se traduce 1:1 a propósito.
+    "duplicate_order": "not_as_described",
+    "incompatible": "wrong_item",
+    "allergic_reaction": "defective",
+    "arrived_late": "defective",
+    "assembly_issue": "defective",
+    "counterfeit_suspicion": "not_as_described",
+}
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger(__name__)
@@ -274,7 +430,16 @@ def _build_state(row: dict) -> dict[str, Any]:
             "returns": [],
         },
         "reason": f"Motivo de evaluación: {row['reason_category']}",
-        "reason_category": row["reason_category"],
+        # Traducido al vocabulario de producción (6 valores de triage.py),
+        # NO el crudo del CSV (15 valores) -- ver
+        # GOLDEN_TO_PRODUCTION_REASON_CATEGORY arriba para el porqué: sin
+        # esto, policy_rules.py::rule_condition_allowed vetaba a "invalid"
+        # por no reconocer motivos imputables a Mercadia como
+        # "missing_parts"/"damaged_in_transit", sin que el importe/plazo
+        # frontera (ni el LLM) llegaran a decidir el caso.
+        "reason_category": GOLDEN_TO_PRODUCTION_REASON_CATEGORY.get(
+            row["reason_category"], "other"
+        ),
         # Solo para que el guard de usage_tracking.py::_log_usage() ("sin
         # thread_id no hay sesión a la que atribuir el gasto") no descarte
         # la llamada -- log_llm_usage() está mockeado más abajo (ver
@@ -296,27 +461,47 @@ def _build_state(row: dict) -> dict[str, Any]:
 
 
 def _deterministic_label(row: dict) -> str:
-    """Reproduce la lógica determinista del agente sin LLM.
-    Útil para --dry-run y para validar el golden dataset.
-    """
-    days = int(row["days_since_delivery"])
-    max_days = int(row["max_return_days"])
-    amount = float(row["refund_amount"])
-    frequent = row["is_frequent_returner"] == "True"
+    """Etiqueta de Fase 1 (determinista, sin LLM) para ``--dry-run``,
+    llamando a ``deterministic_check()`` REAL de ``policy_rules.py`` --
+    NO una reimplementación propia.
 
-    # Fuera de plazo (con margen de 5 días para zona frontera)
-    if days > max_days + BORDER_ZONE_DAYS:
-        return "invalid"
-    # Zona frontera del plazo
-    if max_days - BORDER_ZONE_DAYS < days <= max_days + BORDER_ZONE_DAYS:
-        return "human_review"
-    # HITL por importe
-    if amount > HITL_AMOUNT_THRESHOLD:
-        return "human_review"
-    # HITL por cliente frecuente
-    if frequent:
-        return "human_review"
-    return "valid"
+    Hasta este fix, esta función reimplementaba a mano solo 3 de las 6
+    reglas de negocio (plazo/importe/cliente frecuente) -- nunca ejecutaba
+    ``rule_hygiene``/``rule_condition_allowed``, así que el gate de CI
+    ``qa-golden-dataset-dry-run`` (``.github/workflows/ci.yml``, descrito
+    literalmente como "consistencia con policy_rules.py") en realidad NO
+    comprobaba consistencia con ese módulo en absoluto para esas 2 reglas
+    -- el bug de vocabulario de ``reason_category`` (ver
+    ``GOLDEN_TO_PRODUCTION_REASON_CATEGORY`` arriba) y el bug de
+    ``rule_hygiene()`` (no comprobaba ``condition`` antes de excluir por
+    higiene, corregido en ``policy_rules.py``) podrían haber estado rotos
+    de forma indefinida sin que ningún push lo detectara: el mock de
+    "Fase 1" nunca ejercitaba el código real que sí se ejecuta en
+    producción. Llamando a la función real, este gate ahora SÍ detecta
+    automáticamente cualquier futura regresión de Fase 1 -- p. ej. si se
+    añade una categoría a ``HYGIENE_CATEGORIES`` sin actualizar el mapeo
+    de vocabulario, o si alguien reordena ``POLICY_RULES`` -- sin gastar
+    tokens ni necesitar red.
+
+    Solo cubre Fase 1: los casos que quedan en zona gris ("valid"/
+    "human_review") en producción real pasarían aún por Fase 2 (LLM+RAG,
+    no simulable sin gastar tokens) -- aquí "valid" significa "Fase 1 no
+    vetó", no necesariamente la etiqueta final que daría el LLM.
+    """
+    mapped_reason = GOLDEN_TO_PRODUCTION_REASON_CATEGORY.get(
+        row["reason_category"], "other"
+    )
+    verdict, _ = deterministic_check(
+        days_since_order=int(row["days_since_delivery"]),
+        max_return_days=int(row["max_return_days"]),
+        allowed_conditions=row["allowed_conditions"].split("|"),
+        condition=row["condition"],
+        category=row["category"],
+        reason_category=mapped_reason,
+        refund_amount=float(row["refund_amount"]),
+        approved_returns=6 if row["is_frequent_returner"] == "True" else 0,
+    )
+    return verdict
 
 
 def _expected_tool_called(row: dict) -> bool:
@@ -413,7 +598,19 @@ def _result_to_label(result: dict[str, Any]) -> str:
 
 
 def _compute_metrics(results: list[dict]) -> dict:
-    """Calcula accuracy, precision, recall y F1 por clase y macro-average."""
+    """Calcula accuracy, precision, recall y F1 por clase y macro-average.
+
+    Precondición: ``results`` NO debe contener casos con ``predicted ==
+    "error"`` (fallo técnico -- excepción de ``evaluator_agent()``, p. ej.
+    cuota de OpenAI agotada a mitad de un run de 480 casos, visto en
+    producción). El caller (``run_evaluation``) los filtra antes de llamar
+    aquí -- ver ``_split_technical_failures`` -- porque mezclarlos
+    contaminaría accuracy/precision/recall con fallos de infraestructura
+    que no dicen nada sobre si el agente decide bien. Si aun así llega uno
+    (llamada directa a esta función desde otro sitio), se cuenta como un
+    fallo más de la clase esperada en vez de un ``KeyError`` -- más seguro
+    que crashear, pero sigue siendo responsabilidad del caller filtrarlos.
+    """
     per_class: dict[str, dict] = {lbl: {"tp": 0, "fp": 0, "fn": 0} for lbl in LABELS}
     correct = 0
 
@@ -424,7 +621,8 @@ def _compute_metrics(results: list[dict]) -> dict:
             correct += 1
             per_class[exp]["tp"] += 1
         else:
-            per_class[pred]["fp"] += 1
+            if pred in per_class:
+                per_class[pred]["fp"] += 1
             per_class[exp]["fn"] += 1
 
     total = len(results)
@@ -460,12 +658,89 @@ def _compute_metrics(results: list[dict]) -> dict:
     }
 
 
+def _split_technical_failures(results: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Separa los casos con fallo técnico (``predicted == "error"``, ver
+    docstring de ``_compute_metrics``) del resto.
+
+    Visto en producción: un run completo de 480 casos agotó la cuota de
+    OpenAI a mitad de camino (código ``insufficient_quota`` /
+    ``credit_balance_exhausted``) y marcó 90 casos como ``"error"`` -- sin
+    este filtro, ``_compute_metrics`` los contaba como fallos del *modelo*
+    (accuracy más baja de la real) hasta que directamente crasheaba con
+    ``KeyError: 'error'`` al no reconocer esa etiqueta como clase.
+
+    Returns:
+        ``(evaluable, technical_failures)`` -- ``evaluable`` es lo único
+        que debe llegar a ``_compute_metrics``/``_metrics_by_category``.
+    """
+    evaluable = [r for r in results if r["predicted"] != "error"]
+    technical_failures = [r for r in results if r["predicted"] == "error"]
+    return evaluable, technical_failures
+
+
 def _metrics_by_category(results: list[dict]) -> dict[str, dict]:
     """Agrupa los resultados por categoría y calcula las métricas de cada grupo."""
     by_cat: dict[str, list] = defaultdict(list)
     for r in results:
         by_cat[r["category"]].append(r)
     return {cat: _compute_metrics(rows) for cat, rows in sorted(by_cat.items())}
+
+
+def _confusion_matrix(results: list[dict]) -> dict[str, dict[str, int]]:
+    """Matriz de confusión (real × predicho) — solo para reporting (memoria
+    del TFM), no se manda a LangFuse ni se persiste en ningún fichero (ver
+    docstring del módulo: un `score` de LangFuse es un escalar nombre/valor,
+    no encaja una tabla NxN).
+
+    A diferencia de los TP/FP/FN por clase que ya calcula
+    ``_compute_metrics`` (agregados para precision/recall/F1), aquí se
+    conserva la DIRECCIÓN exacta de cada fallo — p. ej. cuántos ``valid``
+    reales el agente predijo como ``human_review`` frente a cuántos predijo
+    como ``invalid``. Esa distinción se pierde en el TP/FP/FN agregado,
+    donde ambos casos solo cuentan como "FN de valid".
+
+    Las FILAS son siempre las 3 etiquetas de ``LABELS`` -- ``expected`` sale
+    del golden dataset (columna ``expected_label`` de ``eval_cases.csv``),
+    que solo contiene esas 3 -- pero las COLUMNAS añaden cualquier etiqueta
+    extra que aparezca en ``predicted`` fuera de ``LABELS`` (p. ej.
+    ``"error"`` si `evaluator_agent()` lanzó una excepción para algún caso,
+    ver ``_split_technical_failures``): así esos casos quedan visibles en
+    la tabla (en qué clase real cayeron los fallos técnicos) sin ensuciarla
+    con una fila "real=error" que siempre estaría vacía (el CSV nunca
+    exporta esa etiqueta como ``expected``).
+    """
+    extra_labels = sorted(
+        {r["predicted"] for r in results if r["predicted"] not in LABELS}
+    )
+    columns = LABELS + extra_labels
+    matrix = {actual: dict.fromkeys(columns, 0) for actual in LABELS}
+    for r in results:
+        matrix[r["expected"]][r["predicted"]] += 1
+    return matrix
+
+
+def _format_confusion_matrix(matrix: dict[str, dict[str, int]]) -> str:
+    """Formatea la matriz de confusión como tabla de texto de ancho fijo,
+    lista para copiar a la consola o a un bloque de código de la memoria.
+    Filas = etiqueta real (siempre las 3 de ``LABELS``), columnas =
+    etiqueta predicha por el agente (3 + cualquier extra, p. ej. "error").
+    """
+    row_labels = list(matrix.keys())
+    columns = list(next(iter(matrix.values())).keys())
+    row_label = "real \\ predicho"
+    width = max(len(lbl) for lbl in [*row_labels, *columns, row_label, "total"]) + 2
+
+    header = row_label.ljust(width) + "".join(lbl.rjust(width) for lbl in columns)
+    header += "total".rjust(width)
+
+    lines = [header, "-" * len(header)]
+    for actual in row_labels:
+        row = matrix[actual]
+        total = sum(row.values())
+        line = actual.ljust(width) + "".join(str(row[pred]).rjust(width) for pred in columns)
+        line += str(total).rjust(width)
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _compute_extra_metrics(results: list[dict]) -> dict:
@@ -528,8 +803,11 @@ async def run_evaluation(
     en accuracy, calculado en memoria) — ver docstring del módulo.
 
     Returns:
-        ``{"mode": "dry-run"|"llm", "overall": <de _compute_metrics>}`` —
-        lo mínimo que necesita ``__main__`` para el exit code.
+        ``{"mode": "dry-run"|"llm", "overall": <de _compute_metrics>,
+        "confusion_matrix": <de _confusion_matrix>}`` — lo mínimo que
+        necesita ``__main__`` para el exit code, más la matriz de
+        confusión ya calculada (real × predicho) para quien quiera
+        consumirla sin reparsear el log (p. ej. para la memoria del TFM).
     """
     from backend.agents.nodes.evaluator import POLICY_SYSTEM_PROMPT, evaluator_agent
     from backend.services.observability import get_langfuse, flush as langfuse_flush
@@ -762,9 +1040,23 @@ async def run_evaluation(
         if (i + 1) % 50 == 0:
             logger.info("  %d/%d casos procesados…", i + 1, len(cases))
 
-    overall = _compute_metrics(results)
-    by_cat = _metrics_by_category(results)
+    evaluable, technical_failures = _split_technical_failures(results)
+    if technical_failures:
+        logger.warning(
+            "%d/%d casos excluidos de accuracy/precision/recall/F1 y de la "
+            "matriz de confusión por FALLO TÉCNICO (excepción de "
+            "evaluator_agent, no una decisión del modelo -- ver WARNING "
+            "'Caso ... falló' más arriba para la causa exacta, p. ej. cuota "
+            "de OpenAI agotada a mitad del run). Repite el run tras resolver "
+            "la causa si quieres cifras sobre los 480 casos completos.",
+            len(technical_failures),
+            len(results),
+        )
+
+    overall = _compute_metrics(evaluable)
+    by_cat = _metrics_by_category(evaluable)
     extra = _compute_extra_metrics(results)
+    confusion = _confusion_matrix(results)
 
     # ── LangFuse: scores agregados en la traza raíz ────────────────────────
     # Cada métrica agregada calculada por este script se manda aquí -- es la
@@ -844,6 +1136,10 @@ async def run_evaluation(
         overall["accuracy"] * 100,
         overall["macro"]["f1"],
     )
+    logger.info(
+        "Matriz de confusión (filas=real, columnas=predicho):\n%s",
+        _format_confusion_matrix(confusion),
+    )
     if not dry_run:
         logger.info(
             "Tool accuracy: %s (n=%d)  |  Contains: %s (n=%d)  |  "
@@ -875,7 +1171,12 @@ async def run_evaluation(
             "docstring del módulo)."
         )
 
-    return {"mode": "dry-run" if dry_run else "llm", "overall": overall}
+    return {
+        "mode": "dry-run" if dry_run else "llm",
+        "overall": overall,
+        "confusion_matrix": confusion,
+        "technical_failures": len(technical_failures),
+    }
 
 
 def _parse_args() -> argparse.Namespace:
