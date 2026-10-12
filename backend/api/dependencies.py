@@ -78,13 +78,15 @@ async def require_authenticated_customer(
 
     if jwt_secret is None:
         if _settings.environment == "production":
+            # SUPABASE_JWT_SECRET no configurada en production es un error de
+            # configuración del servidor, no una indisponibilidad temporal.
             raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Autenticación no configurada (SUPABASE_JWT_SECRET ausente).",
             )
         return None  # development: autenticación desactivada
 
-    if credentials is None or credentials.scheme.lower() != "bearer":
+    if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Falta la cabecera Authorization: Bearer <token>.",
@@ -96,6 +98,7 @@ async def require_authenticated_customer(
             credentials.credentials,
             jwt_secret.get_secret_value(),
             algorithms=["HS256"],  # fijo: nunca aceptar "none" ni RS256 aquí
+            options={"leeway": 10},  # 10 s de tolerancia a desfase de reloj
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(
