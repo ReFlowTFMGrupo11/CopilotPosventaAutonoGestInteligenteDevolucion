@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from langchain_openai import ChatOpenAI
 
+from backend.agents.infra.openai_adapter import OpenAIChatAdapter
+from backend.agents.ports import LLMPort
 from backend.config import get_settings
 
 DEFAULT_MODEL = "gpt-5-mini"
@@ -25,7 +27,7 @@ DEFAULT_MODEL = "gpt-5-mini"
 
 def build_chat_llm(
     env_var: str, *, temperature: float, max_tokens: int | None = None
-) -> ChatOpenAI:
+) -> LLMPort:
     """Construye un ``ChatOpenAI`` leyendo el modelo desde ``Settings``.
 
     Admite el prefijo opcional ``"openai:"`` (convención de
@@ -55,17 +57,19 @@ def build_chat_llm(
     )
     resolved_temperature = getattr(settings, f"{field}_temperature", None)
     resolved_max_tokens = getattr(settings, f"{field}_max_tokens", None)
-    return ChatOpenAI(
-        model=model,
-        temperature=(
-            resolved_temperature if resolved_temperature is not None else temperature
-        ),
-        max_tokens=(
-            resolved_max_tokens
-            if resolved_max_tokens is not None
-            else default_max_tokens
-        ),
-        timeout=settings.llm_timeout_seconds,
+    return OpenAIChatAdapter(
+        ChatOpenAI(
+            model=model,
+            temperature=(
+                resolved_temperature if resolved_temperature is not None else temperature
+            ),
+            max_tokens=(
+                resolved_max_tokens
+                if resolved_max_tokens is not None
+                else default_max_tokens
+            ),
+            timeout=settings.llm_timeout_seconds,
+        )
     )
 
 

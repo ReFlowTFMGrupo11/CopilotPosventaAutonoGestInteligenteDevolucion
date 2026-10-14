@@ -27,8 +27,8 @@ import logging
 from typing import Any
 
 from langchain_core.messages import SystemMessage
-from langchain_openai import ChatOpenAI
 
+from backend.agents.ports import LLMPort
 from backend.agents.state import ReturnState
 from backend.agents.llm_factory import build_chat_llm
 from backend.agents.usage_tracking import invoke_structured_tracked
@@ -128,7 +128,7 @@ artículo recibido en "Artículos a evaluar", identificada por su `order_item_id
 """
 
 
-def _build_llm() -> ChatOpenAI:
+def _build_llm() -> LLMPort:
     """Construye el LLM para el evaluador de políticas.
 
     Modelo configurable vía ``EVALUATOR_MODEL``; por defecto ``gpt-5-mini``.

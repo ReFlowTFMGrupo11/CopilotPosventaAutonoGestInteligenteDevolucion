@@ -24,9 +24,9 @@ import time
 from typing import TypeVar
 
 from langchain_core.messages import AIMessage
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
+from backend.agents.ports import LLMPort
 from backend.services import usage_service
 
 logger = logging.getLogger(__name__)
@@ -97,7 +97,7 @@ async def _log_usage(
 
 
 async def invoke_tracked(
-    llm: ChatOpenAI,
+    llm: LLMPort,
     messages: list,
     *,
     node: str,
@@ -122,7 +122,7 @@ async def invoke_tracked(
 
 
 async def invoke_structured_tracked(
-    llm: ChatOpenAI,
+    llm: LLMPort,
     schema: type[SchemaT],
     messages: list,
     *,
