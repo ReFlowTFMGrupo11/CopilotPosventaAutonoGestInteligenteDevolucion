@@ -1,10 +1,6 @@
 # Database
 supabase>=2.5.0
 pydantic-settings>=2.3.0
-# Ya venía como dependencia transitiva de supabase (vía supabase-auth); se
-# fija aquí explícitamente porque backend/api/dependencies.py la importa
-# directamente (verificación HS256 de los JWT de Supabase Auth).
-pyjwt>=2.8.0
 
 # MCP
 mcp[cli]>=1.0.0,<2.0.0

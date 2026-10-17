@@ -17,7 +17,6 @@ from langchain_core.messages import HumanMessage
 from backend.api.dependencies import (
     GRAPH_TURN_TIMEOUT_SECONDS,
     get_graph,
-    require_authenticated_customer,
     thread_locks,
     with_graph_limits,
 )
@@ -32,16 +31,7 @@ from backend.services.observability import score_error, score_resolution, with_l
 
 logger = logging.getLogger(__name__)
 
-# La autenticación se declara a nivel de router: todos los endpoints de
-# este router requieren un JWT válido de Supabase Auth (Bearer token) ANTES
-# de ejecutar el cuerpo del handler. Los endpoints no saben nada de tokens
-# — así se puede cambiar la política de autenticación sin tocarlos (ver
-# require_authenticated_customer en dependencies.py).
-router = APIRouter(
-    prefix="/api/chat",
-    tags=["chat"],
-    dependencies=[Depends(require_authenticated_customer)],
-)
+router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # ── Control de turnos de conversación ───────────────────────────────────
 #

@@ -95,12 +95,6 @@ SUPABASE_DB_URL=postgresql://postgres:<password>@<host>:5432/postgres
 OPENAI_API_KEY=<tu-openai-api-key>
 ```
 
-Opcional — `SUPABASE_JWT_SECRET` (Dashboard → Project Settings → API → JWT
-Secret): con él, los endpoints de `/api/chat` exigen `Authorization: Bearer
-<jwt>` con un token emitido por Supabase Auth. Sin él, la autenticación queda
-desactivada en desarrollo (y en `ENVIRONMENT=production` se rechazan todas las
-peticiones). Ver `backend/api/dependencies.py`.
-
 ### 4. Verificar conexión
 
 ```bash

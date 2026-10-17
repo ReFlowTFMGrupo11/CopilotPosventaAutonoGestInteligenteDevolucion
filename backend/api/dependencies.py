@@ -12,116 +12,14 @@ siguiendo la convención de FastAPI de que un `router.py` solo contiene
 """
 
 import asyncio
-import logging
 import time
 
-import jwt
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Request
 
 from backend.agents.graph import get_return_graph
 from backend.config import get_settings
 
-logger = logging.getLogger(__name__)
-
 _settings = get_settings()
-
-# ── Autenticación (JWT de Supabase Auth) ─────────────────────────────────
-#
-# El cliente se autentica ante esta API presentando el JWT que Supabase
-# Auth le emitió tras el login, en la cabecera "Authorization: Bearer <jwt>".
-# Verificar aquí la firma (HS256 con SUPABASE_JWT_SECRET) es todo lo que
-# hace falta — no hay que llamar a Supabase en cada petición, la firma se
-# valida localmente con el secreto compartido.
-#
-# Sin SUPABASE_JWT_SECRET configurado, el comportamiento sigue el criterio
-# "fail-open solo si es seguro" de graph.py (checkpointer): en development
-# se degrada a autenticación desactivada con un warning (arranque local y
-# tests siguen funcionando); en production se rechaza todo con 503 — una API
-# desprotegida en producción es un error de configuración, no un modo válido.
-
-_bearer_scheme = HTTPBearer(auto_error=False)
-
-# Aviso único al arrancar (no por petición): sin esto, montar la API sin
-# SUPABASE_JWT_SECRET parece "todo funciona" cuando en realidad cualquier
-# cliente puede llamar a los endpoints protegidos.
-if _settings.supabase_jwt_secret is None and _settings.environment != "production":
-    logger.warning(
-        "SUPABASE_JWT_SECRET no configurada: autenticación desactivada "
-        "(solo aceptable en development)."
-    )
-
-
-class AuthenticatedCustomer:
-    """Identidad del cliente extraída del JWT verificado.
-
-    Attributes:
-        user_id: ``sub`` del token (UUID del usuario en Supabase Auth).
-        email: Email del usuario, si el token lo incluye.
-    """
-
-    def __init__(self, user_id: str, email: str | None = None):
-        self.user_id = user_id
-        self.email = email
-
-
-async def require_authenticated_customer(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
-) -> AuthenticatedCustomer | None:
-    """Verifica el JWT de Supabase Auth antes de ejecutar el endpoint.
-
-    Raises:
-        HTTPException: 401 si falta la cabecera o el token es inválido o
-            expirado; 503 en production sin ``SUPABASE_JWT_SECRET``.
-    """
-    jwt_secret = _settings.supabase_jwt_secret
-
-    if jwt_secret is None:
-        if _settings.environment == "production":
-            # SUPABASE_JWT_SECRET no configurada en production es un error de
-            # configuración del servidor, no una indisponibilidad temporal.
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Autenticación no configurada (SUPABASE_JWT_SECRET ausente).",
-            )
-        return None  # development: autenticación desactivada
-
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Falta la cabecera Authorization: Bearer <token>.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    try:
-        payload = jwt.decode(
-            credentials.credentials,
-            jwt_secret.get_secret_value(),
-            algorithms=["HS256"],  # fijo: nunca aceptar "none" ni RS256 aquí
-            options={"leeway": 10},  # 10 s de tolerancia a desfase de reloj
-        )
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token expirado.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except jwt.InvalidTokenError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Token inválido: {exc}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    sub = payload.get("sub")
-    if not sub:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token sin 'sub' (identidad del usuario).",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    return AuthenticatedCustomer(user_id=sub, email=payload.get("email"))
-
 
 # Explícito en vez de depender del default implícito de LangGraph (25).
 # Fuente única en Settings (backend/config.py) — antes se definía por

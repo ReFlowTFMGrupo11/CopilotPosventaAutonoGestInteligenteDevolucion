@@ -65,15 +65,6 @@ class Settings(BaseSettings):
     supabase_service_key: SecretStr | None = None
     supabase_db_url: str | None = None
 
-    # Secreto con el que Supabase Auth firma sus JWT (HS256). Con él
-    # configurado, la API exige "Authorization: Bearer <JWT>" en los
-    # endpoints protegidos (ver backend/api/dependencies.py). Sin él:
-    # en development se degrada a "autenticación desactivada" con un
-    # warning (no rompe el arranque local ni los tests), en production
-    # se rechazan todas las peticiones — la ausencia de autenticación
-    # es un riesgo real en producción, no un caso de uso válido.
-    supabase_jwt_secret: SecretStr | None = None
-
     # ── OpenAI ───────────────────────────────────────────────────────────
     # Solo hace falta explícitamente para el cliente de embeddings en
     # policy_service.py (search_return_policy). Los LLM de chat
