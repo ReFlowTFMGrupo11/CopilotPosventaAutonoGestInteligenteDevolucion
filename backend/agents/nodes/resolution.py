@@ -37,9 +37,9 @@ import logging
 from typing import Any, Literal
 
 from langchain_core.messages import SystemMessage
-from langchain_openai import ChatOpenAI
 from langgraph.types import Command, interrupt
 
+from backend.agents.ports import LLMPort
 from backend.agents.state import ReturnState
 from backend.agents.llm_factory import build_chat_llm
 from backend.agents.usage_tracking import invoke_tracked
@@ -113,7 +113,7 @@ Motivo del rechazo: {reason}
 """
 
 
-def _build_llm() -> ChatOpenAI:
+def _build_llm() -> LLMPort:
     """Construye el LLM para el agente de resolución.
 
     Modelo configurable vía ``RESOLVER_MODEL``; por defecto ``gpt-5-mini``.

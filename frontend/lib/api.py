@@ -5,6 +5,7 @@ extra: si un endpoint cambia, se cambia aquí y ya está.
 """
 
 import json
+import os
 from typing import Iterator
 
 import httpx
@@ -15,7 +16,7 @@ from dotenv import load_dotenv
 # sin override, load_dotenv() no lo sustituiría por el valor bueno de .env.
 load_dotenv(override=True)
 
-API_BASE = "http://localhost:8000"
+API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
 def health() -> bool:

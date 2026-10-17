@@ -1,0 +1,65 @@
+# Entorno virtual local
+.venv/
+
+# Secretos — nunca dentro de la imagen
+.env
+.env.*
+.env copy
+
+# Artefactos Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Tests y evaluación (no forman parte de la imagen de producción)
+tests/
+evaluation/
+
+# Datos de desarrollo
+data/
+
+# Documentación
+docs/
+*.md
+!README.md
+
+# Artefactos de ejecución local (se regeneran en el contenedor)
+generated_labels/
+
+# Base de datos y migraciones (gestionadas fuera del contenedor)
+supabase/
+
+# Scripts de mantenimiento (no necesarios en producción)
+scripts/
+
+# Infraestructura (no forma parte de la imagen de la app)
+infra/
+
+# Frontend legacy React (muerto)
+frontend/node_modules/
+node_modules/
+
+# IDE y herramientas locales
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# CI/CD
+.github/
+
+# Caché de linters/type checkers
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Terraform state
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# PIDs de procesos locales
+.reflow_pids
