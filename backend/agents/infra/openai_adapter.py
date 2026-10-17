@@ -40,8 +40,6 @@ class OpenAIChatAdapter:
         """Delega la llamada al LLM de chat."""
         return await self._llm.ainvoke(messages)
 
-    def with_structured_output(
-        self, schema: type, *, include_raw: bool = False
-    ) -> Any:
+    def with_structured_output(self, schema: type, *, include_raw: bool = False) -> Any:
         """Delega la construcción del chain de salida estructurada."""
         return self._llm.with_structured_output(schema, include_raw=include_raw)

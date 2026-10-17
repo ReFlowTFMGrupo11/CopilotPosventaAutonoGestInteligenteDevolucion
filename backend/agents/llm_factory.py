@@ -61,7 +61,9 @@ def build_chat_llm(
         ChatOpenAI(
             model=model,
             temperature=(
-                resolved_temperature if resolved_temperature is not None else temperature
+                resolved_temperature
+                if resolved_temperature is not None
+                else temperature
             ),
             max_tokens=(
                 resolved_max_tokens
