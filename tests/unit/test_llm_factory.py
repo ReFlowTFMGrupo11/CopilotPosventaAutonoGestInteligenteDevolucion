@@ -54,34 +54,34 @@ class TestBuildChatLlm:
         monkeypatch.setenv("EVALUATOR_MODEL", "gpt-4o-mini")
         monkeypatch.delenv("EVALUATOR_MODEL_TEMPERATURE", raising=False)
         llm = build_chat_llm("EVALUATOR_MODEL", temperature=0.3)
-        assert llm.temperature == 0.3
+        assert llm._llm.temperature == 0.3
 
     def test_env_var_de_temperatura_sobreescribe_el_argumento(self, monkeypatch):
         monkeypatch.setenv("EVALUATOR_MODEL", "gpt-4o-mini")
         monkeypatch.setenv("EVALUATOR_MODEL_TEMPERATURE", "0.7")
         llm = build_chat_llm("EVALUATOR_MODEL", temperature=0.0)
-        assert llm.temperature == 0.7
+        assert llm._llm.temperature == 0.7
 
     def test_usa_max_tokens_global_por_defecto(self, monkeypatch):
         monkeypatch.delenv("RESOLVER_MODEL_MAX_TOKENS", raising=False)
         monkeypatch.delenv("LLM_MAX_OUTPUT_TOKENS", raising=False)
         llm = build_chat_llm("RESOLVER_MODEL", temperature=0.0)
-        assert llm.max_tokens == 4096
+        assert llm._llm.max_tokens == 4096
 
     def test_max_tokens_pasado_por_argumento_gana_al_global(self, monkeypatch):
         monkeypatch.delenv("RESOLVER_MODEL_MAX_TOKENS", raising=False)
         llm = build_chat_llm("RESOLVER_MODEL", temperature=0.0, max_tokens=1024)
-        assert llm.max_tokens == 1024
+        assert llm._llm.max_tokens == 1024
 
     def test_env_var_de_max_tokens_especifica_del_nodo_gana_a_todo(self, monkeypatch):
         monkeypatch.setenv("RESOLVER_MODEL_MAX_TOKENS", "2048")
         llm = build_chat_llm("RESOLVER_MODEL", temperature=0.0, max_tokens=1024)
-        assert llm.max_tokens == 2048
+        assert llm._llm.max_tokens == 2048
 
     def test_usa_el_timeout_configurado(self, monkeypatch):
         monkeypatch.setenv("LLM_TIMEOUT_SECONDS", "30")
         llm = build_chat_llm("TRIAGE_MODEL", temperature=0.0)
-        assert llm.request_timeout == 30.0
+        assert llm._llm.request_timeout == 30.0
 
 
 class TestTrimHistory:
