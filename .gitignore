@@ -16,6 +16,15 @@ build/
 .env.local
 .env.*.local
 
+# Terraform: estado local y variables con datos personales (IPs, credenciales)
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+infra/terraform.tfvars
+infra/*.tfvars
+infra/backend.hcl
+
 # IDE
 .vscode/
 .idea/

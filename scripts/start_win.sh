@@ -75,7 +75,7 @@ launch "API FastAPI (8000)" "python -m backend.api.run --reload --port 8000"
 sleep 3
 
 echo "==> Lanzando frontend Streamlit (http://localhost:8501)..."
-launch "Frontend Streamlit (8501)" "streamlit run frontend/Chat.py"
+launch "Frontend Streamlit (8501)" "streamlit run frontend/app.py --server.headless true"
 
 cat <<EOF
 

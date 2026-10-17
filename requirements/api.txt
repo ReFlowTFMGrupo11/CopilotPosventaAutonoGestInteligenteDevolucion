@@ -1,0 +1,37 @@
+# Dependencias de la imagen Docker del backend FastAPI (Dockerfile.api).
+#
+# Incluye todo lo necesario para arrancar backend/api/main.py y los agentes
+# LangGraph: FastAPI, LangChain, LangGraph, OpenAI, Supabase, Langfuse, etc.
+# NO incluye reportlab (lo genera el MCP de logística, no la API) ni
+# streamlit/httpx/pandas (exclusivos del frontend).
+#
+# requirements.txt en la raíz del repo sigue siendo la fuente de verdad para
+# desarrollo local y CI (pytest, smoke-test, lint) — este fichero es solo para
+# la imagen de producción.
+
+# Database / settings
+supabase>=2.5.0
+pydantic-settings>=2.3.0
+
+# MCP client (los agentes llaman a los MCP servers vía HTTP)
+mcp[cli]>=1.0.0,<2.0.0
+
+# AI / Embeddings
+openai>=1.30.0
+tiktoken>=0.7.0
+
+# Observabilidad
+langfuse>=4.14.0
+
+# Agents (LangChain / LangGraph)
+langchain>=1.3.0
+langchain-openai>=1.4.0
+langchain-mcp-adapters>=0.3.0
+langgraph-checkpoint-postgres>=2.0.0
+psycopg[binary,pool]>=3.1.0
+python-dotenv>=1.0.0
+
+# API
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+PyJWT>=2.8.0

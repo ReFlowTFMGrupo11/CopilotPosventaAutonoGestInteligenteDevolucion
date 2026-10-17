@@ -1,0 +1,26 @@
+# Dependencias de la imagen Docker de los MCP servers (Dockerfile.mcp).
+# Sirve para ambos servidores: mcp_supabase (:8001) y mcp_logistics (:8002).
+#
+# Los MCP servers son wrappers finos sobre backend/services/ — no necesitan
+# LangChain, LangGraph, FastAPI ni Langfuse (esas capas viven en la imagen
+# de la API). Solo necesitan conectar con Supabase, generar PDFs y servir
+# tools vía el protocolo MCP.
+#
+# openai y tiktoken son necesarios para mcp_supabase: policy_service.py
+# genera embeddings con text-embedding-3-small para la búsqueda RAG.
+
+# Database / settings
+supabase>=2.5.0
+pydantic-settings>=2.3.0
+
+# MCP server
+mcp[cli]>=1.0.0,<2.0.0
+
+# Embeddings RAG (mcp_supabase → policy_service.py)
+openai>=1.30.0
+tiktoken>=0.7.0
+
+# PDF (mcp_logistics → logistics_service.py)
+reportlab>=4.0.0
+
+python-dotenv>=1.0.0

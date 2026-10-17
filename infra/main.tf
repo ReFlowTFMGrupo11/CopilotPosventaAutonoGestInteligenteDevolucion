@@ -26,7 +26,7 @@ provider "aws" {
   default_tags {
     tags = {
       Project     = "reflow"
-      Environment = "production"
+      Environment = "tfm"
       ManagedBy   = "terraform"
     }
   }
@@ -34,6 +34,6 @@ provider "aws" {
 
 locals {
   app  = "reflow"
-  env  = "production"
+  env  = "tfm"
   name = "${local.app}-${local.env}"
 }

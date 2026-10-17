@@ -1,0 +1,45 @@
+# ── Imagen MCP servers (mcp_supabase :8001 y mcp_logistics :8002) ────────────
+#
+# Una sola imagen para ambos servidores MCP. En ECS el CMD se sobreescribe
+# por servicio en la task definition:
+#   mcp-supabase:  python -m backend.mcp.mcp_supabase
+#   mcp-logistics: python -m backend.mcp.mcp_logistics
+#
+# Los MCP servers solo importan de backend/models/, backend/services/ y
+# backend/db/ — no necesitan LangChain, LangGraph, FastAPI ni Langfuse.
+# Imagen resultante ~3x más pequeña que la imagen de la API.
+#
+# Las variables de entorno (SUPABASE_URL, OPENAI_API_KEY, etc.) llegan
+# desde ECS task definition → AWS Secrets Manager.
+
+FROM python:3.12-slim
+
+# gcc: compilar extensiones C (pydantic-core, tiktoken)
+# curl: health check del contenedor
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ── Dependencias (capa cacheada)
+COPY requirements/mcp.txt requirements/mcp.txt
+RUN pip install --no-cache-dir -r requirements/mcp.txt
+
+# ── Código (solo backend/ — los MCP servers no usan frontend/ ni agents/)
+COPY backend/ backend/
+
+# logistics_service.py crea generated_labels/ al importarse (exist_ok=True),
+# pero crearlo aquí explícitamente evita un error de permisos si el proceso
+# no tiene acceso de escritura al arrancar por primera vez.
+RUN mkdir -p generated_labels
+
+# Puerto por defecto: mcp_supabase. mcp_logistics sobreescribe el CMD
+# en su task definition de ECS (y expone 8002 allí).
+EXPOSE 8001
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -s --max-time 4 -o /dev/null -w "%{http_code}" \
+        http://localhost:8001/mcp | grep -qE "^(200|400|406)$" || exit 1
+
+CMD ["python", "-m", "backend.mcp.mcp_supabase"]

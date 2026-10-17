@@ -1,0 +1,32 @@
+# ── Imagen FastAPI (backend/api/main.py) ─────────────────────────────────────
+#
+# Solo copia backend/ — no necesita frontend/, data/, tests/ ni supabase/.
+# Las variables de entorno (JWT_SECRET, OPENAI_API_KEY, etc.) llegan desde
+# ECS task definition → AWS Secrets Manager; no se usa .env en producción.
+
+FROM python:3.12-slim
+
+# gcc: compilar extensiones C (tiktoken, pydantic-core, psycopg)
+# curl: health check del contenedor
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# ── Dependencias (capa cacheada; se invalida solo si cambia requirements/api.txt)
+COPY requirements/api.txt requirements/api.txt
+RUN pip install --no-cache-dir -r requirements/api.txt
+
+# ── Código (solo backend/)
+COPY backend/ backend/
+
+EXPOSE 8000
+
+# ECS usa el health check para marcar la tarea como healthy antes de
+# registrarla en el target group del ALB. start-period=30s da tiempo
+# al grafo LangGraph a conectar con el checkpointer de Postgres al arrancar.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
