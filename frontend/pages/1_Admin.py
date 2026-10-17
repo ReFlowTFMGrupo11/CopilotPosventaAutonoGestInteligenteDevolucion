@@ -17,6 +17,34 @@ styles.inject_css()
 styles.render_header()
 styles.render_backend_banner(api.health())
 
+# ── Muro de login admin ──────────────────────────────────────────────────────
+if "admin_token" not in st.session_state:
+    st.markdown("### Acceso al panel de administración")
+    with st.form("admin_login_form"):
+        password = st.text_input("Contraseña", type="password")
+        submitted = st.form_submit_button("Entrar", use_container_width=True)
+
+    if submitted and password:
+        try:
+            result = api.admin_login(password)
+            st.session_state["admin_token"] = result["token"]
+            st.rerun()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                st.error("Contraseña incorrecta.")
+            else:
+                st.error(f"Error al iniciar sesión: {exc}")
+        except httpx.RequestError as exc:
+            st.error(f"No se pudo contactar con el backend: {exc}")
+    st.stop()
+
+admin_token = st.session_state["admin_token"]
+
+with st.sidebar:
+    if st.button("Cerrar sesión", use_container_width=True):
+        st.session_state.pop("admin_token", None)
+        st.rerun()
+
 st.markdown("## Panel de administración")
 
 # ── Monitorización de gasto (LangFuse) ──────────────────────────────────
@@ -27,7 +55,7 @@ st.markdown("## Panel de administración")
 # customer_id, desde que se conoce), así que en vez de reimplementarlo
 # aquí se enlaza directamente a su dashboard.
 try:
-    links = api.observability_links()
+    links = api.observability_links(token=admin_token)
 except httpx.HTTPError:
     links = {"configured": False}
 
@@ -110,8 +138,8 @@ def money(value) -> str:
 
 
 try:
-    stats = api.stats()
-    pending = api.pending_returns()
+    stats = api.stats(token=admin_token)
+    pending = api.pending_returns(token=admin_token)
 except httpx.HTTPError as exc:
     st.error(f"No se pudieron cargar los datos: {exc}")
     stats, pending = {}, []
@@ -187,10 +215,12 @@ else:
             edited_amount if abs(edited_amount - original_amount) > 0.001 else None
         )
         if c7.button("Aprobar", key=f"approve_{thread_id}", type="primary"):
-            api.approve(thread_id, reason, override_refund_amount=override)
+            api.approve(
+                thread_id, reason, override_refund_amount=override, token=admin_token
+            )
             st.rerun()
         if c8.button("Rechazar", key=f"reject_{thread_id}"):
-            api.reject(thread_id, reason)
+            api.reject(thread_id, reason, token=admin_token)
             st.rerun()
 
 # ── Todas las devoluciones ───────────────────────────────────────────────
@@ -210,7 +240,7 @@ status_label = st.selectbox(
 )
 
 try:
-    rows = api.list_returns(status_options[status_label])
+    rows = api.list_returns(status_options[status_label], token=admin_token)
 except httpx.HTTPError as exc:
     st.error(f"No se pudieron cargar las devoluciones: {exc}")
     rows = []
@@ -246,6 +276,6 @@ with st.form("buscador_pedidos", border=False):
 
 if buscar and order_id.strip():
     try:
-        st.json(api.get_order(order_id.strip()))
+        st.json(api.get_order(order_id.strip(), token=admin_token))
     except httpx.HTTPError:
         st.error(f"No se encontró el pedido {order_id.strip()}")

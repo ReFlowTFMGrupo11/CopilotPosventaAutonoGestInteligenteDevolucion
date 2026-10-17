@@ -38,7 +38,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend.agents.graph import get_checkpointer_status, get_return_graph
-from backend.api.routers import admin, chat, usage
+from backend.api.routers import admin, auth, chat, usage
 from backend.services import pricing
 from backend.services.observability import flush as langfuse_flush, get_langfuse
 
@@ -110,6 +110,7 @@ app.add_middleware(
 # docstring del módulo). admin.py expone dos routers: `router` (acciones de
 # administración) y `public_router` (búsqueda de pedido + KPIs, movidos aquí
 # desde el extinto routers/orders.py — ver docstring de admin.py).
+app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(admin.router)
 app.include_router(admin.public_router)

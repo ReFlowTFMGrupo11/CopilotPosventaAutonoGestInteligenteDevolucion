@@ -80,7 +80,7 @@ echo $! >> "$PIDFILE"
 sleep 3
 
 echo "==> Lanzando frontend Streamlit (http://localhost:8501)..."
-streamlit run frontend/Chat.py --server.port 8501 --server.headless true > /tmp/reflow_streamlit.log 2>&1 &
+streamlit run frontend/app.py --server.port 8501 --server.headless true > /tmp/reflow_streamlit.log 2>&1 &
 echo $! >> "$PIDFILE"
 
 cat <<EOF

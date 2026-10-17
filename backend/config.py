@@ -144,6 +144,23 @@ class Settings(BaseSettings):
     langfuse_host: str | None = None
     langfuse_project_id: str | None = None
 
+    # ── Autenticación JWT ────────────────────────────────────────────────
+    # jwt_secret: clave de firma de tokens JWT (HMAC-SHA256).
+    # Genérala con:  openssl rand -hex 32
+    # En producción, ponla en AWS Secrets Manager — Fargate la inyecta
+    # como variable de entorno al arrancar el contenedor.
+    # Si es None, los endpoints de login devuelven 500 con un mensaje
+    # claro; no bloquea el arranque del proceso (mismo patrón que el
+    # resto de secrets en esta clase).
+    jwt_secret: SecretStr | None = None
+    jwt_algorithm: str = "HS256"
+    # Tiempo de vida de un token emitido. 8 horas cubre una jornada
+    # laboral; ajústalo según el caso de uso.
+    jwt_expiry_hours: int = 8
+    # Contraseña del panel de administración. Sin default: si no está
+    # configurada, POST /api/auth/admin/login devuelve 500.
+    admin_password: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
