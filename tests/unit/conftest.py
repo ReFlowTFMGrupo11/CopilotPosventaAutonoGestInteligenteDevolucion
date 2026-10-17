@@ -14,7 +14,11 @@ from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.api.main import app
-from backend.api.dependencies import get_graph, require_authenticated_customer, require_admin
+from backend.api.dependencies import (
+    get_graph,
+    require_authenticated_customer,
+    require_admin,
+)
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -137,7 +141,9 @@ def _bypass_auth():
     interferir con otros fixtures que también usan ``dependency_overrides``
     (p. ej. ``mock_graph``, que llama a ``.clear()`` en su propio teardown).
     """
-    app.dependency_overrides[require_authenticated_customer] = lambda: "test-customer-id"
+    app.dependency_overrides[require_authenticated_customer] = (
+        lambda: "test-customer-id"
+    )
     app.dependency_overrides[require_admin] = lambda: True
     yield
     app.dependency_overrides.pop(require_authenticated_customer, None)

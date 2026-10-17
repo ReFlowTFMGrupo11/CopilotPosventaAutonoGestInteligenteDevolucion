@@ -10,20 +10,28 @@ from pydantic import BaseModel, Field
 class CustomerLoginRequest(BaseModel):
     """Credenciales de login del cliente (Opción B: solo email, sin contraseña)."""
 
-    email: str = Field(description="Email del cliente registrado en la tabla customers.")
+    email: str = Field(
+        description="Email del cliente registrado en la tabla customers."
+    )
 
 
 class AdminLoginRequest(BaseModel):
     """Credenciales de login del administrador."""
 
-    password: str = Field(description="Contraseña del panel de administración (ADMIN_PASSWORD en .env).")
+    password: str = Field(
+        description="Contraseña del panel de administración (ADMIN_PASSWORD en .env)."
+    )
 
 
 class TokenResponse(BaseModel):
     """Token JWT emitido tras un login correcto."""
 
-    token: str = Field(description="Token JWT firmado. Úsalo en Authorization: Bearer <token>.")
-    token_type: str = Field(default="bearer", description="Tipo de token (siempre 'bearer').")
+    token: str = Field(
+        description="Token JWT firmado. Úsalo en Authorization: Bearer <token>."
+    )
+    token_type: str = Field(
+        default="bearer", description="Tipo de token (siempre 'bearer')."
+    )
     customer_id: Optional[str] = Field(
         default=None,
         description="UUID del cliente autenticado. None para el token de admin.",

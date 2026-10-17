@@ -51,8 +51,14 @@ token = st.session_state["token"]
 
 with st.sidebar:
     if st.button("Cerrar sesión", use_container_width=True):
-        for key in ("token", "customer_id", "thread_id", "messages",
-                    "processing", "pending_request"):
+        for key in (
+            "token",
+            "customer_id",
+            "thread_id",
+            "messages",
+            "processing",
+            "pending_request",
+        ):
             st.session_state.pop(key, None)
         st.rerun()
 

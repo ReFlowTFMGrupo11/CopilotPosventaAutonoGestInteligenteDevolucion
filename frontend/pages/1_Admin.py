@@ -215,7 +215,9 @@ else:
             edited_amount if abs(edited_amount - original_amount) > 0.001 else None
         )
         if c7.button("Aprobar", key=f"approve_{thread_id}", type="primary"):
-            api.approve(thread_id, reason, override_refund_amount=override, token=admin_token)
+            api.approve(
+                thread_id, reason, override_refund_amount=override, token=admin_token
+            )
             st.rerun()
         if c8.button("Rechazar", key=f"reject_{thread_id}"):
             api.reject(thread_id, reason, token=admin_token)
