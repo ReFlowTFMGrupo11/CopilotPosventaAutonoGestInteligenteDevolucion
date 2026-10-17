@@ -27,6 +27,7 @@ from backend.api.dependencies import (
     GRAPH_RECURSION_LIMIT,
     GRAPH_TURN_TIMEOUT_SECONDS,
     get_graph,
+    require_admin,
 )
 from backend.api.schemas import (
     AdminDecisionRequest,
@@ -40,11 +41,20 @@ from backend.services import (
     tool_call_service,
 )
 
-router = APIRouter(prefix="/api/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/api/admin",
+    tags=["admin"],
+    dependencies=[Depends(require_admin)],
+)
 
 # Prefijo "/api" (no "/api/admin"): mismas URLs que tenía routers/orders.py,
-# ver docstring del módulo.
-public_router = APIRouter(prefix="/api", tags=["orders"])
+# ver docstring del módulo. También protegidos con require_admin: su único
+# consumidor real es el panel de admin (1_Admin.py), nunca el chat de cliente.
+public_router = APIRouter(
+    prefix="/api",
+    tags=["orders"],
+    dependencies=[Depends(require_admin)],
+)
 
 # GRAPH_RECURSION_LIMIT/GRAPH_TURN_TIMEOUT_SECONDS: ver
 # backend/api/dependencies.py -- fuente única compartida con chat.py, ya no

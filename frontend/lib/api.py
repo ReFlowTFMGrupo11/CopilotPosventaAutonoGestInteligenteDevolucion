@@ -2,6 +2,12 @@
 
 Cada función mapea 1:1 con un endpoint del backend. Sin abstracciones
 extra: si un endpoint cambia, se cambia aquí y ya está.
+
+Autenticación: las funciones que llaman a endpoints protegidos aceptan un
+parámetro ``token: str | None = None``. El token se obtiene llamando a
+``customer_login()`` o ``admin_login()`` y guardándolo en
+``st.session_state``. Si se omite, la llamada llegará sin cabecera
+``Authorization`` y el backend responderá con 403.
 """
 
 import json
@@ -19,6 +25,60 @@ load_dotenv(override=True)
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+
+def _auth_headers(token: str | None) -> dict:
+    """Construye el header ``Authorization`` si hay token, dict vacío si no."""
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
+# ── Autenticación ──────────────────────────────────────────────────────────
+
+
+def customer_login(email: str) -> dict:
+    """Llama a POST /api/auth/login con el email del cliente.
+
+    Args:
+        email: Email del cliente registrado en la tabla ``customers``.
+
+    Returns:
+        Dict con ``token`` (JWT) y ``customer_id``.
+
+    Raises:
+        httpx.HTTPStatusError: 401 si el email no existe, 500 si falta
+            JWT_SECRET en el backend.
+    """
+    r = httpx.post(f"{API_BASE}/api/auth/login", json={"email": email}, timeout=10)
+    r.raise_for_status()
+    return r.json()
+
+
+def admin_login(password: str) -> dict:
+    """Llama a POST /api/auth/admin/login con la contraseña del admin.
+
+    Args:
+        password: Contraseña configurada en ADMIN_PASSWORD del backend.
+
+    Returns:
+        Dict con ``token`` (JWT).
+
+    Raises:
+        httpx.HTTPStatusError: 401 si la contraseña no coincide, 500 si
+            falta ADMIN_PASSWORD o JWT_SECRET en el backend.
+    """
+    r = httpx.post(
+        f"{API_BASE}/api/auth/admin/login", json={"password": password}, timeout=10
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+# ── Health ─────────────────────────────────────────────────────────────────
+
+
 def health() -> bool:
     """True si el backend responde a GET /health."""
     try:
@@ -27,13 +87,16 @@ def health() -> bool:
         return False
 
 
-def new_chat() -> str:
+def new_chat(token: str | None = None) -> str:
     """Llama a POST /api/chat/new para abrir una sesión de conversación nueva.
+
+    Args:
+        token: JWT del cliente autenticado.
 
     Returns:
         El ``thread_id`` (str) generado para esta sesión.
     """
-    r = httpx.post(f"{API_BASE}/api/chat/new", timeout=10)
+    r = httpx.post(f"{API_BASE}/api/chat/new", headers=_auth_headers(token), timeout=10)
     r.raise_for_status()
     return r.json()["thread_id"]
 
@@ -42,6 +105,7 @@ def stream_chat(
     thread_id: str,
     message: str,
     selected_item_ids: list[str] | None = None,
+    token: str | None = None,
 ) -> Iterator[dict]:
     """Llama a POST /api/chat/stream y cede (yield) cada evento SSE tal como llega.
 
@@ -63,6 +127,7 @@ def stream_chat(
             "message": message,
             "selected_item_ids": selected_item_ids,
         },
+        headers=_auth_headers(token),
         timeout=120,
     ) as response:
         response.raise_for_status()
@@ -80,47 +145,64 @@ def stream_chat(
                     yield json.loads(data)
 
 
-def stats() -> dict:
+def stats(token: str | None = None) -> dict:
     """Llama a GET /api/stats para obtener los KPIs generales de devoluciones.
+
+    Args:
+        token: JWT del administrador autenticado.
 
     Returns:
         Dict con totales/tasa de aprobación (``total_returns``, ``approved``,
         ``rejected``, ``pending``, ``approval_rate``).
     """
-    r = httpx.get(f"{API_BASE}/api/stats", timeout=10)
+    r = httpx.get(f"{API_BASE}/api/stats", headers=_auth_headers(token), timeout=10)
     r.raise_for_status()
     return r.json()
 
 
-def pending_returns() -> list[dict]:
+def pending_returns(token: str | None = None) -> list[dict]:
     """Llama a GET /api/admin/pending para listar devoluciones a la espera de aprobación HITL.
+
+    Args:
+        token: JWT del administrador autenticado.
 
     Returns:
         Lista de devoluciones pendientes (dict por fila).
     """
-    r = httpx.get(f"{API_BASE}/api/admin/pending", timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/admin/pending", headers=_auth_headers(token), timeout=10
+    )
     r.raise_for_status()
     return r.json().get("pending", [])
 
 
-def list_returns(status: str = "") -> list[dict]:
+def list_returns(status: str = "", token: str | None = None) -> list[dict]:
     """Llama a GET /api/admin/returns para listar devoluciones, opcionalmente filtradas.
 
     Args:
         status: Estado por el que filtrar (``approved``, ``rejected``,
             ``pending_approval``). Vacío para no filtrar.
+        token: JWT del administrador autenticado.
 
     Returns:
         Lista de devoluciones que cumplen el filtro (dict por fila).
     """
     params = {"status": status} if status else {}
-    r = httpx.get(f"{API_BASE}/api/admin/returns", params=params, timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/admin/returns",
+        params=params,
+        headers=_auth_headers(token),
+        timeout=10,
+    )
     r.raise_for_status()
     return r.json().get("returns", [])
 
 
 def approve(
-    thread_id: str, reason: str = "", override_refund_amount: float | None = None
+    thread_id: str,
+    reason: str = "",
+    override_refund_amount: float | None = None,
+    token: str | None = None,
 ) -> dict:
     """Llama a POST /api/admin/{thread_id}/approve para aprobar una devolución pendiente y reanudar el grafo.
 
@@ -138,13 +220,14 @@ def approve(
     r = httpx.post(
         f"{API_BASE}/api/admin/{thread_id}/approve",
         json={"reason": reason, "override_refund_amount": override_refund_amount},
+        headers=_auth_headers(token),
         timeout=30,
     )
     r.raise_for_status()
     return r.json()
 
 
-def reject(thread_id: str, reason: str = "") -> dict:
+def reject(thread_id: str, reason: str = "", token: str | None = None) -> dict:
     """Llama a POST /api/admin/{thread_id}/reject para rechazar una devolución pendiente y reanudar el grafo.
 
     Args:
@@ -156,13 +239,16 @@ def reject(thread_id: str, reason: str = "") -> dict:
         ``resolution``).
     """
     r = httpx.post(
-        f"{API_BASE}/api/admin/{thread_id}/reject", json={"reason": reason}, timeout=30
+        f"{API_BASE}/api/admin/{thread_id}/reject",
+        json={"reason": reason},
+        headers=_auth_headers(token),
+        timeout=30,
     )
     r.raise_for_status()
     return r.json()
 
 
-def get_order(order_id: str) -> dict:
+def get_order(order_id: str, token: str | None = None) -> dict:
     """Llama a GET /api/orders/{order_id} para obtener el detalle de un pedido.
 
     Args:
@@ -171,12 +257,14 @@ def get_order(order_id: str) -> dict:
     Returns:
         Dict con los datos del pedido (productos, cliente, fechas).
     """
-    r = httpx.get(f"{API_BASE}/api/orders/{order_id}", timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/orders/{order_id}", headers=_auth_headers(token), timeout=10
+    )
     r.raise_for_status()
     return r.json()
 
 
-def chat_state(thread_id: str) -> dict:
+def chat_state(thread_id: str, token: str | None = None) -> dict:
     """Llama a GET /api/chat/{thread_id}/state para leer el estado actual del grafo.
 
     Args:
@@ -186,12 +274,16 @@ def chat_state(thread_id: str) -> dict:
         Dict con el estado del grafo (agente actual, pedido, elegibilidad,
         resolución, artículos del pedido y si falta selección del cliente).
     """
-    r = httpx.get(f"{API_BASE}/api/chat/{thread_id}/state", timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/chat/{thread_id}/state",
+        headers=_auth_headers(token),
+        timeout=10,
+    )
     r.raise_for_status()
     return r.json()
 
 
-def usage_sessions(limit: int = 100) -> list[dict]:
+def usage_sessions(limit: int = 100, token: str | None = None) -> list[dict]:
     """Llama a GET /api/admin/usage/sessions para listar el coste/latencia agregado por sesión.
 
     Args:
@@ -201,13 +293,16 @@ def usage_sessions(limit: int = 100) -> list[dict]:
         Lista de sesiones con tokens, coste estimado y latencia agregados.
     """
     r = httpx.get(
-        f"{API_BASE}/api/admin/usage/sessions", params={"limit": limit}, timeout=10
+        f"{API_BASE}/api/admin/usage/sessions",
+        params={"limit": limit},
+        headers=_auth_headers(token),
+        timeout=10,
     )
     r.raise_for_status()
     return r.json().get("sessions", [])
 
 
-def usage_session_detail(thread_id: str) -> list[dict]:
+def usage_session_detail(thread_id: str, token: str | None = None) -> list[dict]:
     """Llama a GET /api/admin/usage/sessions/{thread_id} para el detalle petición a petición.
 
     Args:
@@ -216,12 +311,16 @@ def usage_session_detail(thread_id: str) -> list[dict]:
     Returns:
         Lista de peticiones al LLM (nodo, modelo, tokens, coste, latencia).
     """
-    r = httpx.get(f"{API_BASE}/api/admin/usage/sessions/{thread_id}", timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/admin/usage/sessions/{thread_id}",
+        headers=_auth_headers(token),
+        timeout=10,
+    )
     r.raise_for_status()
     return r.json().get("requests", [])
 
 
-def usage_trends(since=None, until=None) -> list[dict]:
+def usage_trends(since=None, until=None, token: str | None = None) -> list[dict]:
     """Llama a GET /api/admin/usage/trends para la serie temporal de
     coste/tokens/latencia por nodo (gráficas de tendencia de 2_Costes.py).
 
@@ -240,12 +339,17 @@ def usage_trends(since=None, until=None) -> list[dict]:
         params["since"] = str(since)
     if until is not None:
         params["until"] = str(until)
-    r = httpx.get(f"{API_BASE}/api/admin/usage/trends", params=params, timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/admin/usage/trends",
+        params=params,
+        headers=_auth_headers(token),
+        timeout=10,
+    )
     r.raise_for_status()
     return r.json().get("points", [])
 
 
-def observability_links() -> dict:
+def observability_links(token: str | None = None) -> dict:
     """Llama a GET /api/admin/observability: enlaces a LangFuse, estado del
     checkpointer y error rate por tool MCP.
 
@@ -255,6 +359,8 @@ def observability_links() -> dict:
         `tool_error_rates` (lista agregada por tool, ver
         tool_call_service.get_tool_call_error_rates).
     """
-    r = httpx.get(f"{API_BASE}/api/admin/observability", timeout=10)
+    r = httpx.get(
+        f"{API_BASE}/api/admin/observability", headers=_auth_headers(token), timeout=10
+    )
     r.raise_for_status()
     return r.json()

@@ -14,7 +14,7 @@ from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from backend.api.main import app
-from backend.api.dependencies import get_graph
+from backend.api.dependencies import get_graph, require_authenticated_customer, require_admin
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -115,3 +115,30 @@ def async_client():
     """Fixture: cliente HTTP async para testear la app."""
     transport = ASGITransport(app=app)
     return AsyncClient(transport=transport, base_url="http://test")
+
+
+@pytest.fixture(autouse=True)
+def _bypass_auth():
+    """Desactiva la validación JWT en todos los tests unitarios de endpoints.
+
+    Sin esto, tras añadir ``Depends(require_authenticated_customer)`` a
+    ``chat.py`` y ``Depends(require_admin)`` a ``admin.py``, todos los tests
+    recibirían 403 al no mandar ``Authorization: Bearer ...``.
+
+    Usa el mismo mecanismo que ``mock_graph``: ``app.dependency_overrides``
+    sustituye la dependencia real por una función que devuelve un valor fijo.
+
+    - ``require_authenticated_customer`` → devuelve ``"test-customer-id"``
+      (un customer_id ficticio que los tests pueden usar en sus assertions).
+    - ``require_admin`` → devuelve ``True`` (el guard admin solo comprueba
+      que el token es válido; ``True`` indica "autenticado").
+
+    El teardown usa ``pop(key, None)`` en vez de ``clear()`` para no
+    interferir con otros fixtures que también usan ``dependency_overrides``
+    (p. ej. ``mock_graph``, que llama a ``.clear()`` en su propio teardown).
+    """
+    app.dependency_overrides[require_authenticated_customer] = lambda: "test-customer-id"
+    app.dependency_overrides[require_admin] = lambda: True
+    yield
+    app.dependency_overrides.pop(require_authenticated_customer, None)
+    app.dependency_overrides.pop(require_admin, None)

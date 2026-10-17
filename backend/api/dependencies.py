@@ -9,15 +9,24 @@ sustituirlo en tests con `app.dependency_overrides`.
 límites de ejecución del grafo que ambos routers necesitan) — movidos aquí
 siguiendo la convención de FastAPI de que un `router.py` solo contiene
 `APIRouter()` + *path operations*, no dependencias compartidas entre routers.
+
+`require_authenticated_customer` / `require_admin` extraen y validan el token
+JWT del header ``Authorization: Bearer <token>`` en cada request protegido.
+La lógica de firma/verificación vive en ``backend/services/auth_service.py``;
+estas funciones solo traducen ``AuthError`` → ``HTTPException`` para FastAPI.
+En tests se sustituyen vía ``app.dependency_overrides`` (ver conftest.py).
 """
 
 import asyncio
 import time
 
+from fastapi import Depends, HTTPException
 from fastapi import Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.agents.graph import get_return_graph
 from backend.config import get_settings
+from backend.services.auth_service import AuthError, verify_token
 
 _settings = get_settings()
 
@@ -107,3 +116,89 @@ class ThreadLockRegistry:
 
 
 thread_locks = ThreadLockRegistry()
+
+
+# ── Autenticación JWT ────────────────────────────────────────────────────
+#
+# HTTPBearer extrae automáticamente el token del header:
+#   Authorization: Bearer eyJhbGci...
+# y devuelve un objeto HTTPAuthorizationCredentials con `.credentials`
+# conteniendo el token en crudo. Si el header falta o tiene formato incorrecto,
+# FastAPI devuelve 403 antes de llegar a la función (auto_error=True por defecto).
+#
+# En tests, estas dependencias se sustituyen vía app.dependency_overrides:
+#   app.dependency_overrides[require_authenticated_customer] = lambda: "customer-test-id"
+#   app.dependency_overrides[require_admin] = lambda: True
+# lo que evita tener que generar tokens reales en cada test.
+
+_bearer = HTTPBearer()
+
+
+async def require_authenticated_customer(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> str:
+    """Valida el token JWT de un cliente y devuelve su ``customer_id``.
+
+    Se usa con ``Depends(require_authenticated_customer)`` en los endpoints
+    de ``routers/chat.py``. El valor devuelto (el ``customer_id``) queda
+    disponible en el endpoint como parámetro inyectado por FastAPI.
+
+    Args:
+        credentials: Token Bearer extraído del header ``Authorization``
+            por ``HTTPBearer``. FastAPI rechaza la petición con 403 antes
+            de llegar aquí si el header no está presente.
+
+    Returns:
+        ``customer_id`` (campo ``sub`` del payload JWT).
+
+    Raises:
+        HTTPException 401: Si el token está expirado, tiene firma inválida,
+            o su rol no es ``"customer"``.
+    """
+    try:
+        payload = verify_token(credentials.credentials)
+    except AuthError as exc:
+        raise HTTPException(status_code=401, detail=exc.detail)
+
+    if payload.get("role") != "customer":
+        raise HTTPException(
+            status_code=401,
+            detail="Token inválido para este endpoint: se requiere rol 'customer'.",
+        )
+
+    return payload["sub"]  # customer_id
+
+
+async def require_admin(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> bool:
+    """Valida el token JWT de administrador.
+
+    Se usa con ``Depends(require_admin)`` en los endpoints de
+    ``routers/admin.py``. Devuelve ``True`` si el token es válido y tiene
+    rol ``"admin"``; el valor en sí no se suele usar, la dependencia
+    actúa como guard.
+
+    Args:
+        credentials: Token Bearer extraído del header ``Authorization``
+            por ``HTTPBearer``.
+
+    Returns:
+        ``True`` si el token de admin es válido.
+
+    Raises:
+        HTTPException 401: Si el token está expirado, tiene firma inválida,
+            o su rol no es ``"admin"``.
+    """
+    try:
+        payload = verify_token(credentials.credentials)
+    except AuthError as exc:
+        raise HTTPException(status_code=401, detail=exc.detail)
+
+    if payload.get("role") != "admin":
+        raise HTTPException(
+            status_code=401,
+            detail="Token inválido para este endpoint: se requiere rol 'admin'.",
+        )
+
+    return True

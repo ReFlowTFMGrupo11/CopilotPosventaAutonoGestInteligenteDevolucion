@@ -17,6 +17,46 @@ styles.inject_css()
 styles.render_header()
 styles.render_backend_banner(api.health())
 
+# ── Muro de login ────────────────────────────────────────────────────────────
+#
+# Si no hay token en session_state, mostrar el formulario y detener la
+# ejecución del resto de la página con st.stop(). En cuanto el login tiene
+# éxito, st.rerun() vuelve a ejecutar la página ya con el token guardado.
+if "token" not in st.session_state:
+    st.markdown("### Iniciar sesión")
+    st.caption("Introduce el email con el que realizaste tu compra.")
+    with st.form("login_form"):
+        email = st.text_input("Email", placeholder="tu@email.com")
+        submitted = st.form_submit_button("Entrar", use_container_width=True)
+
+    if submitted and email.strip():
+        try:
+            result = api.customer_login(email.strip())
+            st.session_state["token"] = result["token"]
+            st.session_state["customer_id"] = result.get("customer_id")
+            st.rerun()
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                st.error(
+                    "Email no encontrado. "
+                    "Comprueba que es el email con el que realizaste tu compra."
+                )
+            else:
+                st.error(f"Error al iniciar sesión: {exc}")
+        except httpx.RequestError as exc:
+            st.error(f"No se pudo contactar con el backend: {exc}")
+    st.stop()
+
+token = st.session_state["token"]
+
+with st.sidebar:
+    if st.button("Cerrar sesión", use_container_width=True):
+        for key in ("token", "customer_id", "thread_id", "messages",
+                    "processing", "pending_request"):
+            st.session_state.pop(key, None)
+        st.rerun()
+
+
 if "messages" not in st.session_state:
     st.session_state.messages = (
         []
@@ -34,7 +74,7 @@ if "pending_request" not in st.session_state:
 
 if "thread_id" not in st.session_state:
     try:
-        st.session_state.thread_id = api.new_chat()
+        st.session_state.thread_id = api.new_chat(token=token)
     except httpx.HTTPError:
         st.session_state.thread_id = None
         st.session_state.messages.append(
@@ -50,7 +90,7 @@ order_items: list[dict] = []
 selection_required = False
 if thread_id:
     try:
-        chat_state = api.chat_state(thread_id)
+        chat_state = api.chat_state(thread_id, token=token)
         order_items = chat_state.get("order_items") or []
         selection_required = bool(chat_state.get("selection_required"))
     except httpx.HTTPError:
@@ -166,6 +206,7 @@ if processing and st.session_state.pending_request:
                 thread_id,
                 pending["text"],
                 selected_item_ids=pending["selected_item_ids"],
+                token=token,
             ):
                 etype = event.get("type")
                 content = event.get("content") or ""
