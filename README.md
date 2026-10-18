@@ -77,12 +77,28 @@ Requisitos: [Python 3.12](https://python.org) + [Git for Windows](https://git-sc
 
 ### Paso 1 — Credenciales AWS (caduca cada 8h, repetir cada sesión)
 
+Cada persona usa su propio comando `stskeygen` según su cuenta y rol de admin.
+El perfil generado debe escribirse en `~/.aws/credentials` bajo el nombre `default`
+(o el nombre que configures en `terraform.tfvars`).
+
 ```bash
-stskeygen --account aws-site-data-dev \
+# Ejemplo — adapta account, admin-role y profile a tu configuración:
+stskeygen --account <tu-cuenta-aws> \
   --admin \
-  --admin-role aws-site-data-dev@admin \
+  --admin-role <tu-rol-admin> \
   --duration 28800 \
   --profile default
+
+# Verifica que funciona — busca un Arn con "admin" en el nombre del rol:
+aws sts get-caller-identity --profile admin@admin
+```
+
+Para saber qué perfil tienes disponible con permisos admin:
+
+```bash
+# Lista todos los perfiles y prueba cuál responde sin error
+grep "^\[" ~/.aws/credentials
+aws sts get-caller-identity --profile <nombre-perfil>
 ```
 
 ### Paso 2 — Configurar perfil e IP en `infra/terraform.tfvars` (no se sube a git)
