@@ -7,7 +7,7 @@
 #       ./start_all_mac.sh stop   (para todos los servicios)
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 PIDFILE="$REPO_ROOT/.reflow_pids"
