@@ -21,12 +21,13 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region  = var.aws_region
+  profile = var.aws_profile
 
   default_tags {
     tags = {
       Project     = "reflow"
-      Environment = "production"
+      Environment = "tfm"
       ManagedBy   = "terraform"
     }
   }
@@ -34,6 +35,6 @@ provider "aws" {
 
 locals {
   app  = "reflow"
-  env  = "production"
+  env  = "tfm"
   name = "${local.app}-${local.env}"
 }

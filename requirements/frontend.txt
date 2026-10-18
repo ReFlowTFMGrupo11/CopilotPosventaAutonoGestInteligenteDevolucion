@@ -1,0 +1,13 @@
+# Dependencias de la imagen Docker del frontend Streamlit (Dockerfile.frontend).
+#
+# El frontend es completamente independiente del backend: solo hace llamadas
+# HTTP a la API de FastAPI (via httpx) y renderiza la UI con Streamlit.
+# No importa nada de backend/ — no necesita LangChain, Supabase, OpenAI, etc.
+#
+# pandas se fija explícito porque 2_Costes.py lo importa directamente
+# (ya venía como transitivo de streamlit, mismo criterio que en requirements.txt).
+
+streamlit>=1.38.0
+httpx>=0.27.0
+pandas>=2.0.0
+python-dotenv>=1.0.0
