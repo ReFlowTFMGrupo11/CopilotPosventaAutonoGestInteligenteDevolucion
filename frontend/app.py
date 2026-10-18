@@ -34,6 +34,13 @@ admin = st.Page(
     icon=admin_icon,
 )
 
-pg = st.navigation([chat, admin])
+costes_icon = "💰" if st.session_state.get("admin_token") else "🔒"
+costes = st.Page(
+    "pages/2_Costes.py",
+    title="Panel de costes",
+    icon=costes_icon,
+)
+
+pg = st.navigation([chat, admin, costes])
 
 pg.run()
