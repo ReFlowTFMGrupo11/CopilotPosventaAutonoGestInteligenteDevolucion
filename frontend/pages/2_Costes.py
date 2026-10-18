@@ -37,7 +37,11 @@ if "admin_token" not in st.session_state:
             st.session_state["admin_token"] = result["token"]
             st.rerun()
         except httpx.HTTPStatusError as exc:
-            st.error("Contraseña incorrecta." if exc.response.status_code == 401 else f"Error: {exc}")
+            st.error(
+                "Contraseña incorrecta."
+                if exc.response.status_code == 401
+                else f"Error: {exc}"
+            )
         except httpx.RequestError as exc:
             st.error(f"No se pudo contactar con el backend: {exc}")
     st.stop()
