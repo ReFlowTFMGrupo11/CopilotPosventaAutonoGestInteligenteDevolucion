@@ -25,6 +25,30 @@ styles.inject_css()
 styles.render_header()
 styles.render_backend_banner(api.health())
 
+# ── Muro de login admin ──────────────────────────────────────────────────────
+if "admin_token" not in st.session_state:
+    st.markdown("### Acceso al panel de costes")
+    with st.form("admin_login_costes"):
+        password = st.text_input("Contraseña", type="password")
+        submitted = st.form_submit_button("Entrar", use_container_width=True)
+    if submitted and password:
+        try:
+            result = api.admin_login(password)
+            st.session_state["admin_token"] = result["token"]
+            st.rerun()
+        except httpx.HTTPStatusError as exc:
+            st.error("Contraseña incorrecta." if exc.response.status_code == 401 else f"Error: {exc}")
+        except httpx.RequestError as exc:
+            st.error(f"No se pudo contactar con el backend: {exc}")
+    st.stop()
+
+admin_token = st.session_state["admin_token"]
+
+with st.sidebar:
+    if st.button("Cerrar sesión", use_container_width=True):
+        st.session_state.pop("admin_token", None)
+        st.rerun()
+
 st.markdown("## Coste, latencia y tokens por nodo")
 st.caption(
     "💡 El coste en € es una ESTIMACIÓN: usa precios por token fijados en "
@@ -45,7 +69,7 @@ def money(value) -> str:
 
 # ── KPIs globales (todas las sesiones, sin filtro temporal) ────────────────
 try:
-    sessions = api.usage_sessions()
+    sessions = api.usage_sessions(token=admin_token)
 except httpx.HTTPError as exc:
     st.error(f"No se pudieron cargar los datos de uso: {exc}")
     sessions = []
@@ -98,7 +122,7 @@ days = PRESETS[preset]
 since = date.today() - timedelta(days=days) if days is not None else None
 
 try:
-    points = api.usage_trends(since=since)
+    points = api.usage_trends(since=since, token=admin_token)
 except httpx.HTTPError as exc:
     st.error(f"No se pudieron cargar las tendencias: {exc}")
     points = []
@@ -192,7 +216,7 @@ with st.expander("📋 Detalle por sesión (tabla)", expanded=False):
 
         if selected:
             try:
-                requests = api.usage_session_detail(selected)
+                requests = api.usage_session_detail(selected, token=admin_token)
             except httpx.HTTPError as exc:
                 st.error(f"No se pudo cargar el detalle de la sesión: {exc}")
                 requests = []
