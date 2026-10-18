@@ -24,7 +24,7 @@ sys.stderr.reconfigure(encoding="utf-8")
 # FastMCP: clase del SDK oficial "mcp" (paquete PyPI "mcp", serie 1.x; ver
 # el comentario equivalente en mcp_supabase.py sobre por qué 1.x y no 2.x).
 from mcp.server.fastmcp import FastMCP
-from backend.models.returns import ShippingLabelItem
+from backend.models import ShippingLabelItem
 
 from backend.services import logistics_service
 

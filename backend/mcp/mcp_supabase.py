@@ -25,7 +25,7 @@ Tools:
 # llamarse MCPServer) porque "langchain-mcp-adapters" todavía no soporta
 # mcp 2.x (ver requirements.txt).
 from mcp.server.fastmcp import FastMCP
-from backend.models.returns import ReturnItem
+from backend.models import ReturnItem
 
 from backend.services import orders_service, policy_service, returns_service
 
