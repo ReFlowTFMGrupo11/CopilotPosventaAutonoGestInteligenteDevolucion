@@ -75,30 +75,37 @@ Requisitos: [Python 3.12](https://python.org) + [Git for Windows](https://git-sc
 - Docker corriendo
 - Acceso a la cuenta AWS con perfil admin en `~/.aws/credentials`
 
-### Paso 1 — Credenciales AWS (caduca cada 8h, repetir cada sesión)
+### Paso 1 — Credenciales AWS
 
-Cada persona usa su propio comando `stskeygen` según su cuenta y rol de admin.
-El perfil generado debe escribirse en `~/.aws/credentials` bajo el nombre `default`
-(o el nombre que configures en `terraform.tfvars`).
+#### Cuenta personal (recomendado para evaluadores)
+
+1. Crea una cuenta en [aws.amazon.com](https://aws.amazon.com) si no tienes una.
+2. En la consola AWS → **IAM** → **Users** → crea un usuario con la política `AdministratorAccess`.
+3. Genera una **Access Key** para ese usuario (IAM → Users → Security credentials → Create access key).
+4. Configura las credenciales en tu máquina:
 
 ```bash
-# Ejemplo — adapta account, admin-role y profile a tu configuración:
-stskeygen --account <tu-cuenta-aws> \
-  --admin \
-  --admin-role <tu-rol-admin> \
-  --duration 28800 \
-  --profile default
-
-# Verifica que funciona — busca un Arn con "admin" en el nombre del rol:
-aws sts get-caller-identity --profile admin@admin
+aws configure
+# AWS Access Key ID: AKIA...
+# AWS Secret Access Key: ...
+# Default region name: eu-west-1
+# Default output format: json
 ```
 
-Para saber qué perfil tienes disponible con permisos admin:
+5. Verifica que funciona:
 
 ```bash
-# Lista todos los perfiles y prueba cuál responde sin error
-grep "^\[" ~/.aws/credentials
-aws sts get-caller-identity --profile <nombre-perfil>
+aws sts get-caller-identity
+```
+
+#### Cuenta corporativa con SSO/roles temporales
+
+Si tu empresa usa herramientas propias para generar credenciales temporales,
+asegúrate de que el perfil resultante tenga permisos de admin y configura
+su nombre en `infra/terraform.tfvars`:
+
+```bash
+aws sts get-caller-identity --profile <tu-perfil-admin>
 ```
 
 ### Paso 2 — Configurar perfil e IP en `infra/terraform.tfvars` (no se sube a git)

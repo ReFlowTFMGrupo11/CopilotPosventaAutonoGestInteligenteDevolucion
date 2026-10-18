@@ -79,13 +79,11 @@ check_aws_auth() {
   info "Verificando credenciales AWS (perfil: $AWS_CLI_PROFILE)..."
   local arn
   arn=$(aws sts get-caller-identity --query 'Arn' --output text 2>&1) || {
-    error "Credenciales expiradas o inválidas para el perfil '$AWS_CLI_PROFILE'.\n\
-Ejecuta primero:\n\
-  stskeygen --account aws-site-data-dev \\\n\
-    --admin \\\n\
-    --admin-role aws-site-data-dev@admin \\\n\
-    --duration 28800 \\\n\
-    --profile default"
+    error "Credenciales expiradas o invalidas para el perfil '$AWS_CLI_PROFILE'.\n\
+Opciones:\n\
+  - Cuenta personal:   aws configure  (introduce tu Access Key)\n\
+  - Cuenta corporativa: genera credenciales con tu herramienta de SSO/roles\n\
+  - Cambia el perfil:  edita aws_profile en infra/terraform.tfvars"
   }
   info "Cuenta activa: $arn"
 }
