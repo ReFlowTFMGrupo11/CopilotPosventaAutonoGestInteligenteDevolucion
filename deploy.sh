@@ -167,14 +167,18 @@ push_images() {
 
   cd "$SCRIPT_DIR"
 
-  info "  Build + push reflow-api..."
-  docker build -f Dockerfile.api      -t "$api_url:latest" . && docker push "$api_url:latest"
+  # --platform linux/amd64: ECS Fargate corre en x86_64.
+  # Sin esto, en Macs Apple Silicon (M1/M2/M3) Docker construye para arm64
+  # y ECS falla con "image Manifest does not contain descriptor matching
+  # platform linux/amd64".
+  info "  Build + push reflow-api (linux/amd64)..."
+  docker build --platform linux/amd64 -f Dockerfile.api      -t "$api_url:latest" . && docker push "$api_url:latest"
 
-  info "  Build + push reflow-mcp..."
-  docker build -f Dockerfile.mcp      -t "$mcp_url:latest" . && docker push "$mcp_url:latest"
+  info "  Build + push reflow-mcp (linux/amd64)..."
+  docker build --platform linux/amd64 -f Dockerfile.mcp      -t "$mcp_url:latest" . && docker push "$mcp_url:latest"
 
-  info "  Build + push reflow-frontend..."
-  docker build -f Dockerfile.frontend -t "$fe_url:latest"  . && docker push "$fe_url:latest"
+  info "  Build + push reflow-frontend (linux/amd64)..."
+  docker build --platform linux/amd64 -f Dockerfile.frontend -t "$fe_url:latest"  . && docker push "$fe_url:latest"
 }
 
 # ── Esperar a que ECS esté estable ────────────────────────────────────────────
