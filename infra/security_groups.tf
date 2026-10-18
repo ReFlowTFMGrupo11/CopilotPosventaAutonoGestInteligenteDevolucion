@@ -13,28 +13,28 @@
 
 resource "aws_security_group" "alb" {
   name        = "${local.name}-alb"
-  description = "ALB: acepta HTTP/HTTPS de internet, reenvía a frontend y api"
+  description = "ALB: accepts HTTP/HTTPS from internet, forwards to frontend and api"
   vpc_id      = aws_vpc.main.id
   tags        = { Name = "${local.name}-alb" }
 }
 
 resource "aws_security_group" "frontend" {
   name        = "${local.name}-frontend"
-  description = "Streamlit :8501 — solo accesible desde el ALB"
+  description = "Streamlit :8501 - only accessible from ALB"
   vpc_id      = aws_vpc.main.id
   tags        = { Name = "${local.name}-frontend" }
 }
 
 resource "aws_security_group" "api" {
   name        = "${local.name}-api"
-  description = "FastAPI :8000 — solo accesible desde el ALB"
+  description = "FastAPI :8000 - only accessible from ALB"
   vpc_id      = aws_vpc.main.id
   tags        = { Name = "${local.name}-api" }
 }
 
 resource "aws_security_group" "mcp" {
   name        = "${local.name}-mcp"
-  description = "MCP servers :8001/:8002 — solo accesibles desde FastAPI"
+  description = "MCP servers :8001/:8002 - only accessible from FastAPI"
   vpc_id      = aws_vpc.main.id
   tags        = { Name = "${local.name}-mcp" }
 }

@@ -5,15 +5,16 @@
 # Uso:
 #   ./deploy.sh local                    Arranca los 4 servicios en local
 #   ./deploy.sh local stop               Para los servicios locales
-#   ./deploy.sh aws <cuenta>             Despliega en AWS (apply + push + wait)
-#   ./deploy.sh aws <cuenta> destroy     Destruye toda la infraestructura AWS
+#   ./deploy.sh secrets                  Sincroniza .env → Secrets Manager (AWS)
+#   ./deploy.sh aws                      Despliega en AWS (apply + secrets + push + wait)
+#   ./deploy.sh aws destroy              Destruye toda la infraestructura AWS
 #
 # Prerequisitos AWS:
 #   - stskeygen instalado y configurado
 #   - terraform >= 1.6  (brew install terraform)
 #   - docker corriendo
 #   - aws cli instalado  (brew install awscli)
-#   - .env con los valores reales (se sincronizan automáticamente a Secrets Manager)
+#   - .env con los valores reales
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -22,6 +23,15 @@ INFRA_DIR="$SCRIPT_DIR/infra"
 ENV_FILE="$SCRIPT_DIR/.env"
 
 MODE="${1:-}"
+
+# ── Configuración AWS ─────────────────────────────────────────────────────────
+# Perfil y región por defecto. Terraform los lee de terraform.tfvars;
+# los comandos aws CLI los usan via AWS_PROFILE y AWS_DEFAULT_REGION.
+AWS_CLI_PROFILE="${AWS_PROFILE:-admin@admin}"
+AWS_CLI_REGION="${AWS_DEFAULT_REGION:-eu-west-1}"
+
+# Shortcut: cualquier llamada a `aws` usará automáticamente perfil y región.
+aws() { command aws --profile "$AWS_CLI_PROFILE" --region "$AWS_CLI_REGION" "$@"; }
 
 # ── Colores ───────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -34,10 +44,15 @@ usage() {
   echo ""
   echo "Uso: $0 <modo> [opciones]"
   echo ""
-  echo "  local                    Arranca los 4 servicios en local"
-  echo "  local stop               Para los servicios locales"
-  echo "  aws <cuenta>             Despliega en AWS ECS Fargate"
-  echo "  aws <cuenta> destroy     Destruye toda la infraestructura AWS"
+  echo "  local              Arranca los 4 servicios en local (Mac/Linux)"
+  echo "  local stop         Para los servicios locales"
+  echo "  secrets            Sincroniza .env → AWS Secrets Manager"
+  echo "  aws                Despliega en AWS (terraform + secrets + docker + ECS)"
+  echo "  aws destroy        Destruye toda la infraestructura AWS"
+  echo ""
+  echo "Variables de entorno opcionales:"
+  echo "  AWS_PROFILE        Perfil AWS a usar (default: admin@admin)"
+  echo "  AWS_DEFAULT_REGION Region AWS (default: eu-west-1)"
   echo ""
   exit 1
 }
@@ -59,17 +74,23 @@ start_local() {
 #  MODO AWS                                                                    #
 # ════════════════════════════════════════════════════════════════════════════ #
 
-# ── 1. Autenticación AWS ──────────────────────────────────────────────────────
-aws_auth() {
-  local account="$1"
-  info "Autenticando en AWS (cuenta: $account)..."
-  stskeygen --account "$account"
-  local current_account
-  current_account=$(aws sts get-caller-identity --query 'Account' --output text)
-  info "Cuenta activa: $current_account"
+# ── Verificar credenciales activas ────────────────────────────────────────────
+check_aws_auth() {
+  info "Verificando credenciales AWS (perfil: $AWS_CLI_PROFILE)..."
+  local arn
+  arn=$(aws sts get-caller-identity --query 'Arn' --output text 2>&1) || {
+    error "Credenciales expiradas o inválidas para el perfil '$AWS_CLI_PROFILE'.\n\
+Ejecuta primero:\n\
+  stskeygen --account aws-site-data-dev \\\n\
+    --admin \\\n\
+    --admin-role aws-site-data-dev@admin \\\n\
+    --duration 28800 \\\n\
+    --profile default"
+  }
+  info "Cuenta activa: $arn"
 }
 
-# ── 2. Terraform apply ────────────────────────────────────────────────────────
+# ── Terraform apply ────────────────────────────────────────────────────────────
 terraform_apply() {
   info "Ejecutando terraform apply..."
   cd "$INFRA_DIR"
@@ -78,78 +99,70 @@ terraform_apply() {
   cd "$SCRIPT_DIR"
 }
 
-# ── 3. Sincronizar secrets desde .env → Secrets Manager ──────────────────────
+# ── Sincronizar secrets desde .env → Secrets Manager ─────────────────────────
 sync_secrets() {
   info "Sincronizando secrets desde .env a Secrets Manager..."
+  info "  Perfil: $AWS_CLI_PROFILE  |  Region: $AWS_CLI_REGION"
 
-  [ -f "$ENV_FILE" ] || error "No se encontró .env en $ENV_FILE"
+  [ -f "$ENV_FILE" ] || error "No se encontro .env en $ENV_FILE"
 
-  # Mapeo env var → secret ID en Secrets Manager
-  declare -A SECRET_MAP=(
-    [OPENAI_API_KEY]="reflow/openai-api-key"
-    [SUPABASE_URL]="reflow/supabase-url"
-    [SUPABASE_SERVICE_KEY]="reflow/supabase-service-key"
-    [SUPABASE_DB_URL]="reflow/supabase-db-url"
-    [JWT_SECRET]="reflow/jwt-secret"
-    [ADMIN_PASSWORD]="reflow/admin-password"
-    [LANGFUSE_SECRET_KEY]="reflow/langfuse-secret-key"
-    [LANGFUSE_PUBLIC_KEY]="reflow/langfuse-public-key"
-  )
+  # Lee el valor de una clave del .env sin ejecutar el fichero
+  get_env_value() {
+    local key="$1"
+    local val
+    # grep la línea key=valor, ignora comentarios, elimina comillas
+    val=$(grep -E "^${key}=" "$ENV_FILE" | head -1 | cut -d'=' -f2- | sed "s/#.*$//" | xargs 2>/dev/null || true)
+    echo "$val"
+  }
 
-  # Leer .env sin ejecutarlo (evita efectos secundarios)
-  declare -A ENV_VALUES
-  while IFS='=' read -r key value; do
-    # Saltar comentarios y líneas vacías
-    [[ "$key" =~ ^[[:space:]]*# ]] && continue
-    [[ -z "$key" ]] && continue
-    # Eliminar comillas y espacios del valor
-    value="${value%%#*}"         # eliminar comentarios inline
-    value="${value%"${value##*[! ]}"}" # rtrim
-    value="${value#\"}" ; value="${value%\"}"  # eliminar comillas dobles
-    value="${value#\'}" ; value="${value%\'}"  # eliminar comillas simples
-    ENV_VALUES["$key"]="$value"
-  done < "$ENV_FILE"
-
-  local updated=0
-  local skipped=0
-  for env_var in "${!SECRET_MAP[@]}"; do
-    local secret_id="${SECRET_MAP[$env_var]}"
-    local value="${ENV_VALUES[$env_var]:-}"
-
+  # Empuja un secret si tiene valor real (no vacío ni CHANGE_ME)
+  push_secret() {
+    local env_var="$1"
+    local secret_id="$2"
+    local value
+    value=$(get_env_value "$env_var")
     if [ -n "$value" ] && [ "$value" != "CHANGE_ME" ]; then
-      echo "  ✓ $secret_id"
+      echo "  ✓  $env_var → $secret_id"
       aws secretsmanager put-secret-value \
         --secret-id "$secret_id" \
         --secret-string "$value" \
         --output text > /dev/null
-      ((updated++)) || true
+      return 0
     else
-      warning "  $env_var no está en .env — $secret_id se queda sin actualizar"
-      ((skipped++)) || true
+      warning "  -  $env_var no encontrado en .env — $secret_id omitido"
+      return 1
     fi
-  done
+  }
+
+  local updated=0 skipped=0
+  _push() { push_secret "$1" "$2" && ((updated++)) || ((skipped++)) || true; }
+
+  _push "OPENAI_API_KEY"     "reflow/openai-api-key"
+  _push "SUPABASE_URL"       "reflow/supabase-url"
+  _push "SUPABASE_SERVICE_KEY" "reflow/supabase-service-key"
+  _push "SUPABASE_DB_URL"    "reflow/supabase-db-url"
+  _push "JWT_SECRET"         "reflow/jwt-secret"
+  _push "ADMIN_PASSWORD"     "reflow/admin-password"
+  _push "LANGFUSE_SECRET_KEY" "reflow/langfuse-secret-key"
+  _push "LANGFUSE_PUBLIC_KEY" "reflow/langfuse-public-key"
 
   info "$updated secrets actualizados, $skipped omitidos."
-  [ "$skipped" -gt 0 ] && warning "Los servicios que usen secrets omitidos fallarán al arrancar."
+  [ "$skipped" -gt 0 ] && warning "Los servicios que usen esos secrets fallaran al arrancar."
 }
 
-# ── 4. Build + push imágenes a ECR ───────────────────────────────────────────
+# ── Build + push imágenes a ECR ───────────────────────────────────────────────
 push_images() {
   info "Construyendo y subiendo imágenes a ECR..."
   cd "$INFRA_DIR"
 
-  local region
-  region=$(terraform output -raw aws_region)
-  local account
+  local account ecr_base api_url mcp_url fe_url
   account=$(aws sts get-caller-identity --query 'Account' --output text)
-  local ecr_base="$account.dkr.ecr.$region.amazonaws.com"
+  ecr_base="$account.dkr.ecr.$AWS_CLI_REGION.amazonaws.com"
 
-  # Docker login a ECR
   info "  Docker login a ECR ($ecr_base)..."
-  aws ecr get-login-password --region "$region" | \
+  aws ecr get-login-password | \
     docker login --username AWS --password-stdin "$ecr_base"
 
-  local api_url mcp_url fe_url
   api_url=$(terraform output -json ecr_urls | python3 -c "import json,sys; print(json.load(sys.stdin)['reflow-api'])")
   mcp_url=$(terraform output -json ecr_urls | python3 -c "import json,sys; print(json.load(sys.stdin)['reflow-mcp'])")
   fe_url=$(terraform output -json ecr_urls  | python3 -c "import json,sys; print(json.load(sys.stdin)['reflow-frontend'])")
@@ -166,36 +179,35 @@ push_images() {
   docker build -f Dockerfile.frontend -t "$fe_url:latest"  . && docker push "$fe_url:latest"
 }
 
-# ── 5. Esperar a que ECS esté estable ────────────────────────────────────────
+# ── Esperar a que ECS esté estable ────────────────────────────────────────────
 wait_ecs() {
-  info "Esperando a que los servicios ECS estén estables (puede tardar ~3 min)..."
+  info "Esperando a que los servicios ECS esten estables (puede tardar ~3 min)..."
   local cluster
   cluster=$(cd "$INFRA_DIR" && terraform output -raw cluster_name)
 
   aws ecs wait services-stable \
     --cluster "$cluster" \
-    --services fastapi mcp-supabase mcp-logistics frontend \
-    --region "$(cd "$INFRA_DIR" && terraform output -raw aws_region)"
+    --services fastapi mcp-supabase mcp-logistics frontend
 
-  info "Todos los servicios están activos."
+  info "Todos los servicios estan activos."
 }
 
-# ── 6. Mostrar URL ────────────────────────────────────────────────────────────
+# ── Mostrar URL ───────────────────────────────────────────────────────────────
 show_url() {
   local app_url
   app_url=$(cd "$INFRA_DIR" && terraform output -raw alb_url)
   echo ""
-  echo -e "${GREEN}════════════════════════════════════════${NC}"
-  echo -e "${GREEN}  ReFlow desplegado en AWS              ${NC}"
-  echo -e "${GREEN}  URL: $app_url          ${NC}"
-  echo -e "${GREEN}════════════════════════════════════════${NC}"
+  echo -e "${GREEN}================================================${NC}"
+  echo -e "${GREEN}  ReFlow desplegado en AWS                      ${NC}"
+  echo -e "${GREEN}  URL: $app_url  ${NC}"
+  echo -e "${GREEN}================================================${NC}"
   echo ""
 }
 
 # ── Destroy ───────────────────────────────────────────────────────────────────
 terraform_destroy() {
-  warning "Esto destruirá TODA la infraestructura en AWS (VPC, ECS, ECR, secrets...)."
-  read -r -p "¿Estás segura? Escribe 'destruir' para confirmar: " confirm
+  warning "Esto destruira TODA la infraestructura en AWS."
+  read -r -p "Escribe 'destruir' para confirmar: " confirm
   [ "$confirm" == "destruir" ] || { echo "Cancelado."; exit 0; }
 
   info "Ejecutando terraform destroy..."
@@ -213,13 +225,14 @@ case "$MODE" in
     start_local "${2:-}"
     ;;
 
+  secrets)
+    check_aws_auth
+    sync_secrets
+    ;;
+
   aws)
-    ACCOUNT="${2:-}"
-    SUBMODE="${3:-deploy}"
-
-    [ -n "$ACCOUNT" ] || error "Especifica el nombre de la cuenta AWS.\n  Uso: $0 aws <cuenta>"
-
-    aws_auth "$ACCOUNT"
+    SUBMODE="${2:-deploy}"
+    check_aws_auth
 
     if [ "$SUBMODE" == "destroy" ]; then
       terraform_destroy

@@ -4,6 +4,12 @@ variable "aws_region" {
   default     = "eu-west-1"
 }
 
+variable "aws_profile" {
+  description = "Perfil AWS (~/.aws/credentials) que usa Terraform. Sobreescribe con tu perfil en terraform.tfvars."
+  type        = string
+  default     = "default"
+}
+
 variable "github_repo" {
   description = "Repositorio GitHub en formato 'org/repo' (para el rol OIDC de GitHub Actions)"
   type        = string
