@@ -24,7 +24,3 @@ tiktoken>=0.7.0
 reportlab>=4.0.0
 
 python-dotenv>=1.0.0
-
-# backend/models/__init__.py importa state.py que necesita langchain_core.
-# El __init__.py se ejecuta siempre al importar cualquier cosa de backend.models.*
-langchain-core>=0.3.0
