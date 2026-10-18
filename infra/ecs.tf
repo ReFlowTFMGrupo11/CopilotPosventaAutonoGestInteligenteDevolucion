@@ -85,7 +85,7 @@ resource "aws_ecs_task_definition" "fastapi" {
 
     environment = [
       { name = "ENVIRONMENT", value = "production" },
-      # Service Connect: los MCP servers son accesibles por nombre dentro del cluster
+      # Service Connect: MCP servers and Streamlit resolve these names internally
       { name = "MCP_SUPABASE_URL", value = "http://mcp-supabase:8001/mcp" },
       { name = "MCP_LOGISTICS_URL", value = "http://mcp-logistics:8002/mcp" },
     ]
@@ -223,8 +223,8 @@ resource "aws_ecs_task_definition" "frontend" {
     }]
 
     environment = [
-      # Streamlit llama a FastAPI a través del ALB (URL pública)
-      { name = "API_BASE_URL", value = "http://${aws_lb.main.dns_name}" },
+      # Streamlit calls FastAPI directly via Service Connect (no ALB hairpin)
+      { name = "API_BASE_URL", value = "http://fastapi:8000" },
     ]
 
     logConfiguration = local.log_config["frontend"]
@@ -256,18 +256,22 @@ resource "aws_ecs_service" "fastapi" {
     assign_public_ip = false
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "fastapi"
-    container_port   = 8000
-  }
-
+  # FastAPI registers itself as "fastapi" in Service Connect so Streamlit
+  # can call it at http://fastapi:8000 without going through the ALB.
   service_connect_configuration {
     enabled   = true
     namespace = aws_service_discovery_http_namespace.main.arn
+
+    service {
+      port_name = "fastapi"
+      client_alias {
+        port     = 8000
+        dns_name = "fastapi"
+      }
+    }
   }
 
-  depends_on = [aws_lb_listener_rule.api]
+  depends_on = [aws_lb_listener.http]
 
   tags = { Name = "${local.name}-fastapi" }
 }
@@ -340,13 +344,19 @@ resource "aws_ecs_service" "frontend" {
   network_configuration {
     subnets          = [aws_subnet.public_a.id]
     security_groups  = [aws_security_group.frontend.id]
-    assign_public_ip = true # subnet pública: Fargate necesita IP pública para pull de ECR
+    assign_public_ip = true # public subnet: Fargate needs public IP to pull from ECR
   }
 
   load_balancer {
     target_group_arn = aws_lb_target_group.frontend.arn
     container_name   = "frontend"
     container_port   = 8501
+  }
+
+  # Service Connect enabled as client so Streamlit can resolve "fastapi:8000"
+  service_connect_configuration {
+    enabled   = true
+    namespace = aws_service_discovery_http_namespace.main.arn
   }
 
   depends_on = [aws_lb_listener.http]
