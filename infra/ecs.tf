@@ -142,6 +142,8 @@ resource "aws_ecs_task_definition" "mcp_supabase" {
       { name = "OPENAI_API_KEY", valueFrom = local.secret["reflow/openai-api-key"].arn },
       { name = "SUPABASE_URL", valueFrom = local.secret["reflow/supabase-url"].arn },
       { name = "SUPABASE_SERVICE_KEY", valueFrom = local.secret["reflow/supabase-service-key"].arn },
+      { name = "LANGFUSE_SECRET_KEY", valueFrom = local.secret["reflow/langfuse-secret-key"].arn },
+      { name = "LANGFUSE_PUBLIC_KEY", valueFrom = local.secret["reflow/langfuse-public-key"].arn },
     ]
 
     logConfiguration = local.log_config["mcp-supabase"]

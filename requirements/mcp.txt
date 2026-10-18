@@ -24,3 +24,8 @@ tiktoken>=0.7.0
 reportlab>=4.0.0
 
 python-dotenv>=1.0.0
+
+# Langfuse: traza la llamada de embeddings RAG en mcp_supabase/policy_service.py.
+# Si no está configurado (LANGFUSE_SECRET_KEY ausente), get_langfuse() devuelve
+# None y se usa el SDK de OpenAI estándar — degradación silenciosa.
+langfuse>=4.14.0
