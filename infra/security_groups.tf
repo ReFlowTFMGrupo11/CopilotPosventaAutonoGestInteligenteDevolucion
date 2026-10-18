@@ -44,7 +44,7 @@ resource "aws_security_group" "mcp" {
 resource "aws_security_group_rule" "alb_ingress_http" {
   security_group_id = aws_security_group.alb.id
   type              = "ingress"
-  description       = "HTTP desde internet"
+  description       = "HTTP from internet (restricted by IP)"
   from_port         = 80
   to_port           = 80
   protocol          = "tcp"
@@ -54,11 +54,24 @@ resource "aws_security_group_rule" "alb_ingress_http" {
 resource "aws_security_group_rule" "alb_ingress_https" {
   security_group_id = aws_security_group.alb.id
   type              = "ingress"
-  description       = "HTTPS desde internet"
+  description       = "HTTPS from internet (restricted by IP)"
   from_port         = 443
   to_port           = 443
   protocol          = "tcp"
   cidr_blocks       = var.allowed_cidr_blocks
+}
+
+# El frontend (en subnet publica 10.0.1.x) llama al ALB para alcanzar FastAPI.
+# El ALB rechaza el trafico interno sin esta regla porque la IP origen es
+# del VPC, no de allowed_cidr_blocks.
+resource "aws_security_group_rule" "alb_ingress_vpc" {
+  security_group_id = aws_security_group.alb.id
+  type              = "ingress"
+  description       = "HTTP from VPC internal traffic (frontend to ALB to FastAPI)"
+  from_port         = 80
+  to_port           = 80
+  protocol          = "tcp"
+  cidr_blocks       = ["10.0.0.0/16"]
 }
 
 resource "aws_security_group_rule" "alb_egress_frontend" {
@@ -96,9 +109,19 @@ resource "aws_security_group_rule" "frontend_ingress_alb" {
 resource "aws_security_group_rule" "frontend_egress_https" {
   security_group_id = aws_security_group.frontend.id
   type              = "egress"
-  description       = "HTTPS saliente (ALB, internet)"
+  description       = "HTTPS outbound"
   from_port         = 443
   to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
+resource "aws_security_group_rule" "frontend_egress_http" {
+  security_group_id = aws_security_group.frontend.id
+  type              = "egress"
+  description       = "HTTP outbound - to reach ALB on port 80"
+  from_port         = 80
+  to_port           = 80
   protocol          = "tcp"
   cidr_blocks       = ["0.0.0.0/0"]
 }
