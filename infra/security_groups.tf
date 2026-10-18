@@ -138,9 +138,19 @@ resource "aws_security_group_rule" "api_egress_mcp_logistics" {
 resource "aws_security_group_rule" "api_egress_https" {
   security_group_id = aws_security_group.api.id
   type              = "egress"
-  description       = "HTTPS saliente (Supabase, OpenAI, Langfuse, ECR)"
+  description       = "HTTPS outbound (Supabase, OpenAI, Langfuse, ECR)"
   from_port         = 443
   to_port           = 443
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
+resource "aws_security_group_rule" "api_egress_postgres" {
+  security_group_id = aws_security_group.api.id
+  type              = "egress"
+  description       = "PostgreSQL outbound - Supabase pooler :6543 and direct :5432"
+  from_port         = 5432
+  to_port           = 6543
   protocol          = "tcp"
   cidr_blocks       = ["0.0.0.0/0"]
 }
