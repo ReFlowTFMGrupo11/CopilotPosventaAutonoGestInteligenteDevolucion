@@ -4,82 +4,40 @@
 > Región: **eu-west-1**. Orquestación: **ECS Fargate** con Service Connect (AWS Cloud Map).  
 > Script de despliegue end-to-end: `deploy.sh aws`.
 
-## Topología de red y flujo de tráfico
+## Diagrama visual
 
-```mermaid
-graph TD
-    USER([Usuario / Browser])
+**Archivo**: [`docs/infra_diagram.drawio`](infra_diagram.drawio)  
+Ábrelo en [diagrams.net](https://app.diagrams.net/) (File → Open from → This device) o en el plugin de VS Code / JetBrains.
 
-    subgraph AWS["AWS · eu-west-1"]
+### Código de colores
 
-        subgraph VPC["VPC  10.0.0.0/16  ·  tfm-reflow"]
+| Color | Elemento |
+|-------|----------|
+| Gris claro · borde gris | Región AWS (`eu-west-1`) |
+| Morado claro · borde morado | VPC (`10.0.0.0/16`) |
+| Azul claro · borde azul **discontinuo** | Availability Zone (AZ) |
+| **Verde** · borde verde | Public subnet |
+| **Azul** · borde azul sólido | Private subnet |
+| Rojo claro · borde rojo | Security group |
+| Borde negro grueso | ECS Cluster |
+| Naranja | Servicio AWS Fargate / ECR |
+| Flecha sólida | Flujo de tráfico |
+| Flecha discontinua | Configuración (image pull / secretos / logs) |
 
-            ALB["ALB · sg_alb<br/>HTTP :80 → Target Group :8501<br/>Subnets públicas A + B"]
+### Flujo principal
 
-            subgraph PUB_A["Subnet pública A · 10.0.1.0/24 · eu-west-1a"]
-                FRONTEND["reflow-frontend<br/>Streamlit :8501 · Fargate<br/>sg_frontend · 0.25 vCPU / 512 MB<br/>assign_public_ip = true"]
-                NAT["NAT Gateway<br/>+ Elastic IP"]
-            end
-
-            subgraph PRIV_A["Subnet privada A · 10.0.10.0/24 · eu-west-1a"]
-                API["reflow-api<br/>FastAPI :8000 · Fargate<br/>sg_api · 0.5 vCPU / 1024 MB"]
-                MCP_S["reflow-mcp · mcp-supabase<br/>:8001 · Fargate<br/>sg_mcp · 0.25 vCPU / 512 MB"]
-                MCP_L["reflow-mcp · mcp-logistics<br/>:8002 · Fargate<br/>sg_mcp · 0.25 vCPU / 512 MB"]
-            end
-
-            IGW[Internet Gateway]
-        end
-
-        subgraph SUPPORT["Servicios de soporte AWS"]
-            ECR["ECR<br/>reflow-api · reflow-mcp · reflow-frontend"]
-            SM["Secrets Manager<br/>reflow/* · 8 secretos"]
-            CW["CloudWatch Logs<br/>4 log groups · 7 días"]
-            IAM["IAM<br/>ecs-execution · ecs-task"]
-        end
-
-    end
-
-    subgraph EXT["Servicios externos"]
-        SUPABASE[("Supabase Cloud<br/>PostgreSQL + pgvector")]
-        OPENAI["OpenAI API"]
-        LANGFUSE["Langfuse Cloud"]
-    end
-
-    %% ── Flujo principal de tráfico ──────────────────────────────────────────
-    USER -->|"HTTP :80"| ALB
-    ALB -->|"Target Group :8501"| FRONTEND
-    FRONTEND -->|"Service Connect<br/>http://fastapi:8000"| API
-    API -->|"Service Connect<br/>http://mcp-supabase:8001/mcp"| MCP_S
-    API -->|"Service Connect<br/>http://mcp-logistics:8002/mcp"| MCP_L
-
-    %% ── Salida a Internet ────────────────────────────────────────────────────
-    FRONTEND -->|":443 (ECR pull — IP pública)"| IGW
-    API -->|":443 / :5432–:6543"| NAT
-    MCP_S -->|":443 / :5432–:6543"| NAT
-    MCP_L -->|":443 / :5432"| NAT
-    NAT --> IGW
-    IGW --> SUPABASE
-    IGW --> OPENAI
-    IGW --> LANGFUSE
-
-    %% ── Servicios de soporte ─────────────────────────────────────────────────
-    SM -.->|"vars inyectadas al arrancar"| API
-    SM -.-> MCP_S
-    SM -.-> MCP_L
-    ECR -.->|"image pull"| FRONTEND
-    ECR -.-> API
-    ECR -.-> MCP_S
-    ECR -.-> MCP_L
-    FRONTEND -.->|"logs"| CW
-    API -.-> CW
-    MCP_S -.-> CW
-    MCP_L -.-> CW
-    IAM -.->|"permite pull ECR<br/>lectura SM · escritura CW"| API
 ```
-
-> **Nota sobre la subnet pública B** (`10.0.2.0/24 · eu-west-1b`): AWS exige al menos
-> dos zonas de disponibilidad para un ALB; esta subnet solo sirve como segunda AZ del
-> balanceador y no aloja ninguna tarea ECS.
+Usuarios
+  └─► sg_alb (HTTP :80)
+        └─► ALB  →  Listener :80 → Target Group :8501
+              └─► [Public subnet A]  reflow-frontend (Streamlit :8501)
+                    │  Service Connect
+                    └─► [Private subnet A / ECS Cluster]  reflow-api (FastAPI :8000)
+                          ├─►  mcp-supabase :8001   (Service Connect)
+                          └─►  mcp-logistics :8002  (Service Connect)
+                                │  :443 / :5432  vía NAT Gateway → Internet Gateway
+                                └─► Supabase Cloud · OpenAI API · Langfuse Cloud
+```
 
 ## Servicios ECS
 
