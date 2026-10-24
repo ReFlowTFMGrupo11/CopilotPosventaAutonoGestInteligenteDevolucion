@@ -78,7 +78,11 @@ class TestSearchReturnPolicy:
         )
         fake_openai_cls = MagicMock(return_value=fake_openai_client)
 
-        settings = SimpleNamespace(openai_api_key=None, rag_match_threshold=0.5)
+        settings = SimpleNamespace(
+            openai_api_key=None,
+            rag_match_threshold=0.5,
+            rag_embedding_model="text-embedding-3-small",
+        )
 
         return (
             patch("backend.services.observability.get_langfuse", return_value=None),
@@ -175,3 +179,21 @@ class TestSearchReturnPolicy:
         embed_call_kwargs = fake_openai_client.embeddings.create.call_args.kwargs
         assert embed_call_kwargs["input"] == "mi consulta de politica"
         assert embed_call_kwargs["model"] == "text-embedding-3-small"
+        assert "name" not in embed_call_kwargs
+        assert "metadata" not in embed_call_kwargs
+
+    @pytest.mark.asyncio
+    async def test_usa_modelo_configurado_para_consultas(self):
+        mock_client, query = _make_sync_supabase_client()
+        query.execute = AsyncMock(return_value=MagicMock(data=[]))
+        with patch(
+            "backend.services.policy_service.get_policy_info",
+            new=AsyncMock(return_value=None),
+        ):
+            p1, p2, p3, p4, fake_openai_client = self._patched_env(mock_client)
+            with p1, p2, p3, p4 as settings_mock:
+                settings_mock.return_value.rag_embedding_model = "modelo-de-prueba"
+                await search_return_policy(query="q", category="calzado")
+        assert fake_openai_client.embeddings.create.call_args.kwargs["model"] == (
+            "modelo-de-prueba"
+        )

@@ -36,20 +36,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import os
 from typing import Any, Optional
 
 import tiktoken
-from dotenv import load_dotenv
 from openai import OpenAI
 
+from backend.config import get_settings
 from backend.db.supabase_client import get_supabase_client
 from data.generate_dataset import (
     CATEGORIES,
     POLICIES_DIR,
 )  # POLICIES_DIR → dataset/rag/policies/
-
-load_dotenv(override=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -63,8 +60,6 @@ GENERAL_POLICY_DOC = "00_marco_general_devoluciones.md"
 # Mismo modelo que ya usa search_return_policy para la consulta del cliente
 # (backend/services/policy_service.py): si no coincidiera, las distancias
 # vectoriales entre pregunta y política dejarían de tener sentido.
-EMBEDDING_MODEL = "text-embedding-3-small"
-
 # dataset/README.md documenta chunks de "~300-500 tokens" — se respeta ese
 # rango salvo que un único párrafo (p. ej. la tabla de la sección 6) ya lo
 # supere él solo, en cuyo caso se deja como chunk propio sin partirlo.
@@ -166,7 +161,9 @@ def chunk_markdown(markdown_text: str) -> list[str]:
 def _embed_texts(openai_client: OpenAI, texts: list[str]) -> list[list[float]]:
     """Pide los embeddings de varios textos en una sola llamada a la API
     (acepta ``input`` como lista), preservando el orden de entrada."""
-    response = openai_client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
+    response = openai_client.embeddings.create(
+        model=get_settings().rag_embedding_model, input=texts
+    )
     return [item.embedding for item in response.data]
 
 
@@ -269,8 +266,11 @@ async def ingest(*, only_category: Optional[str] = None, dry_run: bool = False) 
             f"{', '.join(sorted(CATEGORIES))}."
         )
 
+    api_key = get_settings().openai_api_key if not dry_run else None
     openai_client: Optional[OpenAI] = (
-        None if dry_run else OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        None
+        if dry_run
+        else OpenAI(api_key=api_key.get_secret_value() if api_key else None)
     )
     supabase_client = None if dry_run else await get_supabase_client()
 

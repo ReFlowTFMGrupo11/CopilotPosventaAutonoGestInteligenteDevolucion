@@ -14,6 +14,7 @@ from data.rag.ingest_policy_embeddings import (
     GENERAL_POLICY_DOC,
     MAX_CHUNK_TOKENS,
     _count_tokens,
+    _embed_texts,
     _get_active_policy_id,
     _replace_embeddings,
     _split_into_sections,
@@ -85,6 +86,17 @@ class TestChunkMarkdown:
         # Ningún chunk se dispara muy por encima del máximo salvo el caso
         # documentado (párrafo ya oversized por sí solo, p.ej. la tabla).
         assert all(_count_tokens(chunk) <= MAX_CHUNK_TOKENS * 2 for chunk in chunks)
+
+
+def test_ingesta_usa_modelo_configurado_para_embeddings():
+    client = MagicMock()
+    client.embeddings.create.return_value.data = [MagicMock(embedding=[0.1, 0.2])]
+    with patch("data.rag.ingest_policy_embeddings.get_settings") as settings:
+        settings.return_value.rag_embedding_model = "modelo-de-prueba"
+        assert _embed_texts(client, ["política"]) == [[0.1, 0.2]]
+    client.embeddings.create.assert_called_once_with(
+        model="modelo-de-prueba", input=["política"]
+    )
 
 
 class TestGetActivePolicyId:

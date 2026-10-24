@@ -97,12 +97,14 @@ async def search_return_policy(
     # comprobado en real); por eso el thread_id va en `metadata`, que sí
     # está soportado -- la traza queda suelta (no anidada en el trace de la
     # conversación), pero es buscable/filtrable por thread_id igualmente.
-    embedding_resp = openai_client.embeddings.create(
-        model="text-embedding-3-small",
-        input=query,
-        name="rag_embedding",
-        metadata={"thread_id": thread_id, "category": category},
-    )
+    embedding_kwargs = {"model": get_settings().rag_embedding_model, "input": query}
+    if lf is not None:
+        # name/metadata son extensiones de langfuse.openai, no del SDK nativo.
+        embedding_kwargs.update(
+            name="rag_embedding",
+            metadata={"thread_id": thread_id, "category": category},
+        )
+    embedding_resp = openai_client.embeddings.create(**embedding_kwargs)
     query_embedding = embedding_resp.data[0].embedding
 
     rpc_params = {
@@ -126,3 +128,15 @@ async def search_return_policy(
         "semantic_results": results.data,
         "policy_info": policy_info,
     }
+
+
+async def list_policy_embedding_metadata() -> list[dict]:
+    """Lista metadatos del índice para verificar su cobertura antes de evaluarlo."""
+    client = await get_supabase_client()
+    response = (
+        await client.table("policy_embeddings")
+        .select("id, metadata")
+        .limit(1000)
+        .execute()
+    )
+    return response.data or []
