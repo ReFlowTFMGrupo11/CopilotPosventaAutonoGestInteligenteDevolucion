@@ -6,80 +6,9 @@
 
 ## Topología de red y flujo de tráfico
 
-```mermaid
-graph TD
-    USER([Usuario / Browser])
+![Diagrama de infraestructura cloud AWS ECS Fargate](infra_diagram.svg)
 
-    subgraph AWS["AWS · eu-west-1"]
-
-        subgraph VPC["VPC  10.0.0.0/16  ·  tfm-reflow"]
-
-            ALB["ALB · sg_alb<br/>HTTP :80 → Target Group :8501<br/>Subnets públicas A + B"]
-
-            subgraph PUB_A["Subnet pública A · 10.0.1.0/24 · eu-west-1a"]
-                FRONTEND["reflow-frontend<br/>Streamlit :8501 · Fargate<br/>sg_frontend · 0.25 vCPU / 512 MB<br/>assign_public_ip = true"]
-                NAT["NAT Gateway<br/>+ Elastic IP"]
-            end
-
-            subgraph PRIV_A["Subnet privada A · 10.0.10.0/24 · eu-west-1a"]
-                API["reflow-api<br/>FastAPI :8000 · Fargate<br/>sg_api · 0.5 vCPU / 1024 MB"]
-                MCP_S["reflow-mcp · mcp-supabase<br/>:8001 · Fargate<br/>sg_mcp · 0.25 vCPU / 512 MB"]
-                MCP_L["reflow-mcp · mcp-logistics<br/>:8002 · Fargate<br/>sg_mcp · 0.25 vCPU / 512 MB"]
-            end
-
-            IGW[Internet Gateway]
-        end
-
-        subgraph SUPPORT["Servicios de soporte AWS"]
-            ECR["ECR<br/>reflow-api · reflow-mcp · reflow-frontend"]
-            SM["Secrets Manager<br/>reflow/* · 8 secretos"]
-            CW["CloudWatch Logs<br/>4 log groups · 7 días"]
-            IAM["IAM<br/>ecs-execution · ecs-task"]
-        end
-
-    end
-
-    subgraph EXT["Servicios externos"]
-        SUPABASE[("Supabase Cloud<br/>PostgreSQL + pgvector")]
-        OPENAI["OpenAI API"]
-        LANGFUSE["Langfuse Cloud"]
-    end
-
-    %% ── Flujo principal de tráfico ──────────────────────────────────────────
-    USER -->|"HTTP :80"| ALB
-    ALB -->|"Target Group :8501"| FRONTEND
-    FRONTEND -->|"Service Connect<br/>http://fastapi:8000"| API
-    API -->|"Service Connect<br/>http://mcp-supabase:8001/mcp"| MCP_S
-    API -->|"Service Connect<br/>http://mcp-logistics:8002/mcp"| MCP_L
-
-    %% ── Salida a Internet ────────────────────────────────────────────────────
-    FRONTEND -->|":443 (ECR pull — IP pública)"| IGW
-    API -->|":443 / :5432–:6543"| NAT
-    MCP_S -->|":443 / :5432–:6543"| NAT
-    MCP_L -->|":443 / :5432"| NAT
-    NAT --> IGW
-    IGW --> SUPABASE
-    IGW --> OPENAI
-    IGW --> LANGFUSE
-
-    %% ── Servicios de soporte ─────────────────────────────────────────────────
-    SM -.->|"vars inyectadas al arrancar"| API
-    SM -.-> MCP_S
-    SM -.-> MCP_L
-    ECR -.->|"image pull"| FRONTEND
-    ECR -.-> API
-    ECR -.-> MCP_S
-    ECR -.-> MCP_L
-    FRONTEND -.->|"logs"| CW
-    API -.-> CW
-    MCP_S -.-> CW
-    MCP_L -.-> CW
-    IAM -.->|"permite pull ECR<br/>lectura SM · escritura CW"| API
-```
-
-> **Nota sobre la subnet pública B** (`10.0.2.0/24 · eu-west-1b`): AWS exige al menos
-> dos zonas de disponibilidad para un ALB; esta subnet solo sirve como segunda AZ del
-> balanceador y no aloja ninguna tarea ECS.
+---
 
 ## Servicios ECS
 
@@ -122,9 +51,6 @@ El frontend no expone ningún alias (solo actúa como cliente de `fastapi`).
 | `reflow-mcp` | `Dockerfile.mcp` | Override por task definition ECS (supabase / logistics) | Últimas 5 etiquetas; sin etiqueta → 1 día |
 | `reflow-frontend` | `Dockerfile.frontend` | `streamlit run app.py --port 8501` | Últimas 5 etiquetas; sin etiqueta → 1 día |
 
-Todos los repositorios usan etiquetas `MUTABLE` (`:latest` se sobreescribe en cada push)
-y tienen `scan_on_push = true` para escaneo gratuito de vulnerabilidades.
-
 ## Secrets Manager
 
 Secretos creados con valor `CHANGE_ME` por `terraform apply`. Se rellenan con valores reales
@@ -148,10 +74,6 @@ Terraform solo gestiona la creación: `lifecycle { ignore_changes = [secret_stri
 |-----|---------------------|-----------|
 | `reflow-tfm-ecs-execution` | `ecr:GetAuthorizationToken`, `ecr:BatchGetImage`, `secretsmanager:GetSecretValue`, `logs:CreateLogStream / PutLogEvents` | Infraestructura ECS: pull de imágenes, lectura de secretos, escritura de logs |
 | `reflow-tfm-ecs-task` | (ninguno actualmente) | Permisos de aplicación en runtime — separación intencional, reservado para extensiones futuras |
-
-El rol de GitHub Actions OIDC (`reflow-tfm-github-actions`) está pendiente de aprobación
-corporativa; la infraestructura de datos fuente está en `infra/iam.tf` (comentada) y
-`infra/data.tf`.
 
 ## Flujo de despliegue (`deploy.sh aws`)
 
