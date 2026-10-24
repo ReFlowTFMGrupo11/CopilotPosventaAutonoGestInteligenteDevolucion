@@ -7,79 +7,124 @@
 ## Topología de red y flujo de tráfico
 
 ```mermaid
-graph TD
-    USER([Usuario / Browser])
+flowchart TD
+    USER([Usuarios])
 
-    subgraph AWS["AWS · eu-west-1"]
-
+    subgraph REGION["Region: eu-west-1"]
         subgraph VPC["VPC  10.0.0.0/16  ·  tfm-reflow"]
+            IGW([Internet Gateway])
+            SGALB["sg_alb  ·  HTTP :80"]
+            ALB[ALB]
+            LST["Listener :80  →  Target Group :8501"]
 
-            ALB["ALB · sg_alb<br/>HTTP :80 → Target Group :8501<br/>Subnets públicas A + B"]
-
-            subgraph PUB_A["Subnet pública A · 10.0.1.0/24 · eu-west-1a"]
-                FRONTEND["reflow-frontend<br/>Streamlit :8501 · Fargate<br/>sg_frontend · 0.25 vCPU / 512 MB<br/>assign_public_ip = true"]
-                NAT["NAT Gateway<br/>+ Elastic IP"]
+            subgraph AZ_A["AZ: eu-west-1a"]
+                subgraph PUB_A["Public subnet A  ·  10.0.1.0/24"]
+                    FE["reflow-frontend<br/>Streamlit :8501"]
+                    NAT["NAT Gateway"]
+                end
+                subgraph PRIV_A["Private subnet A  ·  10.0.10.0/24"]
+                    subgraph ECSC["ECS Cluster"]
+                        API["reflow-api<br/>FastAPI :8000"]
+                        MCPS["mcp-supabase  :8001"]
+                        MCPL["mcp-logistics  :8002"]
+                    end
+                end
             end
 
-            subgraph PRIV_A["Subnet privada A · 10.0.10.0/24 · eu-west-1a"]
-                API["reflow-api<br/>FastAPI :8000 · Fargate<br/>sg_api · 0.5 vCPU / 1024 MB"]
-                MCP_S["reflow-mcp · mcp-supabase<br/>:8001 · Fargate<br/>sg_mcp · 0.25 vCPU / 512 MB"]
-                MCP_L["reflow-mcp · mcp-logistics<br/>:8002 · Fargate<br/>sg_mcp · 0.25 vCPU / 512 MB"]
+            subgraph AZ_B["AZ: eu-west-1b"]
+                subgraph PUB_B["Public subnet B  ·  10.0.2.0/24"]
+                    NB["2.ª AZ requerida por el ALB<br/>Sin tareas ECS"]
+                end
             end
-
-            IGW[Internet Gateway]
         end
 
-        subgraph SUPPORT["Servicios de soporte AWS"]
-            ECR["ECR<br/>reflow-api · reflow-mcp · reflow-frontend"]
-            SM["Secrets Manager<br/>reflow/* · 8 secretos"]
-            CW["CloudWatch Logs<br/>4 log groups · 7 días"]
-            IAM["IAM<br/>ecs-execution · ecs-task"]
-        end
-
+        ECR["ECR  ·  3 repos"]
+        SM["Secrets Manager  ·  8 secretos"]
+        CW["CloudWatch Logs"]
     end
 
-    subgraph EXT["Servicios externos"]
-        SUPABASE[("Supabase Cloud<br/>PostgreSQL + pgvector")]
-        OPENAI["OpenAI API"]
-        LANGFUSE["Langfuse Cloud"]
-    end
+    SUP[(Supabase Cloud)]
+    OAI[OpenAI API]
+    LF[Langfuse Cloud]
 
-    %% ── Flujo principal de tráfico ──────────────────────────────────────────
-    USER -->|"HTTP :80"| ALB
-    ALB -->|"Target Group :8501"| FRONTEND
-    FRONTEND -->|"Service Connect<br/>http://fastapi:8000"| API
-    API -->|"Service Connect<br/>http://mcp-supabase:8001/mcp"| MCP_S
-    API -->|"Service Connect<br/>http://mcp-logistics:8002/mcp"| MCP_L
+    %% ── Flujo principal de tráfico ──────────────────────────────────
+    USER        --> SGALB
+    SGALB       --> ALB
+    ALB         --> LST
+    LST         -->|"Target Group :8501"| FE
+    FE          -->|"Service Connect :8000"| API
+    API         -->|":8001"| MCPS
+    API         -->|":8002"| MCPL
+    API         -->|":443 / :5432"| NAT
+    MCPS        --> NAT
+    MCPL        --> NAT
+    FE          -->|":443  IP pública"| IGW
+    NAT         --> IGW
+    IGW         --> SUP
+    IGW         --> OAI
+    IGW         --> LF
 
-    %% ── Salida a Internet ────────────────────────────────────────────────────
-    FRONTEND -->|":443 (ECR pull — IP pública)"| IGW
-    API -->|":443 / :5432–:6543"| NAT
-    MCP_S -->|":443 / :5432–:6543"| NAT
-    MCP_L -->|":443 / :5432"| NAT
-    NAT --> IGW
-    IGW --> SUPABASE
-    IGW --> OPENAI
-    IGW --> LANGFUSE
+    %% ── Configuración — líneas discontinuas ─────────────────────────
+    ECR         -.->|"image pull"| FE
+    ECR         -.->            API
+    SM          -.->|"secretos"| API
+    SM          -.->            MCPS
+    API         -.->|"logs"|    CW
+    FE          -.->            CW
 
-    %% ── Servicios de soporte ─────────────────────────────────────────────────
-    SM -.->|"vars inyectadas al arrancar"| API
-    SM -.-> MCP_S
-    SM -.-> MCP_L
-    ECR -.->|"image pull"| FRONTEND
-    ECR -.-> API
-    ECR -.-> MCP_S
-    ECR -.-> MCP_L
-    FRONTEND -.->|"logs"| CW
-    API -.-> CW
-    MCP_S -.-> CW
-    MCP_L -.-> CW
-    IAM -.->|"permite pull ECR<br/>lectura SM · escritura CW"| API
+    %% ══════════════════════════════════════════════════════════════
+    %%  COLORES DE CONTENEDORES
+    %%  Region   → gris claro
+    %%  VPC      → morado claro
+    %%  AZ       → azul claro, borde discontinuo
+    %%  Public   → verde
+    %%  Private  → azul
+    %%  Cluster  → blanco, borde negro grueso
+    %% ══════════════════════════════════════════════════════════════
+    style REGION fill:#F5F5F5,stroke:#666666,stroke-width:2px,color:#333333
+    style VPC    fill:#F9F0FF,stroke:#8C4FFF,stroke-width:2px,color:#6A0FBF
+    style AZ_A   fill:#EBF5FB,stroke:#147EBA,stroke-width:2px,color:#0D6BA8
+    style AZ_B   fill:#EBF5FB,stroke:#147EBA,stroke-width:2px,color:#0D6BA8
+    style PUB_A  fill:#E8F5E9,stroke:#00A878,stroke-width:2px,color:#005C3E
+    style PUB_B  fill:#E8F5E9,stroke:#00A878,stroke-width:2px,color:#005C3E
+    style PRIV_A fill:#D6EAF8,stroke:#147EBA,stroke-width:2px,color:#0D6BA8
+    style ECSC   fill:#FFFFFF,stroke:#232F3E,stroke-width:3px,color:#232F3E
+
+    %% ── Clases de nodos ──────────────────────────────────────────
+    classDef svc     fill:#F58534,stroke:#C05A00,color:#fff
+    classDef sgbox   fill:#f8cecc,stroke:#b85450,color:#7B2D2D
+    classDef gw      fill:#EDE0FF,stroke:#8C4FFF,color:#5A0FBF
+    classDef support fill:#FFF3CD,stroke:#E6AC00,color:#5A4300
+    classDef ext     fill:#DAE8FC,stroke:#6C8EBF,color:#1A3A5C
+    classDef note    fill:#F0F0F0,stroke:#AAAAAA,color:#666666
+
+    class FE,API,MCPS,MCPL svc
+    class SGALB                sgbox
+    class USER,IGW,NAT,ALB,LST gw
+    class ECR,SM,CW            support
+    class SUP,OAI,LF           ext
+    class NB                   note
 ```
 
-> **Nota sobre la subnet pública B** (`10.0.2.0/24 · eu-west-1b`): AWS exige al menos
-> dos zonas de disponibilidad para un ALB; esta subnet solo sirve como segunda AZ del
-> balanceador y no aloja ninguna tarea ECS.
+### Código de colores
+
+| Color | Capa / elemento |
+|-------|----------------|
+| Fondo gris · borde gris | Region `eu-west-1` |
+| Fondo **morado** claro · borde morado | VPC `10.0.0.0/16` |
+| Fondo **azul** claro · borde azul | Availability Zone (AZ) |
+| Fondo **verde** · borde verde | Public subnet |
+| Fondo **azul** medio · borde azul sólido | Private subnet |
+| Fondo blanco · borde **negro** grueso | ECS Cluster |
+| **Naranja** | Servicio ECS Fargate |
+| **Rojo** claro | Security group (`sg_alb`) |
+| **Morado** claro (nodo) | Gateway / balanceador (ALB, NAT, IGW, Listener) |
+| **Amarillo** claro | Soporte AWS (ECR, Secrets Manager, CloudWatch) |
+| **Azul** claro (nodo) | Servicio externo (Supabase, OpenAI, Langfuse) |
+| Flecha sólida `→` | Flujo de tráfico |
+| Flecha discontinua `- ->` | Configuración (image pull / secretos / logs) |
+
+---
 
 ## Servicios ECS
 
@@ -122,9 +167,6 @@ El frontend no expone ningún alias (solo actúa como cliente de `fastapi`).
 | `reflow-mcp` | `Dockerfile.mcp` | Override por task definition ECS (supabase / logistics) | Últimas 5 etiquetas; sin etiqueta → 1 día |
 | `reflow-frontend` | `Dockerfile.frontend` | `streamlit run app.py --port 8501` | Últimas 5 etiquetas; sin etiqueta → 1 día |
 
-Todos los repositorios usan etiquetas `MUTABLE` (`:latest` se sobreescribe en cada push)
-y tienen `scan_on_push = true` para escaneo gratuito de vulnerabilidades.
-
 ## Secrets Manager
 
 Secretos creados con valor `CHANGE_ME` por `terraform apply`. Se rellenan con valores reales
@@ -148,10 +190,6 @@ Terraform solo gestiona la creación: `lifecycle { ignore_changes = [secret_stri
 |-----|---------------------|-----------|
 | `reflow-tfm-ecs-execution` | `ecr:GetAuthorizationToken`, `ecr:BatchGetImage`, `secretsmanager:GetSecretValue`, `logs:CreateLogStream / PutLogEvents` | Infraestructura ECS: pull de imágenes, lectura de secretos, escritura de logs |
 | `reflow-tfm-ecs-task` | (ninguno actualmente) | Permisos de aplicación en runtime — separación intencional, reservado para extensiones futuras |
-
-El rol de GitHub Actions OIDC (`reflow-tfm-github-actions`) está pendiente de aprobación
-corporativa; la infraestructura de datos fuente está en `infra/iam.tf` (comentada) y
-`infra/data.tf`.
 
 ## Flujo de despliegue (`deploy.sh aws`)
 
