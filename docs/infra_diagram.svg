@@ -1,0 +1,305 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1260 1160" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#444"/>
+    </marker>
+    <marker id="arr-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0,0 L10,5 L0,10 Z" fill="#999"/>
+    </marker>
+  </defs>
+
+  <!-- ═══════════════════════════════════════════════
+       REGION: eu-west-1  (grey)
+  ═══════════════════════════════════════════════ -->
+  <rect x="20" y="75" width="1220" height="1050" rx="6"
+        fill="#F5F5F5" stroke="#666666" stroke-width="2"/>
+  <text x="34" y="97" font-size="13" font-weight="bold" fill="#333333">Region: eu-west-1</text>
+
+  <!-- ═══════════════════════════════════════════════
+       VPC  (light purple)
+  ═══════════════════════════════════════════════ -->
+  <rect x="52" y="112" width="860" height="988" rx="6"
+        fill="#F9F0FF" stroke="#8C4FFF" stroke-width="2"/>
+  <text x="74" y="132" font-size="12" font-weight="bold" fill="#6A0FBF">⬡  VPC  10.0.0.0/16  ·  tfm-reflow</text>
+
+  <!-- ═══════════════════════════════════════════════
+       INTERNET GATEWAY  (purple node, inside VPC top-right)
+  ═══════════════════════════════════════════════ -->
+  <rect x="820" y="138" width="78" height="52" rx="5"
+        fill="#EDE0FF" stroke="#8C4FFF" stroke-width="1.5"/>
+  <text x="859" y="161" text-anchor="middle" font-size="10" font-weight="bold" fill="#5A0FBF">Internet</text>
+  <text x="859" y="177" text-anchor="middle" font-size="10" fill="#5A0FBF">Gateway</text>
+
+  <!-- ═══════════════════════════════════════════════
+       USERS  (top-centre, outside all boxes)
+  ═══════════════════════════════════════════════ -->
+  <text x="460" y="34" text-anchor="middle" font-size="26" fill="#232F3E">👤</text>
+  <text x="460" y="56" text-anchor="middle" font-size="12" fill="#232F3E">Usuarios</text>
+
+  <!-- sg_alb  (red) -->
+  <rect x="375" y="68" width="170" height="44" rx="4"
+        fill="#f8cecc" stroke="#b85450" stroke-width="1.5"/>
+  <text x="460" y="87" text-anchor="middle" font-size="11" font-weight="bold" fill="#7B2D2D">sg_alb · HTTP :80</text>
+
+  <!-- ALB  (purple node) -->
+  <rect x="390" y="126" width="140" height="44" rx="4"
+        fill="#EDE0FF" stroke="#8C4FFF" stroke-width="1.5"/>
+  <text x="460" y="145" text-anchor="middle" font-size="11" font-weight="bold" fill="#5A0FBF">Application</text>
+  <text x="460" y="161" text-anchor="middle" font-size="10" fill="#5A0FBF">Load Balancer</text>
+
+  <!-- Listener  (yellow node) -->
+  <rect x="310" y="184" width="300" height="40" rx="4"
+        fill="#FFF3CD" stroke="#E6AC00" stroke-width="1.5"/>
+  <text x="460" y="200" text-anchor="middle" font-size="10" fill="#5A4300">Listener :80  →  Target Group :8501</text>
+
+  <!-- ═══════════════════════════════════════════════
+       AZ: eu-west-1a  (light blue, dashed)
+  ═══════════════════════════════════════════════ -->
+  <rect x="68" y="240" width="524" height="840" rx="6"
+        fill="#EBF5FB" stroke="#147EBA" stroke-width="2" stroke-dasharray="10,5"/>
+  <text x="84" y="260" font-size="11" font-weight="bold" fill="#0D6BA8">AZ: eu-west-1a</text>
+
+  <!-- PUBLIC SUBNET A  (green) -->
+  <rect x="86" y="272" width="488" height="162" rx="4"
+        fill="#E8F5E9" stroke="#00A878" stroke-width="2"/>
+  <text x="100" y="290" font-size="10" fill="#005C3E">Public subnet A  ·  10.0.1.0/24</text>
+
+  <!-- Frontend Fargate  (orange) -->
+  <rect x="104" y="300" width="192" height="118" rx="4"
+        fill="#F58534" stroke="#C05A00" stroke-width="1.5"/>
+  <text x="200" y="324" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">reflow-frontend</text>
+  <text x="200" y="342" text-anchor="middle" font-size="10" fill="#fff">Streamlit :8501</text>
+  <text x="200" y="358" text-anchor="middle" font-size="9"  fill="#ffe8cc">assign_public_ip = true</text>
+  <rect x="110" y="368" width="100" height="22" rx="3" fill="#f8cecc" stroke="#b85450" stroke-width="1"/>
+  <text x="160" y="383" text-anchor="middle" font-size="9" fill="#7B2D2D">sg_frontend</text>
+
+  <!-- NAT Gateway  (purple node) -->
+  <rect x="374" y="300" width="184" height="118" rx="4"
+        fill="#EDE0FF" stroke="#8C4FFF" stroke-width="1.5"/>
+  <text x="466" y="354" text-anchor="middle" font-size="11" font-weight="bold" fill="#5A0FBF">NAT Gateway</text>
+  <text x="466" y="372" text-anchor="middle" font-size="10" fill="#5A0FBF">+ Elastic IP</text>
+
+  <!-- PRIVATE SUBNET A  (blue) -->
+  <rect x="86" y="450" width="488" height="612" rx="4"
+        fill="#D6EAF8" stroke="#147EBA" stroke-width="2"/>
+  <text x="100" y="468" font-size="10" fill="#0D6BA8">Private subnet A  ·  10.0.10.0/24</text>
+
+  <!-- ECS CLUSTER  (white, thick black border) -->
+  <rect x="100" y="480" width="460" height="568" rx="4"
+        fill="#FFFFFF" stroke="#232F3E" stroke-width="3"/>
+  <text x="330" y="503" text-anchor="middle" font-size="12" font-weight="bold" fill="#232F3E">ECS CLUSTER</text>
+
+  <!-- FastAPI Fargate  (orange) -->
+  <rect x="120" y="518" width="200" height="110" rx="4"
+        fill="#F58534" stroke="#C05A00" stroke-width="1.5"/>
+  <text x="220" y="546" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">reflow-api</text>
+  <text x="220" y="564" text-anchor="middle" font-size="10" fill="#fff">FastAPI :8000</text>
+  <rect x="126" y="578" width="90" height="22" rx="3" fill="#f8cecc" stroke="#b85450" stroke-width="1"/>
+  <text x="171" y="593" text-anchor="middle" font-size="9" fill="#7B2D2D">sg_api</text>
+
+  <!-- mcp-supabase Fargate  (orange) -->
+  <rect x="120" y="662" width="200" height="110" rx="4"
+        fill="#F58534" stroke="#C05A00" stroke-width="1.5"/>
+  <text x="220" y="693" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">mcp-supabase</text>
+  <text x="220" y="711" text-anchor="middle" font-size="10" fill="#fff">:8001</text>
+  <rect x="126" y="726" width="90" height="22" rx="3" fill="#f8cecc" stroke="#b85450" stroke-width="1"/>
+  <text x="171" y="741" text-anchor="middle" font-size="9" fill="#7B2D2D">sg_mcp</text>
+
+  <!-- mcp-logistics Fargate  (orange) -->
+  <rect x="340" y="662" width="200" height="110" rx="4"
+        fill="#F58534" stroke="#C05A00" stroke-width="1.5"/>
+  <text x="440" y="693" text-anchor="middle" font-size="11" font-weight="bold" fill="#fff">mcp-logistics</text>
+  <text x="440" y="711" text-anchor="middle" font-size="10" fill="#fff">:8002</text>
+  <rect x="346" y="726" width="90" height="22" rx="3" fill="#f8cecc" stroke="#b85450" stroke-width="1"/>
+  <text x="391" y="741" text-anchor="middle" font-size="9" fill="#7B2D2D">sg_mcp</text>
+
+  <!-- ═══════════════════════════════════════════════
+       AZ: eu-west-1b  (light blue, dashed)
+  ═══════════════════════════════════════════════ -->
+  <rect x="620" y="240" width="280" height="210" rx="6"
+        fill="#EBF5FB" stroke="#147EBA" stroke-width="2" stroke-dasharray="10,5"/>
+  <text x="636" y="260" font-size="11" font-weight="bold" fill="#0D6BA8">AZ: eu-west-1b</text>
+
+  <!-- PUBLIC SUBNET B  (green) -->
+  <rect x="638" y="272" width="244" height="160" rx="4"
+        fill="#E8F5E9" stroke="#00A878" stroke-width="2"/>
+  <text x="652" y="290" font-size="10" fill="#005C3E">Public subnet B  ·  10.0.2.0/24</text>
+  <text x="760" y="340" text-anchor="middle" font-size="11" fill="#555555" font-style="italic">2.ª AZ requerida</text>
+  <text x="760" y="358" text-anchor="middle" font-size="11" fill="#555555" font-style="italic">por el ALB</text>
+  <text x="760" y="376" text-anchor="middle" font-size="10" fill="#777777" font-style="italic">Sin tareas ECS</text>
+
+  <!-- ═══════════════════════════════════════════════
+       SUPPORT SERVICES  (inside Region, outside VPC)
+  ═══════════════════════════════════════════════ -->
+
+  <!-- ECR -->
+  <rect x="960" y="240" width="250" height="72" rx="4"
+        fill="#FFF3CD" stroke="#E6AC00" stroke-width="1.5"/>
+  <text x="1085" y="265" text-anchor="middle" font-size="11" font-weight="bold" fill="#5A4300">ECR · 3 repos</text>
+  <text x="1085" y="282" text-anchor="middle" font-size="9" fill="#7A6000">reflow-api / reflow-mcp / reflow-frontend</text>
+  <text x="1085" y="298" text-anchor="middle" font-size="9" fill="#7A6000">scan_on_push = true</text>
+
+  <!-- Secrets Manager -->
+  <rect x="960" y="332" width="250" height="62" rx="4"
+        fill="#FFF3CD" stroke="#E6AC00" stroke-width="1.5"/>
+  <text x="1085" y="357" text-anchor="middle" font-size="11" font-weight="bold" fill="#5A4300">Secrets Manager</text>
+  <text x="1085" y="374" text-anchor="middle" font-size="9" fill="#7A6000">8 secretos  ·  reflow/*</text>
+
+  <!-- CloudWatch Logs -->
+  <rect x="960" y="414" width="250" height="62" rx="4"
+        fill="#FFF3CD" stroke="#E6AC00" stroke-width="1.5"/>
+  <text x="1085" y="439" text-anchor="middle" font-size="11" font-weight="bold" fill="#5A4300">CloudWatch Logs</text>
+  <text x="1085" y="456" text-anchor="middle" font-size="9" fill="#7A6000">4 log groups  ·  7 días retención</text>
+
+  <!-- ═══════════════════════════════════════════════
+       EXTERNAL SERVICES
+  ═══════════════════════════════════════════════ -->
+  <text x="460" y="1104" text-anchor="middle" font-size="11" fill="#666" font-style="italic">Servicios externos</text>
+
+  <!-- Supabase -->
+  <rect x="58" y="1114" width="215" height="72" rx="4"
+        fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1.5"/>
+  <text x="165" y="1139" text-anchor="middle" font-size="11" font-weight="bold" fill="#1A3A5C">Supabase Cloud</text>
+  <text x="165" y="1157" text-anchor="middle" font-size="9" fill="#1A3A5C">PostgreSQL + pgvector</text>
+  <text x="165" y="1173" text-anchor="middle" font-size="9" fill="#1A3A5C">:443 / :5432–:6543</text>
+
+  <!-- OpenAI -->
+  <rect x="380" y="1114" width="180" height="72" rx="4"
+        fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+  <text x="470" y="1144" text-anchor="middle" font-size="11" font-weight="bold" fill="#2D4A2D">OpenAI API</text>
+  <text x="470" y="1162" text-anchor="middle" font-size="9" fill="#2D4A2D">:443</text>
+
+  <!-- Langfuse -->
+  <rect x="680" y="1114" width="180" height="72" rx="4"
+        fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+  <text x="770" y="1144" text-anchor="middle" font-size="11" font-weight="bold" fill="#2D4A2D">Langfuse Cloud</text>
+  <text x="770" y="1162" text-anchor="middle" font-size="9" fill="#2D4A2D">:443</text>
+
+  <!-- ═══════════════════════════════════════════════
+       LEGEND
+  ═══════════════════════════════════════════════ -->
+  <rect x="960" y="510" width="258" height="400" rx="4"
+        fill="#FFFFFF" stroke="#CCCCCC" stroke-width="1"/>
+  <text x="972" y="532" font-size="12" font-weight="bold" fill="#333">Leyenda</text>
+
+  <rect x="972" y="542" width="20" height="13" fill="#F5F5F5" stroke="#666666" stroke-width="1"/>
+  <text x="998" y="554" font-size="10" fill="#333">Region</text>
+
+  <rect x="972" y="563" width="20" height="13" fill="#F9F0FF" stroke="#8C4FFF" stroke-width="1.5"/>
+  <text x="998" y="575" font-size="10" fill="#333">VPC</text>
+
+  <rect x="972" y="584" width="20" height="13" fill="#EBF5FB" stroke="#147EBA" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="998" y="596" font-size="10" fill="#333">Availability Zone (AZ)</text>
+
+  <rect x="972" y="605" width="20" height="13" fill="#E8F5E9" stroke="#00A878" stroke-width="1.5"/>
+  <text x="998" y="617" font-size="10" fill="#333">Public subnet</text>
+
+  <rect x="972" y="626" width="20" height="13" fill="#D6EAF8" stroke="#147EBA" stroke-width="1.5"/>
+  <text x="998" y="638" font-size="10" fill="#333">Private subnet</text>
+
+  <rect x="972" y="647" width="20" height="13" fill="#FFFFFF" stroke="#232F3E" stroke-width="2"/>
+  <text x="998" y="659" font-size="10" fill="#333">ECS Cluster</text>
+
+  <rect x="972" y="668" width="20" height="13" fill="#F58534" stroke="#C05A00" stroke-width="1"/>
+  <text x="998" y="680" font-size="10" fill="#333">Fargate task</text>
+
+  <rect x="972" y="689" width="20" height="13" fill="#f8cecc" stroke="#b85450" stroke-width="1"/>
+  <text x="998" y="701" font-size="10" fill="#333">Security group</text>
+
+  <rect x="972" y="710" width="20" height="13" fill="#EDE0FF" stroke="#8C4FFF" stroke-width="1"/>
+  <text x="998" y="722" font-size="10" fill="#333">Gateway / ALB</text>
+
+  <rect x="972" y="731" width="20" height="13" fill="#FFF3CD" stroke="#E6AC00" stroke-width="1"/>
+  <text x="998" y="743" font-size="10" fill="#333">Soporte AWS (ECR / SM / CW)</text>
+
+  <rect x="972" y="752" width="20" height="13" fill="#DAE8FC" stroke="#6C8EBF" stroke-width="1"/>
+  <text x="998" y="764" font-size="10" fill="#333">Servicio externo</text>
+
+  <line x1="972" y1="783" x2="992" y2="783" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="998" y="787" font-size="10" fill="#333">Flujo de tráfico</text>
+
+  <line x1="972" y1="804" x2="992" y2="804" stroke="#999" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arr-d)"/>
+  <text x="998" y="808" font-size="10" fill="#333">Config (pull / secretos / logs)</text>
+
+  <!-- ═══════════════════════════════════════════════
+       ARROWS — TRAFFIC FLOW (solid)
+  ═══════════════════════════════════════════════ -->
+
+  <!-- Users → sg_alb -->
+  <line x1="460" y1="60" x2="460" y2="68" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- sg_alb → ALB -->
+  <line x1="460" y1="112" x2="460" y2="126" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ALB → Listener -->
+  <line x1="460" y1="170" x2="460" y2="184" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Listener → Frontend  (exit left, down into public subnet) -->
+  <path d="M310,204 L200,204 L200,300" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="250" y="198" text-anchor="middle" font-size="9" fill="#444">Target Group :8501</text>
+
+  <!-- Frontend → FastAPI  (Service Connect, down through subnet boundary) -->
+  <path d="M200,418 L200,450 L220,450 L220,518" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="140" y="464" font-size="9" fill="#444">Service Connect</text>
+  <text x="140" y="476" font-size="9" fill="#444">:8000</text>
+
+  <!-- FastAPI → mcp-supabase  (:8001) -->
+  <line x1="220" y1="628" x2="220" y2="662" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="232" y="650" font-size="9" fill="#444">:8001</text>
+
+  <!-- FastAPI → mcp-logistics  (:8002) -->
+  <path d="M320,573 L440,573 L440,662" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="400" y="567" font-size="9" fill="#444">:8002</text>
+
+  <!-- FastAPI → NAT  (right then up through subnet boundary) -->
+  <path d="M320,555 L562,555 L562,370 L558,370" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="572" y="465" font-size="9" fill="#444">:443/:5432</text>
+
+  <!-- mcp-supabase → NAT  (right then up) -->
+  <path d="M320,706 L574,706 L574,380 L558,380" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- mcp-logistics → NAT  (right then up) -->
+  <path d="M540,706 L582,706 L582,390 L558,390" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- NAT → IGW  (right) -->
+  <line x1="558" y1="356" x2="820" y2="164" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Frontend → IGW  (dashed — ECR pull via IP pública) -->
+  <path d="M296,356 L296,228 L820,158" fill="none" stroke="#999" stroke-width="1.5" stroke-dasharray="7,4" marker-end="url(#arr-d)"/>
+  <text x="450" y="222" font-size="9" fill="#888">:443  IP pública  (ECR pull)</text>
+
+  <!-- IGW → Supabase  (down-left) -->
+  <path d="M820,190 L820,1090 L273,1090 L273,1114" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- IGW → OpenAI  (down) -->
+  <path d="M845,190 L845,1080 L470,1080 L470,1114" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- IGW → Langfuse  (down-right) -->
+  <path d="M870,190 L870,1070 L770,1070 L770,1114" fill="none" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- ═══════════════════════════════════════════════
+       ARROWS — CONFIG  (dashed)
+  ═══════════════════════════════════════════════ -->
+
+  <!-- ECR → FastAPI  (image pull) -->
+  <path d="M960,270 L600,270 L600,510 L320,510" fill="none" stroke="#F58534" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-d)"/>
+  <text x="680" y="263" font-size="9" fill="#C05A00">image pull</text>
+
+  <!-- ECR → Frontend  -->
+  <path d="M960,256 L296,256 L296,300" fill="none" stroke="#F58534" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-d)"/>
+
+  <!-- SM → FastAPI  (secretos) -->
+  <path d="M960,358 L616,358 L616,540 L320,540" fill="none" stroke="#b85450" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-d)"/>
+  <text x="680" y="352" font-size="9" fill="#7B2D2D">secretos</text>
+
+  <!-- SM → mcp-supabase -->
+  <path d="M960,370 L624,370 L624,710 L320,710" fill="none" stroke="#b85450" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-d)"/>
+
+  <!-- FastAPI → CW  (logs) -->
+  <path d="M320,563 L632,563 L632,445 L960,445" fill="none" stroke="#E6AC00" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-d)"/>
+  <text x="680" y="556" font-size="9" fill="#5A4300">logs</text>
+
+  <!-- Frontend → CW  -->
+  <path d="M296,300 L296,248 L640,248 L640,435 L960,435" fill="none" stroke="#E6AC00" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arr-d)"/>
+
+</svg>
