@@ -7,6 +7,7 @@
 ## Topología de red y flujo de tráfico
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'edgeLabelBackground': '#ffffff', 'clusterBkg': '#F5F5F5', 'clusterBorder': '#666666'}}}%%
 flowchart TD
     USER([Usuarios])
 
