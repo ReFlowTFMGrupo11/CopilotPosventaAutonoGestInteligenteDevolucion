@@ -20,6 +20,22 @@ relativos al paquete `backend`).
 | `evaluate_evaluator_agent.py` | Evaluador de `evaluator_agent` contra los 480 casos golden (`eval_cases.csv`, en esta misma carpeta). Calcula precisión/recall/F1 (task success) + tool accuracy + contains + costo + latencia por caso, y manda todo como `score` a LangFuse (por caso y agregado en la traza raíz) — no escribe ningún fichero local; sin LangFuse configurado, solo el exit code (accuracy) y el log de consola son el resultado. Pese a su nombre histórico ("evaluate_rag"), **no** ejecuta ninguna búsqueda vectorial real — mockea `search_return_policy()` a propósito para aislar la calidad de la decisión (LLM + reglas) de la calidad del retrieval. El test real del RAG (chunking/ingesta) vive en `tests/unit/test_ingest_policy_embeddings.py`. | Solo si no usas `--dry-run` |
 | `migrate_eval_cases_to_langfuse.py` | Sube los 480 casos golden a Langfuse como **Dataset** (`policy-eval-golden-set`), reutilizando el mismo CSV que `evaluate_evaluator_agent.py`. | No (solo escribe en Langfuse) |
 | `run_langfuse_experiment.py` | Ejecuta `evaluator_agent` contra el dataset de Langfuse y sube los resultados como **Experiment Run**, con evaluación automática por item (`label_match`) y agregada (`accuracy`). Es el equivalente a `evaluate_evaluator_agent.py` pero con historial y comparación entre ejecuciones en la UI de Langfuse en vez de ficheros locales. | Solo si no usas `--dry-run` |
+| `evaluate_live_rag.py` | Evaluación independiente y opcional del índice RAG real (Supabase/pgvector + OpenAI embeddings), con juicios de evidencia en `live_rag_cases.json`. Puede añadir accuracy del evaluador con LLM real; no mockea ni la búsqueda ni la consulta de políticas. | Solo con `--live` |
+
+### Evaluación del RAG real (fuera de CI)
+
+```bash
+python -m evaluation.golden.scripts.evaluate_live_rag                 # valida las evidencias locales sin red
+python -m evaluation.golden.scripts.evaluate_live_rag --live          # embeddings + RPC reales
+python -m evaluation.golden.scripts.evaluate_live_rag --live --with-llm --limit 5
+```
+
+`--live` requiere `OPENAI_API_KEY`, `SUPABASE_URL` y `SUPABASE_SERVICE_KEY` configurados; consume créditos de OpenAI y consulta la BD real. No ejecuta acciones de devolución ni escribe en `llm_usage`; la instrumentación opcional de Langfuse puede registrar trazas. Se debe haber ejecutado la ingesta de políticas: el script rechaza resultados cuyo texto ya no coincida con el corpus local. No incluirlo en CI ni publicar secretos.
+
+La ingesta y la búsqueda comparten `RAG_EMBEDDING_MODEL` en `backend/config.py`;
+si se cambia, reingesta el índice antes de evaluar (ver `data/README.md`).
+
+Los cuatro juicios iniciales señalan **un fragmento de evidencia concreto** de los documentos de políticas. `hit@5` indica si ese fragmento aparece entre los cinco resultados; `MRR@5` pondera su posición. Son medidas de **evidencia designada**, no precisión/recall exhaustivos del RAG. Amplía los juicios con revisión humana y categorías diversas antes de extraer conclusiones globales. El modo `--with-llm` compara la etiqueta de enrutamiento con el golden, indica si el LLM marcó elegible cada artículo y muestra la explicación para revisión humana: **no** mide automáticamente fidelidad de las explicaciones. Omite los casos cuyo plazo, condiciones admitidas o recargo difieren de la política activa. La política estructurada le proporciona además el texto completo al LLM; una decisión correcta no demuestra que la recuperación haya causado el acierto. El CSV golden es sintético y pueden persistir otras divergencias de reglas.
 
 ---
 

@@ -1,0 +1,30 @@
+[
+  {
+    "category": "calzado",
+    "reason_category": "no_longer_needed",
+    "condition": "unopened",
+    "source_doc": "04_calzado.md",
+    "evidence": "30 días naturales"
+  },
+  {
+    "category": "cosmetica_perfumeria",
+    "reason_category": "no_longer_needed",
+    "condition": "used",
+    "source_doc": "12_cosmetica_perfumeria.md",
+    "evidence": "pierden el derecho de"
+  },
+  {
+    "category": "electronica_informatica",
+    "reason_category": "defective",
+    "condition": "defective",
+    "source_doc": "01_electronica_informatica.md",
+    "evidence": "Garantía legal de conformidad"
+  },
+  {
+    "category": "calzado",
+    "reason_category": "no_longer_needed",
+    "condition": "unopened",
+    "source_doc": "00_marco_general_devoluciones.md",
+    "evidence": "14 días naturales"
+  }
+]
