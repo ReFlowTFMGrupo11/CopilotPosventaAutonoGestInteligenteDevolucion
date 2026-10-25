@@ -15,11 +15,16 @@ cambia, así que ``frontend/lib/api.py`` no necesita ningún ajuste.
 
 from datetime import date
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from backend.api.dependencies import require_admin
 from backend.services import usage_service
 
-router = APIRouter(prefix="/api/admin", tags=["usage"])
+router = APIRouter(
+    prefix="/api/admin",
+    tags=["usage"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 @router.get("/usage/sessions")
