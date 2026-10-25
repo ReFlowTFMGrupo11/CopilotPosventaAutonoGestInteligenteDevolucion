@@ -190,8 +190,8 @@ entorno de desarrollo o de pruebas de RAG, se recomienda:
 2. Cargar `supabase/seed_synthetic.sql` con `psql` o el SQL Editor de Supabase
    (esto crea, entre otras, las 16 filas de `return_policies`, una por categoría).
 3. Trocear los documentos de `data/rag/policies/*.md` y generar sus embeddings
-   con `text-embedding-3-small` (el mismo modelo que ya usa
-   `search_return_policy` en `backend/services/supabase_service.py`) para
+   con `RAG_EMBEDDING_MODEL` (`text-embedding-3-small` por defecto; el mismo
+   modelo que usa `search_return_policy` en `backend/services/policy_service.py`) para
    poblar `policy_embeddings`:
 
    ```bash
@@ -210,8 +210,13 @@ entorno de desarrollo o de pruebas de RAG, se recomienda:
    `data/ingest_policy_embeddings.py` para el detalle) y es idempotente:
    volver a ejecutarlo reemplaza los chunks existentes de cada política en
    vez de duplicarlos. `--dry-run` trocea y cuenta sin llamar a OpenAI ni a
-   Supabase; `--category <slug>` limita la ingesta a una sola categoría (más
-   el marco general).
+    Supabase; `--category <slug>` limita la ingesta a una sola categoría (más
+    el marco general).
+
+   Si se cambia `RAG_EMBEDDING_MODEL`, hay que **reingestar las 17 políticas**
+   antes de consultar el índice y recalibrar `RAG_MATCH_THRESHOLD`. La columna
+   `policy_embeddings.embedding` y la RPC `match_policy_embeddings` esperan
+   vectores de 1536 dimensiones: otros tamaños requieren una migración SQL.
 
 ## Qué queda fuera de este dataset (decisión deliberada)
 

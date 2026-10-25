@@ -122,6 +122,10 @@ class Settings(BaseSettings):
     hitl_threshold_eur: float = 100.0
 
     # ── RAG (búsqueda semántica de políticas) ────────────────────────────
+    # El mismo modelo debe indexar las políticas y vectorizar las consultas.
+    # Cambiarlo exige reingestar el corpus y revisar el umbral de similitud;
+    # policy_embeddings y match_policy_embeddings esperan 1536 dimensiones.
+    rag_embedding_model: str = "text-embedding-3-small"
     # 0.7 dejaba search_return_policy() devolviendo 0 chunks en el uso real
     # (comprobado contra la BD real, no solo mocks): con text-embedding-3-small,
     # ninguna query realista de motivo+categoría del cliente supera ~0.5-0.55
