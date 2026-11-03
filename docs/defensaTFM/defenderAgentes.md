@@ -160,7 +160,7 @@ El admin responde con `Command(resume={"approved": True})` y el grafo continúa 
 | Corto plazo | `add_messages` reducer + Checkpointer | Estado del grafo entre turnos, HITL, reanudación |
 | Largo plazo | `return_requests` (vía `get_customer_return_history`) | Historial de devoluciones del cliente entre sesiones — señal de cliente frecuente en `policy_rules.py` |
 
-El checkpointer guarda todo el estado (incluido `messages`) asociado a un `thread_id`. Cuando el usuario vuelve (mismo `thread_id`), el grafo se reanuda con todo el historial.
+El checkpointer guarda todo el estado (incluido `messages`) asociado a un `thread_id`. Cuando el usuario vuelve (mismo `thread_id`), el grafo se reanuda con el estado completo; el LLM de triaje, eso sí, solo recibe los últimos 20 mensajes (ver abajo).
 
 > **Nota histórica**: una versión anterior de esta tabla listaba aquí
 > `chat_sessions`/`chat_messages` como el mecanismo de memoria de largo plazo
@@ -174,9 +174,18 @@ El checkpointer guarda todo el estado (incluido `messages`) asociado a un `threa
 
 ### Persistencia del estado conversacional (Checkpointer)
 
-El grafo LangGraph utiliza un *checkpointer* para persistir el estado completo de cada conversación entre turnos. Cada sesión de usuario se identifica mediante un `thread_id` único, y al finalizar cada turno (cuando el grafo alcanza el nodo `END`), el checkpointer serializa el `ReturnState` —incluyendo el historial de mensajes, datos parciales extraídos y decisiones intermedias— y lo almacena.
+El grafo LangGraph utiliza un *checkpointer* para persistir el estado completo de cada conversación entre turnos. Cada sesión de usuario se identifica mediante un `thread_id` único. LangGraph guarda un checkpoint en cada paso del grafo, incluidas las pausas HITL (`interrupt()`), y el checkpointer serializa el `ReturnState` —historial de mensajes, datos parciales extraídos y decisiones intermedias— asociado a ese `thread_id`.
 
-En desarrollo se emplea `InMemorySaver`, que mantiene el estado en memoria RAM (se pierde al reiniciar el proceso). En producción se utilizaría `PostgresSaver`, que persiste el estado en tablas gestionadas automáticamente por LangGraph (`checkpoints`, `checkpoint_writes`, `checkpoint_migrations`) dentro de la misma instancia PostgreSQL de Supabase, en un schema separado (`langgraph`) para no interferir con el modelo de datos del dominio.
+El backend elige el checkpointer al arrancar (`build_return_graph` en `backend/agents/graph.py`):
+
+- **Con `SUPABASE_DB_URL` configurada** se usa `AsyncPostgresSaver` sobre el pooler de Postgres de Supabase (pool de 1 a 3 conexiones, `autocommit=True`). Las tablas (`checkpoints`, `checkpoint_writes`, `checkpoint_migrations`) las crea `setup()` en el esquema por defecto; el código no configura un schema propio.
+- **Si la conexión falla o falta la URL**, el comportamiento depende de `ENVIRONMENT`. En `development` se degrada a `InMemorySaver` (estado en RAM, se pierde al reiniciar el proceso) y se registra un aviso. En `production` el arranque se detiene, porque el estado multi-turno y las pausas HITL no pueden perderse en silencio.
+- El estado del checkpointer se expone en `/health` y en `/api/admin/observability`, para que una degradación sea visible fuera de los logs.
+
+Dos límites del mecanismo, que conviene conocer:
+
+- **El almacenamiento no se recorta, el prompt sí.** `trim_history` manda solo los últimos `MAX_HISTORY_MESSAGES` (20 por defecto) mensajes al LLM de triaje. Los datos clave sobreviven al recorte porque viajan en campos estructurados del estado (`order_id`, `customer_id`, `reason`, `items_to_return`), no solo en el texto.
+- **Conversaciones acotadas:** `MAX_CONVERSATION_TURNS` (40 turnos de usuario por `thread_id`, 0 desactiva el límite) impide conversaciones sin fin que harían crecer coste y contexto. No hay resumen incremental del historial.
 
 Este mecanismo permite un patrón conversacional multi-turno sin mantener conexiones abiertas: cada mensaje del usuario dispara una nueva invocación del grafo (`graph.invoke()`), el checkpointer restaura el estado previo asociado al `thread_id`, y la ejecución continúa desde donde se detuvo. Esto es fundamental para el agente de triaje, que puede requerir varios intercambios con el cliente antes de reunir toda la información necesaria (`order_id`, motivo, artículos) para avanzar al evaluador de políticas.
 

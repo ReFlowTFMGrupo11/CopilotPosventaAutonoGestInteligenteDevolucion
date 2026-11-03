@@ -262,18 +262,21 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
 
 ### Costes y consumo — nivel medio
 
-- `with_langfuse()` (`observability.py:142-172`) añade `langfuse_session_id`/
+- `with_langfuse()` (`observability.py:143`) añade `langfuse_session_id`/
   `langfuse_user_id` a cada invocación del grafo → LangFuse agrega coste por
   sesión y por cliente sin contador propio en la app.
-- `search_return_policy()` (`supabase_service.py:149-195`) usa
+- `search_return_policy()` (`policy_service.py:60`) usa
   `langfuse.openai` (drop-in del SDK de OpenAI) para trazar el embedding de
   la query RAG como una `GENERATION` con tokens y coste reales — antes de
   esto, ese embedding era invisible para LangFuse y el RAG aparecía siempre
   a $0 en el dashboard de coste.
-- **Decisión explícita**: no hay contador de coste propio en la app.
-  `GET /api/admin/observability` (`admin.py:112-122`) solo devuelve enlaces
-  al dashboard de LangFuse; el comentario en el propio código dice por qué
-  no se reimplementa esa agregación.
+- **Decisión explícita**: la agregación de coste por trazas la hace LangFuse;
+  `observability.py` no tiene contador de coste. `GET /api/admin/observability`
+  (`admin.py:167`) solo devuelve enlaces al dashboard de LangFuse.
+- **Aparte, el dashboard de coste propio**: el proyecto sí tiene un contador de
+  coste, sobre la tabla `llm_usage` (migración 016), que responde a preguntas
+  de negocio por pedido y por cliente. No sustituye a LangFuse ni al revés; se
+  explica en [`defenderDashboardCostes.md`](defenderDashboardCostes.md).
 
 ### Rendimiento técnico (latencias y errores) — la más débil de las cuatro
 
@@ -300,7 +303,7 @@ en este proyecto — con nivel de madurez explícito, no solo lo que existe.
 
 ### Calidad y evaluación — la más fuerte de las cuatro
 
-- **En producción**: `score_rag_similarity()` (`observability.py:175-262`)
+- **En producción**: `score_rag_similarity()` (`observability.py:191`)
   anota en LangFuse la mejor similitud coseno de cada búsqueda RAG,
   incluyendo `value=0.0` explícito cuando no hay resultados — decisión
   deliberada de no callar los "miss".

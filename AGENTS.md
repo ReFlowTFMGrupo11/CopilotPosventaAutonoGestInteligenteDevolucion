@@ -96,16 +96,17 @@ Manual (4 terminals, must start in this order — each layer depends on the prev
 ```bash
 python -m backend.mcp.mcp_supabase      # :8001/mcp
 python -m backend.mcp.mcp_logistics     # :8002/mcp
-uvicorn backend.api.main:app --reload --port 8000   # :8000, Swagger at /docs
-streamlit run frontend/Chat.py          # :8501
+python -m backend.api.run --reload --port 8000      # :8000, Swagger at /docs (avoids 30s Postgres hang on Windows)
+streamlit run frontend/app.py --server.port 8501    # :8501 (app.py builds the Chat/Admin/Costes navigation)
 ```
 
 Or use the scripts (macOS/Linux):
 ```bash
-./start_all_mac.sh          # starts all 4 in background, logs to /tmp/reflow_*.log
-./start_all_mac.sh stop     # stops everything
+./deploy.sh local           # starts all 4 in background via scripts/start_mac.sh, logs to /tmp/reflow_*.log
+./deploy.sh local stop      # stops everything
 ```
-`start_all.sh` / `start_all_win_gitbash.sh` / `stop_all.sh` are Windows/Git-Bash equivalents.
+`scripts/start_win.sh` / `scripts/stop_win.sh` are the Windows/Git-Bash equivalents.
+The database must be prepared first (run_all.sql → seed_synthetic.sql → `python -m data.rag.ingest_policy_embeddings`); see README.md.
 
 ## Testing
 
