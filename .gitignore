@@ -64,3 +64,7 @@ gemini-code-*.json
 node_modules/
 frontend/node_modules/
 .reflow_pids
+
+# Ficheros de bloqueo de LibreOffice/Office (se crean al abrir un documento)
+.~lock.*#
+~$*
