@@ -1,207 +1,82 @@
 <mxfile host="65bd71144e">
     <diagram id="architecture" name="Arquitectura ReFlow">
-        <mxGraphModel dx="1780" dy="648" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="900" math="0" shadow="0">
+        <mxGraphModel dx="1400" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1300" pageHeight="1220" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-                <mxCell id="title" value="&lt;b&gt;ReFlow — Arquitectura Multi-Agente&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;fontSize=18;" parent="1" vertex="1">
-                    <mxGeometry x="550" y="20" width="380" height="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="frontend_group" value="Frontend (Streamlit)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="80" width="280" height="160" as="geometry"/>
-                </mxCell>
-                <mxCell id="chat_ui" value="💬 Chat Cliente&#xa;(puerto 8501)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="120" width="120" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="admin_ui" value="🛡️ Panel Admin&#xa;(HITL)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
-                    <mxGeometry x="190" y="120" width="120" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="stats_ui" value="📊 Dashboard Stats" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="190" width="250" height="35" as="geometry"/>
-                </mxCell>
-                <mxCell id="api_group" value="FastAPI (puerto 8000)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="40" y="290" width="280" height="140" as="geometry"/>
-                </mxCell>
-                <mxCell id="chat_api" value="/api/chat&#xa;(stream + sync)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="325" width="120" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="admin_api" value="/api/admin&#xa;(approve/reject)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
-                    <mxGeometry x="190" y="325" width="120" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="stats_api" value="/api/stats · /health" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" parent="1" vertex="1">
-                    <mxGeometry x="60" y="385" width="250" height="30" as="geometry"/>
-                </mxCell>
-                <mxCell id="graph_group" value="LangGraph StateGraph" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="400" y="80" width="440" height="350" as="geometry"/>
-                </mxCell>
-                <mxCell id="triage" value="🤝 Triaje&#xa;(empatía + extracción)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="540" y="115" width="160" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="fetch" value="📦 Fetch Order Data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
-                    <mxGeometry x="540" y="185" width="160" height="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="evaluator" value="⚖️ Evaluador&#xa;(Reglas + LLM + RAG)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="540" y="245" width="160" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="resolver" value="✅ Resolución&#xa;(etiqueta + notif + HITL)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="440" y="325" width="170" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="reject" value="❌ Rechazo&#xa;(mensaje empático)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
-                    <mxGeometry x="640" y="325" width="150" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="interrupt_box" value="⏸️ interrupt()&#xa;HITL &gt; 100€" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontStyle=2;fontSize=10;" parent="1" vertex="1">
-                    <mxGeometry x="420" y="395" width="130" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="triage" target="fetch" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="fetch" target="evaluator" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="evaluator" target="resolver" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="evaluator" target="reject" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;dashed=1;" parent="1" source="resolver" target="interrupt_box" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="mcp_group" value="MCP Servers (Model Context Protocol)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="920" y="80" width="300" height="180" as="geometry"/>
-                </mxCell>
-                <mxCell id="mcp_supa" value="🗄️ MCP Supabase&#xa;(puerto 8001)&#xa;CRUD pedidos/devoluciones" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
-                    <mxGeometry x="940" y="115" width="130" height="70" as="geometry"/>
-                </mxCell>
-                <mxCell id="mcp_logis" value="🚚 MCP Logistics&#xa;(puerto 8002)&#xa;Etiquetas + tracking" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" parent="1" vertex="1">
-                    <mxGeometry x="1080" y="115" width="130" height="70" as="geometry"/>
-                </mxCell>
-                <mxCell id="mcp_client_label" value="mcp_client.py&#xa;(wrapper HTTP)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;" parent="1" vertex="1">
-                    <mxGeometry x="970" y="200" width="220" height="30" as="geometry"/>
-                </mxCell>
-                <mxCell id="data_group" value="Datos (Supabase Cloud)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;verticalAlign=top;fontStyle=1;fontSize=12;" parent="1" vertex="1">
-                    <mxGeometry x="920" y="390" width="300" height="150" as="geometry"/>
-                </mxCell>
-                <mxCell id="supabase" value="☁️ Supabase PostgreSQL&#xa;+ pgvector (RAG)&#xa;★ migraciones 001-017" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;size=10;" parent="1" vertex="1">
-                    <mxGeometry x="945" y="410" width="140" height="80" as="geometry"/>
-                </mxCell>
-                <mxCell id="checkpointer" value="🔄 Checkpointer&#xa;(AsyncPostgresSaver)&#xa;(checkpoints,&#xa;checkpoint_blobs)" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;size=10;fontSize=9;" parent="1" vertex="1">
-                    <mxGeometry x="1095" y="410" width="115" height="80" as="geometry"/>
-                </mxCell>
-                <mxCell id="services_group" value="Services (lógica de negocio)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;fontSize=11;" vertex="1" parent="1">
-                    <mxGeometry x="920" y="280" width="300" height="90" as="geometry"/>
-                </mxCell>
-                <mxCell id="svc_supa" value="orders/returns/policy_service.py&#xa;(CRUD + RAG)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
-                    <mxGeometry x="935" y="305" width="130" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="svc_logis" value="logistics_service.py&#xa;(etiquetas PDF)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=10;" vertex="1" parent="1">
-                    <mxGeometry x="1080" y="305" width="130" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="llm" value="🧠 OpenAI&#xa;gpt-5-mini" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontStyle=1;" parent="1" vertex="1">
-                    <mxGeometry x="920" y="510" width="130" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="embeddings" value="📐 text-embedding&#xa;-3-small" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="1" vertex="1">
-                    <mxGeometry x="1080" y="510" width="140" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="c1" value="HTTP/SSE" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;" parent="1" source="chat_ui" target="chat_api" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c2" value="HTTP" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;" parent="1" source="admin_ui" target="admin_api" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c3" value="ainvoke / astream" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;" parent="1" source="chat_api" target="triage" edge="1">
-                    <mxGeometry x="-0.328" y="-20" relative="1" as="geometry">
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="c4" value="Command(resume)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;dashed=1;" parent="1" edge="1">
-                    <mxGeometry x="-0.0912" y="10" relative="1" as="geometry">
-                        <mxPoint x="290" y="350" as="sourcePoint"/>
-                        <mxPoint x="465" y="395" as="targetPoint"/>
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="c5" value="HTTP JSON-RPC" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;" parent="1" source="resolver" target="mcp_supa" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c6" value="HTTP JSON-RPC" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;" parent="1" source="resolver" target="mcp_logis" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c7" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" parent="1" source="mcp_supa" target="svc_supa" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c7b" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" edge="1" parent="1" source="mcp_logis" target="svc_logis">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c7c" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" edge="1" parent="1" source="svc_supa" target="supabase">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c8" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;dashed=1;" parent="1" source="graph_group" target="checkpointer" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c9" value="API calls" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;" parent="1" source="evaluator" target="llm" edge="1">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c10" value="RAG" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" parent="1" source="mcp_supa" target="embeddings" edge="1">
-                    <mxGeometry x="0.0455" y="-10" relative="1" as="geometry">
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="c11" value="search_return_policy&#xa;(búsqueda semántica)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;dashed=1;" edge="1" parent="1" source="evaluator" target="mcp_supa">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="rag_note" value="&lt;i&gt;RAG: Evaluador → MCP Supabase →&#xa;embedding query (OpenAI) →&#xa;pgvector cosine similarity →&#xa;top-5 policy chunks → prompt LLM&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
-                    <mxGeometry x="920" y="600" width="230" height="70" as="geometry"/>
-                </mxCell>
-                <mxCell id="migrations_note" value="&lt;i&gt;★ Migraciones recientes:&lt;br&gt;015: DROP chat_sessions (nunca usado)&lt;br&gt;016: cost_eur en llm_usage (auditoría)&lt;br&gt;017: mcp_tool_calls (auditoría MCP)&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
-                    <mxGeometry x="1160" y="600" width="200" height="80" as="geometry"/>
-                </mxCell>
-                <mxCell id="checkpointer_note" value="&lt;i&gt;Checkpointer: conversación en vivo&#xa;y pausas HITL viven aquí, no en BD&#xa;relacional. thread_id vincula ambos mundos.&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
-                    <mxGeometry x="1095" y="500" width="200" height="80" as="geometry"/>
-                </mxCell>
-                <mxCell id="c12" value="orders/returns_service&#xa;(consultas admin)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;dashed=1;" edge="1" parent="1" source="admin_api" target="svc_supa">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c14" value="/api/admin/observability&#xa;(enlaces a coste/sesión)" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="admin_api" target="langfuse_group">
-                    <mxGeometry x="-0.2" relative="1" as="geometry">
-                        <mxPoint as="offset"/>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="legend" value="&lt;b&gt;Leyenda:&lt;/b&gt;&#xa;── Agentes → MCP → Services → BD&#xa;- - FastAPI → Services → BD&#xa;── FastAPI → LangGraph (resume HITL)" style="shape=note;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
-                    <mxGeometry x="40" y="470" width="280" height="70" as="geometry"/>
-                </mxCell>
-                <mxCell id="langfuse_group" value="☁️ Langfuse Cloud — observabilidad LLM (SaaS)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;verticalAlign=top;fontStyle=1;fontSize=12;" vertex="1" parent="1">
-                    <mxGeometry x="360" y="490" width="460" height="150" as="geometry"/>
-                </mxCell>
-                <mxCell id="langfuse_web" value="🔭 Langfuse Cloud UI + API&#xa;(tier gratuito)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
-                    <mxGeometry x="380" y="525" width="190" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="langfuse_worker" value="📊 Tracing distribuido&#xa;(OTEL callbacks)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
-                    <mxGeometry x="590" y="525" width="190" height="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="langfuse_infra_label" value="Self-hosted eliminado (v015+): solo Cloud (ver defenderLangfuse.md §3)" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;" vertex="1" parent="1">
-                    <mxGeometry x="380" y="590" width="400" height="30" as="geometry"/>
-                </mxCell>
-                <mxCell id="c13" value="callbacks (tracing OTel)&#xa;with_langfuse() en chat.py" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="graph_group" target="langfuse_group">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="langfuse_note" value="&lt;i&gt;Opcional: si LANGFUSE_PUBLIC_KEY/SECRET_KEY&#xa;no están en .env, with_langfuse() devuelve&#xa;el config tal cual — la app funciona igual&#xa;sin trazas. Clientes: SDK LangFuse Python&#xa;+ Callbacks de LangGraph.&lt;/i&gt;" style="shape=note;whiteSpace=wrap;html=1;fillColor=#ffffcc;strokeColor=#d6b656;fontSize=9;align=left;spacingLeft=5;" vertex="1" parent="1">
-                    <mxGeometry x="360" y="650" width="250" height="80" as="geometry"/>
-                </mxCell>
-                <mxCell id="ingest_rag" value="📥 Ingesta RAG (offline)&#xa;data/rag/ingest_policy_embeddings.py&#xa;(script manual, no forma parte del runtime)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=10;" parent="1" vertex="1">
-                    <mxGeometry x="920" y="690" width="260" height="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="c15" value="popula policy_embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#00994d;dashed=1;" edge="1" parent="1" source="ingest_rag" target="supabase">
-                    <mxGeometry relative="1" as="geometry">
-                        <Array as="points">
-                            <mxPoint x="900" y="720"/>
-                            <mxPoint x="900" y="455"/>
-                        </Array>
-                    </mxGeometry>
-                </mxCell>
-                <mxCell id="c16" value="genera embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" edge="1" parent="1" source="ingest_rag" target="embeddings">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
+                <mxCell id="title" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;" value="&amp;lt;b&amp;gt;ReFlow — Arquitectura Multi-Agente&amp;lt;/b&amp;gt;" vertex="1"><mxGeometry x="420" y="15" width="560" height="40" as="geometry"/></mxCell>
+                <mxCell id="frontend_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="Frontend (Streamlit)" vertex="1"><mxGeometry x="30" y="80" width="340" height="240" as="geometry"/></mxCell>
+                <mxCell id="chat_ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="💬 Chat cliente&amp;#xa;Chat.py (:8501)" vertex="1"><mxGeometry x="50" y="120" width="150" height="55" as="geometry"/></mxCell>
+                <mxCell id="admin_ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="🛡️ Panel Admin HITL&amp;#xa;pages/1_Admin.py" vertex="1"><mxGeometry x="215" y="120" width="140" height="55" as="geometry"/></mxCell>
+                <mxCell id="costes_ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="💰 Panel Costes FinOps&amp;#xa;pages/2_Costes.py" vertex="1"><mxGeometry x="50" y="190" width="150" height="55" as="geometry"/></mxCell>
+                <mxCell id="login_ui" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="🔐 Login&amp;#xa;JWT solo en session_state" vertex="1"><mxGeometry x="215" y="190" width="140" height="55" as="geometry"/></mxCell>
+                <mxCell id="frontend_note" parent="1" style="text;html=1;fontSize=9;fontStyle=2;align=center;verticalAlign=middle;" value="frontend/lib/api.py: cliente HTTP único (cabecera Authorization: Bearer)" vertex="1"><mxGeometry x="50" y="255" width="305" height="50" as="geometry"/></mxCell>
+                <mxCell id="api_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;" value="FastAPI (puerto 8000)" vertex="1"><mxGeometry x="30" y="350" width="340" height="500" as="geometry"/></mxCell>
+                <mxCell id="health_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#666666;" value="/health (público)" vertex="1"><mxGeometry x="50" y="390" width="300" height="28" as="geometry"/></mxCell>
+                <mxCell id="auth_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" value="POST /api/auth/login (cliente, sin contraseña)&amp;#xa;POST /api/auth/admin/login (ADMIN_PASSWORD)&amp;#xa;Públicos por diseño (emiten el JWT)" vertex="1"><mxGeometry x="50" y="430" width="300" height="58" as="geometry"/></mxCell>
+                <mxCell id="chat_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" value="POST /api/chat · /new · /stream&amp;#xa;GET /api/chat/{thread_id}/state&amp;#xa;🔒 JWT role=customer" vertex="1"><mxGeometry x="50" y="500" width="300" height="58" as="geometry"/></mxCell>
+                <mxCell id="admin_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" value="GET /api/admin/pending · /returns · /returns/{id} · /observability&amp;#xa;POST /api/admin/{thread_id}/approve · /reject&amp;#xa;🔒 JWT role=admin" vertex="1"><mxGeometry x="50" y="570" width="300" height="70" as="geometry"/></mxCell>
+                <mxCell id="pub_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" value="GET /api/stats · /api/orders/{order_id}&amp;#xa;GET /api/customers/{customer_id}/history&amp;#xa;🔒 JWT role=admin" vertex="1"><mxGeometry x="50" y="652" width="300" height="58" as="geometry"/></mxCell>
+                <mxCell id="usage_api" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f8cecc;strokeColor=#b85450;strokeWidth=2;fontStyle=1;" value="⚠️ GET /api/admin/usage/sessions · /sessions/{thread_id} · /trends&amp;#xa;SIN autenticación (router usage.py sin dependencias)" vertex="1"><mxGeometry x="50" y="722" width="300" height="58" as="geometry"/></mxCell>
+                <mxCell id="lock_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" value="ThreadLockRegistry (api/dependencies.py)&amp;#xa;asyncio.Lock por thread_id · requiere desired_count = 1" vertex="1"><mxGeometry x="50" y="792" width="300" height="42" as="geometry"/></mxCell>
+                <mxCell id="graph_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#f8cecc;strokeColor=#b85450;" value="LangGraph StateGraph (agents/graph.py)" vertex="1"><mxGeometry x="400" y="80" width="470" height="440" as="geometry"/></mxCell>
+                <mxCell id="triage" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="🤝 Triaje&amp;#xa;(empatía + extracción de order_number)" vertex="1"><mxGeometry x="420" y="120" width="210" height="50" as="geometry"/></mxCell>
+                <mxCell id="fetch" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="📦 Fetch Order Data&amp;#xa;(MCP get_order_details)" vertex="1"><mxGeometry x="420" y="190" width="210" height="45" as="geometry"/></mxCell>
+                <mxCell id="evaluator" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="⚖️ Evaluador&amp;#xa;guardrails (policy_rules.py) → LLM + RAG" vertex="1"><mxGeometry x="420" y="255" width="210" height="60" as="geometry"/></mxCell>
+                <mxCell id="resolver" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" value="✅ Resolución&amp;#xa;etiqueta PDF + notificación" vertex="1"><mxGeometry x="420" y="340" width="210" height="55" as="geometry"/></mxCell>
+                <mxCell id="reject" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="❌ Rechazo&amp;#xa;(mensaje empático)" vertex="1"><mxGeometry x="650" y="255" width="200" height="50" as="geometry"/></mxCell>
+                <mxCell id="interrupt_box" parent="1" style="rhombus;whiteSpace=wrap;html=1;fontSize=9;fontStyle=2;fillColor=#f5f5f5;strokeColor=#666666;" value="⏸️ interrupt()&amp;#xa;HITL &amp;gt; HITL_THRESHOLD_EUR (100 €)" vertex="1"><mxGeometry x="650" y="335" width="200" height="60" as="geometry"/></mxCell>
+                <mxCell id="routing_note" parent="1" style="text;html=1;fontSize=9;fontStyle=2;align=center;verticalAlign=middle;" value="route_after_* en graph.py: el LLM nunca elige el siguiente nodo" vertex="1"><mxGeometry x="420" y="410" width="430" height="40" as="geometry"/></mxCell>
+                <mxCell id="mcp_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#e1d5e7;strokeColor=#9673a6;" value="MCP Servers (Model Context Protocol)" vertex="1"><mxGeometry x="900" y="80" width="340" height="300" as="geometry"/></mxCell>
+                <mxCell id="mcp_supa" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" value="🗄️ MCP Supabase (:8001) · 8 tools&amp;#xa;get_order_details · get_customer_return_history&amp;#xa;get_policy_info · search_return_policy (RAG)&amp;#xa;create_return_record · update_return_status&amp;#xa;get_pending_return_request_id · get_latest_return_request" vertex="1"><mxGeometry x="920" y="120" width="300" height="110" as="geometry"/></mxCell>
+                <mxCell id="mcp_logis" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" value="🚚 MCP Logistics (:8002) · 2 tools&amp;#xa;generate_shipping_label (PDF, ReportLab)&amp;#xa;send_customer_notification (simulada → .jsonl)" vertex="1"><mxGeometry x="920" y="240" width="300" height="62" as="geometry"/></mxCell>
+                <mxCell id="mcp_client" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#666666;fontSize=9;" value="agents/infra/mcp_client.py: cliente unificado&amp;#xa;_TOOL_SERVER_MAP · caché de tools · lazy loading" vertex="1"><mxGeometry x="920" y="312" width="300" height="58" as="geometry"/></mxCell>
+                <mxCell id="services_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" value="Services (backend/services/, lógica de negocio)" vertex="1"><mxGeometry x="900" y="400" width="340" height="200" as="geometry"/></mxCell>
+                <mxCell id="svc_supa" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="orders_service · returns_service · policy_service&amp;#xa;(CRUD + búsqueda RAG)" vertex="1"><mxGeometry x="920" y="435" width="300" height="45" as="geometry"/></mxCell>
+                <mxCell id="svc_logis" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="logistics_service.py (etiquetas PDF, notificaciones)" vertex="1"><mxGeometry x="920" y="490" width="300" height="40" as="geometry"/></mxCell>
+                <mxCell id="svc_other" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" value="auth_service (JWT) · usage_service · pricing&amp;#xa;observability (with_langfuse) · tool_call_service" vertex="1"><mxGeometry x="920" y="540" width="300" height="48" as="geometry"/></mxCell>
+                <mxCell id="data_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#f5f5f5;strokeColor=#666666;" value="Datos (Supabase Cloud)" vertex="1"><mxGeometry x="900" y="620" width="340" height="250" as="geometry"/></mxCell>
+                <mxCell id="supabase" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;size=10;fontSize=10;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" value="☁️ Supabase PostgreSQL + pgvector&amp;#xa;customers · products · orders · order_items&amp;#xa;return_requests · return_items · return_policies&amp;#xa;policy_embeddings · llm_usage · mcp_tool_calls&amp;#xa;migraciones 001–017 (chat_sessions eliminada en 015)" vertex="1"><mxGeometry x="920" y="660" width="300" height="110" as="geometry"/></mxCell>
+                <mxCell id="checkpointer" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;size=10;fontSize=10;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=9;" value="🔄 Checkpointer AsyncPostgresSaver&amp;#xa;checkpoints · checkpoint_blobs · checkpoint_writes" vertex="1"><mxGeometry x="920" y="785" width="300" height="50" as="geometry"/></mxCell>
+                <mxCell id="llm" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;" value="🧠 OpenAI gpt-5-mini&amp;#xa;TRIAGE / EVALUATOR / RESOLVER_MODEL" vertex="1"><mxGeometry x="900" y="900" width="170" height="60" as="geometry"/></mxCell>
+                <mxCell id="embeddings" parent="1" style="ellipse;whiteSpace=wrap;html=1;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;" value="📐 text-embedding-3-small&amp;#xa;(RAG, pgvector cosine)" vertex="1"><mxGeometry x="1090" y="900" width="170" height="60" as="geometry"/></mxCell>
+                <mxCell id="langfuse_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#ffe6cc;strokeColor=#d79b00;" value="☁️ Langfuse Cloud (SaaS, fail-open)" vertex="1"><mxGeometry x="400" y="560" width="470" height="170" as="geometry"/></mxCell>
+                <mxCell id="langfuse_worker" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" value="callbacks OTel · with_langfuse()&amp;#xa;(services/observability.py)" vertex="1"><mxGeometry x="420" y="600" width="220" height="50" as="geometry"/></mxCell>
+                <mxCell id="langfuse_web" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=9;" value="Langfuse UI + API&amp;#xa;(enlaces desde /api/admin/observability)" vertex="1"><mxGeometry x="660" y="600" width="200" height="50" as="geometry"/></mxCell>
+                <mxCell id="langfuse_label" parent="1" style="text;html=1;fontSize=8;fontStyle=2;align=center;verticalAlign=middle;whiteSpace=wrap;" value="Sin LANGFUSE_PUBLIC_KEY / SECRET_KEY en .env, with_langfuse() devuelve el config sin cambios: la app funciona sin trazas.&amp;#xa;Solo Cloud en runtime (ver defenderLangfuse.md §3). La carpeta langfuse_docker/ sigue en el repo como residuo." vertex="1"><mxGeometry x="420" y="660" width="430" height="56" as="geometry"/></mxCell>
+                <mxCell id="ingest_rag" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;fontSize=9;" value="📥 Ingesta RAG (offline, manual)&amp;#xa;data/rag/ingest_policy_embeddings.py (no forma parte del runtime)" vertex="1"><mxGeometry x="400" y="750" width="470" height="50" as="geometry"/></mxCell>
+                <mxCell id="aws_group" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=1;fontSize=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="Despliegue AWS (infra/*.tf · eu-west-1)" vertex="1"><mxGeometry x="30" y="880" width="340" height="230" as="geometry"/></mxCell>
+                <mxCell id="aws_text" parent="1" style="text;html=1;fontSize=9;align=left;verticalAlign=top;whiteSpace=wrap;" value="ALB :80 → frontend ECS :8501 (subred pública, IP pública)&amp;#xa;reflow-api :8000 + mcp-supabase :8001 + mcp-logistics :8002&amp;#xa;(subred privada, Service Connect)&amp;#xa;ECR · Secrets Manager (reflow/*) · CloudWatch (7 días)&amp;#xa;CD automático con GitHub Actions: PENDIENTE (rol OIDC)&amp;#xa;deploy.sh aws (despliegue asistido)" vertex="1"><mxGeometry x="50" y="915" width="300" height="185" as="geometry"/></mxCell>
+                <mxCell id="legend" parent="1" style="shape=note;whiteSpace=wrap;html=1;align=left;spacingLeft=5;fontSize=9;fillColor=#ffffcc;strokeColor=#d6b656;" value="Leyenda: ── Agentes → MCP → Services → BD · - - FastAPI → Services / BD&amp;#xa;── FastAPI → LangGraph (Command(resume) HITL) · rojo = sin autenticación" vertex="1"><mxGeometry x="400" y="1130" width="470" height="50" as="geometry"/></mxCell>
+                <mxCell id="e1" edge="1" parent="1" source="triage" target="fetch" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" value=""><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="e2" edge="1" parent="1" source="fetch" target="evaluator" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" value=""><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="e3" edge="1" parent="1" source="evaluator" target="resolver" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" value="aprobada"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="e4" edge="1" parent="1" source="evaluator" target="reject" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" value="rechazada"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="e5" edge="1" parent="1" source="resolver" target="interrupt_box" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#666666;" value="importe &amp;gt; umbral"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c1" edge="1" parent="1" source="chat_ui" target="chat_api" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;" value="HTTP/SSE · JWT customer"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c2" edge="1" parent="1" source="admin_ui" target="admin_api" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;" value="HTTP · JWT admin"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c3" edge="1" parent="1" source="costes_ui" target="usage_api" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;dashed=1;" value="HTTP · sin JWT"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c4" edge="1" parent="1" source="login_ui" target="auth_api" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#6c8ebf;" value="POST login"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c5" edge="1" parent="1" source="chat_api" target="triage" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;" value="ainvoke / astream"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c6" edge="1" parent="1" source="admin_api" target="interrupt_box" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;dashed=1;" value="Command(resume)"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c7" edge="1" parent="1" source="fetch" target="mcp_supa" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;" value="HTTP JSON-RPC"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c8" edge="1" parent="1" source="resolver" target="mcp_logis" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;" value="HTTP JSON-RPC"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c9" edge="1" parent="1" source="evaluator" target="mcp_supa" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#9673a6;dashed=1;" value="search_return_policy"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c10" edge="1" parent="1" source="mcp_supa" target="svc_supa" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" value=""><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c11" edge="1" parent="1" source="mcp_logis" target="svc_logis" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" value=""><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c12" edge="1" parent="1" source="admin_api" target="svc_supa" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;dashed=1;" value="consultas admin"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c13" edge="1" parent="1" source="pub_api" target="svc_supa" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;dashed=1;" value="stats / pedidos"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c14" edge="1" parent="1" source="auth_api" target="svc_other" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#82b366;dashed=1;" value="auth_service"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c15" edge="1" parent="1" source="usage_api" target="svc_other" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#b85450;dashed=1;" value="usage_service"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c16" edge="1" parent="1" source="svc_supa" target="supabase" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;" value=""><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c17" edge="1" parent="1" source="graph_group" target="checkpointer" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#666666;dashed=1;" value="estado + pausas HITL"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c18" edge="1" parent="1" source="triage" target="llm" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;" value=""><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c19" edge="1" parent="1" source="evaluator" target="llm" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;" value="API calls"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c20" edge="1" parent="1" source="mcp_supa" target="embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" value="query embedding (RAG)"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c21" edge="1" parent="1" source="graph_group" target="langfuse_group" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" value="callbacks (with_langfuse)"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c22" edge="1" parent="1" source="admin_api" target="langfuse_group" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#d79b00;dashed=1;" value="/observability (enlaces)"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c23" edge="1" parent="1" source="ingest_rag" target="supabase" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#00994d;dashed=1;" value="popula policy_embeddings"><mxGeometry relative="1" as="geometry"/></mxCell>
+                <mxCell id="c24" edge="1" parent="1" source="ingest_rag" target="embeddings" style="edgeStyle=orthogonalEdgeStyle;strokeColor=#00994d;dashed=1;" value="genera embeddings"><mxGeometry relative="1" as="geometry"/></mxCell>
             </root>
         </mxGraphModel>
     </diagram>

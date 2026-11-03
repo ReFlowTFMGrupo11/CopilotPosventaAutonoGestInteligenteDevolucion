@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cierra todo lo que levanta start_all.sh / start_all_win_gitbash.sh: las 4
+# Cierra todo lo que levanta scripts/start_win.sh: las 4
 # ventanas de Git Bash (MCP Supabase, MCP Logistics, API FastAPI y frontend
 # Streamlit), no solo el proceso que corre dentro de cada una.
 #
@@ -16,7 +16,7 @@
 # ventana) tampoco aparece el aviso de mintty de "Close anyway?", porque ese
 # aviso solo salta cuando se cierra la ventana a mano.
 #
-# Uso:  ./stop_all.sh
+# Uso:  ./scripts/stop_win.sh
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -43,7 +43,8 @@ Asegúrate de que el backend y el frontend están corriendo:
 
 ```bash
 # Desde la raíz del proyecto
-./start_all_mac.sh
+./deploy.sh local            # Mac/Linux
+# ./scripts/start_win.sh     # Windows (Git Bash)
 ```
 
 O manualmente:
