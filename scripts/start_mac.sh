@@ -3,11 +3,13 @@
 # virtual y levanta los 4 servicios en background.
 #
 # Compatible con macOS y Linux.
-# Uso:  ./start_all_mac.sh
-#       ./start_all_mac.sh stop   (para todos los servicios)
+# Uso:  ./scripts/start_mac.sh          (o ./deploy.sh local)
+#       ./scripts/start_mac.sh stop     (para todos los servicios)
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# El script vive en scripts/, pero .venv/, .env y requirements.txt están en
+# la raíz del repo: subimos un nivel.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 PIDFILE="$REPO_ROOT/.reflow_pids"
@@ -92,5 +94,5 @@ cat <<EOF
       - Frontend       -> http://localhost:8501
 
     Logs en /tmp/reflow_*.log
-    Para parar todo:  ./start_all_mac.sh stop
+    Para parar todo:  ./deploy.sh local stop  (o ./scripts/start_mac.sh stop)
 EOF
