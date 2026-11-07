@@ -15,10 +15,8 @@
 
 FROM python:3.12-slim
 
-# curl: health check del contenedor (sin gcc — no hay extensiones C que compilar)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+# Sin gcc (todo son wheels) y sin curl (arrastra libcurl→libsasl2, con CVEs
+# sin parche en Debian): el health check usa la stdlib de Python.
 
 WORKDIR /app
 
@@ -33,7 +31,7 @@ EXPOSE 8501
 
 # Streamlit expone /_stcore/health como endpoint de salud propio.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+    CMD python -c "import http.client,sys;c=http.client.HTTPConnection('localhost',8501,timeout=4);c.request('GET','/_stcore/health');sys.exit(0 if c.getresponse().status==200 else 1)"
 
 CMD ["streamlit", "run", "app.py", \
      "--server.port=8501", \

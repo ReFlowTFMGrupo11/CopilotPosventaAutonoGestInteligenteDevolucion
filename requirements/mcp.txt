@@ -14,7 +14,8 @@ supabase>=2.5.0
 pydantic-settings>=2.3.0
 
 # MCP server
-mcp[cli]>=1.0.0,<2.0.0
+# 1.30.0 corrige los CVEs de autorización/SSRF/open-redirect de 1.29.x.
+mcp[cli]>=1.30.0,<2.0.0
 
 # Embeddings RAG (mcp_supabase → policy_service.py)
 openai>=1.30.0
@@ -28,4 +29,11 @@ python-dotenv>=1.0.0
 # Langfuse: traza la llamada de embeddings RAG en mcp_supabase/policy_service.py.
 # Si no está configurado (LANGFUSE_SECRET_KEY ausente), get_langfuse() devuelve
 # None y se usa el SDK de OpenAI estándar — degradación silenciosa.
-langfuse>=4.14.0
+langfuse>=4.14.0,<5.0.0
+
+# Security pins (Snyk): dependencias transitivas con CVEs corregidos.
+# pillow llega vía reportlab; 13.0.0 corrige los CVEs críticos.
+pillow>=13.0.0,<14.0.0
+certifi>=2026.10.18
+urllib3>=2.8.0,<3.0.0
+multidict>=6.9.1,<7.0.0

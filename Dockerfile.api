@@ -7,9 +7,13 @@
 FROM python:3.12-slim
 
 # gcc: compilar extensiones C (tiktoken, pydantic-core, psycopg)
-# curl: health check del contenedor
+# No se instala curl: arrastra libcurl→libsasl2 (CVEs sin parche en Debian);
+# el health check usa la stdlib de Python.
+# upgrade: aplica los parches de seguridad de Debian disponibles sobre la
+# imagen base (Snyk reportaba CVEs en zlib, brotli, libsasl2, etc.).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc curl \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,6 +31,6 @@ EXPOSE 8000
 # registrarla en el target group del ALB. start-period=30s da tiempo
 # al grafo LangGraph a conectar con el checkpointer de Postgres al arrancar.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD python -c "import http.client,sys;c=http.client.HTTPConnection('localhost',8000,timeout=4);c.request('GET','/health');sys.exit(0 if c.getresponse().status==200 else 1)"
 
 CMD ["uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000"]

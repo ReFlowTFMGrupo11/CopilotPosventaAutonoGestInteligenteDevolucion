@@ -2,9 +2,12 @@
 FROM python:3.12-slim
 
 # gcc: necesario para compilar extensiones C (tiktoken, pydantic-core, etc.)
-# curl: útil para health checks manuales dentro del contenedor
+# No se instala curl: arrastra libcurl→libsasl2 (CVEs sin parche en Debian).
+# upgrade: aplica los parches de seguridad de Debian disponibles sobre la
+# imagen base (Snyk reportaba CVEs en zlib, brotli, libsasl2, etc.).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc curl \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
