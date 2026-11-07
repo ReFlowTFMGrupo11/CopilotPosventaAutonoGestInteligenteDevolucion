@@ -15,9 +15,13 @@
 FROM python:3.12-slim
 
 # gcc: compilar extensiones C (pydantic-core, tiktoken)
-# curl: health check del contenedor
+# No se instala curl: arrastra libcurl→libsasl2 (CVEs sin parche en Debian);
+# el health check usa la stdlib de Python.
+# upgrade: aplica los parches de seguridad de Debian disponibles sobre la
+# imagen base (Snyk reportaba CVEs en zlib, brotli, libsasl2, etc.).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc curl \
+    && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends gcc \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -39,7 +43,6 @@ RUN mkdir -p generated_labels
 EXPOSE 8001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -s --max-time 4 -o /dev/null -w "%{http_code}" \
-        http://localhost:8001/mcp | grep -qE "^(200|400|406)$" || exit 1
+    CMD python -c "import http.client,sys;c=http.client.HTTPConnection('localhost',8001,timeout=4);c.request('GET','/mcp');sys.exit(0 if c.getresponse().status in (200,400,406) else 1)"
 
 CMD ["python", "-m", "backend.mcp.mcp_supabase"]
