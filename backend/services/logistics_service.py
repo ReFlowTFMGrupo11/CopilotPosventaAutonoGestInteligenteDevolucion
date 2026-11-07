@@ -8,7 +8,10 @@ explicación completa de por qué existe esta capa).
 import json
 import uuid
 from datetime import datetime
+from email.message import EmailMessage
 from pathlib import Path
+
+from backend.config import get_settings
 
 # __file__ = .../backend/services/logistics_service.py, así que subir 3 niveles
 # (parent.parent.parent) lleva a la raíz del proyecto.
@@ -115,7 +118,14 @@ async def send_customer_notification(
     subject: str = "ReFlow - Actualización de tu devolución",
     attachment_path: str = "",
 ) -> dict:
-    """Simula el envío de un correo electrónico transaccional con el enlace al PDF generado.
+    """Envía la notificación al cliente (AWS SES) o la simula si no hay SES.
+
+    - Si ``SES_SENDER_EMAIL`` está configurado, envía un correo real con el
+      PDF adjunto usando AWS SES. No hay contraseñas: boto3 obtiene
+      credenciales temporales del IAM task role en ECS (o del perfil de
+      ``~/.aws/credentials`` en local).
+    - Si no está configurado, mantiene el modo simulado: solo escribe una
+      línea en ``generated_labels/notifications_log.jsonl``.
 
     Args:
         email: Dirección de correo electrónico del cliente.
@@ -123,20 +133,51 @@ async def send_customer_notification(
         subject: Asunto del correo.
         attachment_path: Ruta al archivo adjunto (etiqueta PDF).
     """
-    # No se envía correo real: se genera un id de notificación y una
-    # marca de tiempo, y se deja constancia en un log en disco.
+    settings = get_settings()
+
     notification_id = str(uuid.uuid4())
     timestamp = datetime.now().isoformat()
 
+    # En demos se puede redirigir todo a un buzón propio en vez de al email
+    # real del cliente.
+    recipient = settings.ses_recipient_override or email
+    sender = settings.ses_sender_email
+
+    status = "sent_simulated"
+    message_id: str | None = None
+    error: str | None = None
+
+    if sender:
+        try:
+            message_id = _send_via_ses(
+                sender=sender,
+                recipient=recipient,
+                subject=subject,
+                message=message,
+                attachment_path=attachment_path,
+                region=settings.ses_region or "eu-west-1",
+            )
+            status = "sent"
+        except Exception as exc:  # noqa: BLE001 - degradación controlada
+            # No se interrumpe el flujo de resolución si SES falla: se deja
+            # constancia en el log y se devuelve status="failed".
+            status = "failed"
+            error = str(exc)
+            print(f"⚠️  [EMAIL] Fallo al enviar vía SES: {exc}")
+
     log_entry = {
         "notification_id": notification_id,
-        "to": email,
+        "to": recipient,
         "subject": subject,
         "message": message,
         "attachment": attachment_path if attachment_path else None,
-        "status": "sent_simulated",
+        "status": status,
         "timestamp": timestamp,
     }
+    if message_id:
+        log_entry["message_id"] = message_id
+    if error:
+        log_entry["error"] = error
 
     log_file = LABELS_DIR / "notifications_log.jsonl"
 
@@ -145,15 +186,71 @@ async def send_customer_notification(
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
-    print(f"📧 [SIMULATED] Email sent to {email}")
+    if status == "sent":
+        print(f"📧 [SES] Email sent to {recipient} (message_id={message_id})")
+    elif status == "sent_simulated":
+        print(f"📧 [SIMULATED] Email sent to {recipient}")
     print(f"   Subject: {subject}")
     print(f"   Attachment: {attachment_path or 'None'}")
 
-    return {
+    result = {
         "notification_id": notification_id,
-        "status": "sent_simulated",
-        "to": email,
+        "status": status,
+        "to": recipient,
         "subject": subject,
         "timestamp": timestamp,
-        "note": "Email sending is simulated. In production, integrate with a transactional email service.",
     }
+    if message_id:
+        result["message_id"] = message_id
+    if error:
+        result["error"] = error
+    if status == "sent_simulated":
+        result["note"] = (
+            "Email sending is simulated (SES_SENDER_EMAIL no configurado). "
+            "Configúralo para enviar correos reales vía AWS SES."
+        )
+    return result
+
+
+def _send_via_ses(
+    *,
+    sender: str,
+    recipient: str,
+    subject: str,
+    message: str,
+    attachment_path: str,
+    region: str,
+) -> str | None:
+    """Envía un correo con el PDF adjunto usando AWS SES.
+
+    Returns:
+        El ``MessageId`` devuelto por SES (o ``None`` si no lo incluye).
+
+    Raises:
+        Exception: Cualquier error de boto3/SES se propaga para que el
+            llamador lo registre como ``status="failed"``.
+    """
+    import boto3  # import perezoso: boto3 solo hace falta si SES está activo
+
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg["Subject"] = subject
+    msg.set_content(message)
+
+    attachment = Path(attachment_path) if attachment_path else None
+    if attachment and attachment.is_file():
+        msg.add_attachment(
+            attachment.read_bytes(),
+            maintype="application",
+            subtype="pdf",
+            filename=attachment.name,
+        )
+
+    client = boto3.client("ses", region_name=region)
+    response = client.send_raw_email(
+        Source=sender,
+        Destinations=[recipient],
+        RawMessage={"Data": msg.as_bytes()},
+    )
+    return response.get("MessageId")

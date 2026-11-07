@@ -73,3 +73,28 @@ resource "aws_iam_role" "ecs_task" {
 # ── GitHub Actions OIDC Role ──────────────────────────────────────────────────
 # Pendiente — se añadirá en la fase de CI/CD una vez confirmado con la empresa
 # que está permitido crear roles OIDC en la cuenta de trabajo.
+
+# ── SES (envío de etiquetas por email) ────────────────────────────────────────
+#
+# Solo lo necesita el servicio mcp-logistics. Se limita a la identidad
+# verificada del remitente; en sandbox, el destinatario también debe estar
+# verificado en SES. No hay credenciales: boto3 usa las temporales del role.
+
+resource "aws_iam_role_policy" "ecs_task_ses" {
+  count = var.ses_sender_email == "" ? 0 : 1
+
+  name = "ses-send-email"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ]
+      Resource = "arn:aws:ses:${var.aws_region}:${data.aws_caller_identity.current.account_id}:identity/${var.ses_sender_email}"
+    }]
+  })
+}

@@ -29,6 +29,10 @@ python-dotenv>=1.0.0
 # PDF generation
 reportlab>=4.0.0
 
+# Email transaccional por AWS SES (mcp_logistics → logistics_service.py).
+# Las credenciales las da el IAM task role en ECS (no hay contraseñas).
+boto3>=1.34.0
+
 # API
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0

@@ -32,3 +32,15 @@ variable "allowed_cidr_blocks" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "ses_sender_email" {
+  description = "Email verificado en SES usado como remitente. Vacío = envío simulado (solo log)."
+  type        = string
+  default     = ""
+}
+
+variable "ses_recipient_override" {
+  description = "Si se define, todos los correos de la demo van a esta dirección. En sandbox debe estar verificada en SES."
+  type        = string
+  default     = ""
+}

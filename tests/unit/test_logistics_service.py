@@ -1,8 +1,10 @@
 """Tests unitarios para backend.services.logistics_service."""
 
 import json
-import pytest
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 from backend.services.logistics_service import (
     generate_shipping_label,
@@ -74,7 +76,19 @@ class TestGenerateShippingLabel:
 
 
 class TestSendCustomerNotification:
-    """Tests para envío simulado de notificaciones."""
+    """Tests para envío de notificaciones (SES o simulado)."""
+
+    @pytest.fixture(autouse=True)
+    def _force_simulated_settings(self, monkeypatch):
+        """Por defecto, simulado: evita que un .env con SES llame a AWS en tests."""
+        monkeypatch.setattr(
+            "backend.services.logistics_service.get_settings",
+            lambda: SimpleNamespace(
+                ses_sender_email=None,
+                ses_recipient_override=None,
+                ses_region=None,
+            ),
+        )
 
     @pytest.mark.asyncio
     async def test_returns_simulated_status(self, tmp_path, monkeypatch):
@@ -122,3 +136,76 @@ class TestSendCustomerNotification:
         log_file = tmp_path / "notifications_log.jsonl"
         lines = log_file.read_text().strip().split("\n")
         assert len(lines) == 2
+
+    @pytest.mark.asyncio
+    async def test_sends_via_ses_when_configured(self, tmp_path, monkeypatch):
+        """Con SES configurado envía de verdad y respeta el override."""
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
+        monkeypatch.setattr(
+            "backend.services.logistics_service.get_settings",
+            lambda: SimpleNamespace(
+                ses_sender_email="from@example.com",
+                ses_recipient_override="to@example.com",
+                ses_region="eu-west-1",
+            ),
+        )
+
+        captured = {}
+
+        def fake_send_via_ses(**kwargs):
+            captured.update(kwargs)
+            return "msg-123"
+
+        monkeypatch.setattr(
+            "backend.services.logistics_service._send_via_ses", fake_send_via_ses
+        )
+
+        result = await send_customer_notification(
+            email="client@example.com",
+            message="Hola",
+            subject="Test",
+            attachment_path=str(tmp_path / "label.pdf"),
+        )
+
+        assert result["status"] == "sent"
+        assert result["to"] == "to@example.com"  # override
+        assert result["message_id"] == "msg-123"
+        assert captured["sender"] == "from@example.com"
+        assert captured["recipient"] == "to@example.com"
+        assert captured["attachment_path"].endswith("label.pdf")
+
+        log = json.loads((tmp_path / "notifications_log.jsonl").read_text().strip())
+        assert log["status"] == "sent"
+        assert log["to"] == "to@example.com"
+
+    @pytest.mark.asyncio
+    async def test_ses_failure_returns_failed_status(self, tmp_path, monkeypatch):
+        """Si SES falla, no rompe el flujo: status=failed + error en el log."""
+        monkeypatch.setattr("backend.services.logistics_service.LABELS_DIR", tmp_path)
+        monkeypatch.setattr(
+            "backend.services.logistics_service.get_settings",
+            lambda: SimpleNamespace(
+                ses_sender_email="from@example.com",
+                ses_recipient_override=None,
+                ses_region="eu-west-1",
+            ),
+        )
+
+        def fake_send_via_ses(**kwargs):
+            raise RuntimeError("SES caído")
+
+        monkeypatch.setattr(
+            "backend.services.logistics_service._send_via_ses", fake_send_via_ses
+        )
+
+        result = await send_customer_notification(
+            email="client@example.com", message="Hola"
+        )
+
+        assert result["status"] == "failed"
+        assert result["to"] == "client@example.com"
+        assert "SES caído" in result["error"]
+
+        log = json.loads((tmp_path / "notifications_log.jsonl").read_text().strip())
+        assert log["status"] == "failed"
+        assert "SES caído" in log["error"]
