@@ -165,6 +165,27 @@ class Settings(BaseSettings):
     # configurada, POST /api/auth/admin/login devuelve 500.
     admin_password: SecretStr | None = None
 
+    # ── Email transaccional (AWS SES) ────────────────────────────────────
+    # Si ses_sender_email está vacío/None, send_customer_notification
+    # mantiene el comportamiento simulado: solo escribe en
+    # generated_labels/notifications_log.jsonl. Si está configurado, envía
+    # el correo real con el PDF adjunto usando SES.
+    #
+    # No hay contraseñas: en ECS, boto3 obtiene credenciales temporales del
+    # IAM task role (con permiso ses:SendRawEmail); en local usa el perfil
+    # de ~/.aws/credentials.
+    #
+    # La identidad del remitente (email o dominio) debe estar verificada en
+    # SES. En modo sandbox, el destinatario también debe estar verificado.
+    ses_sender_email: str | None = None
+    # Región de SES. Si es None, se usa AWS_REGION/AWS_DEFAULT_REGION del
+    # entorno (en ECS, terraform la fija a var.aws_region).
+    ses_region: str | None = None
+    # Override opcional del destinatario (útil para demos: todos los correos
+    # van a tu email en vez de al cliente real). Si es None, se usa el email
+    # del cliente que hizo la devolución.
+    ses_recipient_override: str | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:

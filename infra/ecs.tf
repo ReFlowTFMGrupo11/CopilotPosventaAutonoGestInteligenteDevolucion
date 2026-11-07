@@ -104,7 +104,7 @@ resource "aws_ecs_task_definition" "fastapi" {
     logConfiguration = local.log_config["fastapi"]
 
     healthCheck = {
-      command     = ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      command     = ["CMD-SHELL", "python -c \"import http.client,sys;c=http.client.HTTPConnection('localhost',8000,timeout=4);c.request('GET','/health');sys.exit(0 if c.getresponse().status==200 else 1)\""]
       interval    = 30
       timeout     = 5
       retries     = 3
@@ -149,7 +149,7 @@ resource "aws_ecs_task_definition" "mcp_supabase" {
     logConfiguration = local.log_config["mcp-supabase"]
 
     healthCheck = {
-      command     = ["CMD-SHELL", "curl -s --connect-timeout 4 http://localhost:8001/mcp -o /dev/null || exit 1"]
+      command     = ["CMD-SHELL", "python -c \"import http.client,sys;c=http.client.HTTPConnection('localhost',8001,timeout=4);c.request('GET','/mcp');c.getresponse();sys.exit(0)\""]
       interval    = 30
       timeout     = 5
       retries     = 3
@@ -183,6 +183,14 @@ resource "aws_ecs_task_definition" "mcp_logistics" {
       protocol      = "tcp"
     }]
 
+    # Email transaccional (SES). Si SES_SENDER_EMAIL está vacío, el servicio
+    # mantiene el modo simulado (solo escribe notifications_log.jsonl).
+    environment = [
+      { name = "SES_SENDER_EMAIL", value = var.ses_sender_email },
+      { name = "SES_REGION", value = var.aws_region },
+      { name = "SES_RECIPIENT_OVERRIDE", value = var.ses_recipient_override },
+    ]
+
     secrets = [
       { name = "SUPABASE_URL", valueFrom = local.secret["reflow/supabase-url"].arn },
       { name = "SUPABASE_SERVICE_KEY", valueFrom = local.secret["reflow/supabase-service-key"].arn },
@@ -191,7 +199,7 @@ resource "aws_ecs_task_definition" "mcp_logistics" {
     logConfiguration = local.log_config["mcp-logistics"]
 
     healthCheck = {
-      command     = ["CMD-SHELL", "curl -s --connect-timeout 4 http://localhost:8002/mcp -o /dev/null || exit 1"]
+      command     = ["CMD-SHELL", "python -c \"import http.client,sys;c=http.client.HTTPConnection('localhost',8002,timeout=4);c.request('GET','/mcp');c.getresponse();sys.exit(0)\""]
       interval    = 30
       timeout     = 5
       retries     = 3
@@ -232,7 +240,7 @@ resource "aws_ecs_task_definition" "frontend" {
     logConfiguration = local.log_config["frontend"]
 
     healthCheck = {
-      command     = ["CMD-SHELL", "curl -f http://localhost:8501/_stcore/health || exit 1"]
+      command     = ["CMD-SHELL", "python -c \"import http.client,sys;c=http.client.HTTPConnection('localhost',8501,timeout=4);c.request('GET','/_stcore/health');sys.exit(0 if c.getresponse().status==200 else 1)\""]
       interval    = 30
       timeout     = 5
       retries     = 3
