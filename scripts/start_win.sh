@@ -4,10 +4,12 @@
 # API FastAPI y frontend Streamlit), cada uno en su propia ventana de
 # Git Bash. Pensado para ejecutarse con Git Bash en Windows.
 #
-# Uso:  ./start_all.sh
+# Uso:  ./scripts/start_win.sh
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# El script vive en scripts/, pero .venv/, .env y requirements.txt están en
+# la raíz del repo: subimos un nivel.
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Desactivar conda si está activo en esta terminal: su python/pip no deben
@@ -86,5 +88,5 @@ cat <<EOF
       - Frontend       -> http://localhost:8501
 
     Cierra cada ventana (o Ctrl+C dentro de ella) para parar ese servicio,
-    o ejecuta ./stop_all.sh para cerrarlas todas de golpe.
+    o ejecuta ./scripts/stop_win.sh para cerrarlas todas de golpe.
 EOF
