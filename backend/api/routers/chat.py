@@ -136,6 +136,19 @@ async def send_message(request: ChatRequest, graph=Depends(get_graph)):
         score_error(request.thread_id, "exception")
         raise HTTPException(status_code=500, detail=f"Error ejecutando el grafo: {exc}")
 
+    # Si el grafo se ha pausado en un interrupt() (HITL), no exponer al
+    # cliente el payload interno del admin: devolver el mensaje de espera.
+    state = await graph.aget_state(config)
+    if state and state.next:
+        values = state.values or {}
+        return ChatResponse(
+            thread_id=request.thread_id,
+            response=_HITL_CUSTOMER_MSG,
+            current_agent=values.get("current_agent"),
+            order_id=values.get("order_id"),
+            resolution=values.get("resolution"),
+        )
+
     last_message = result["messages"][-1]
     score_resolution(request.thread_id, result.get("resolution"))
 
@@ -263,11 +276,7 @@ async def _stream_chat_events(
                         break
                 yield ChatStreamEvent(
                     type="awaiting_admin",
-                    content=interrupt_payload.get(
-                        "message",
-                        "Tu solicitud requiere aprobación de un administrador. "
-                        "Te avisaremos en cuanto se resuelva.",
-                    ),
+                    content=_HITL_CUSTOMER_MSG,
                     order_id=interrupt_payload.get("order_id"),
                 )
                 return
